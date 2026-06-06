@@ -13,8 +13,7 @@ authors = [
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
-    "pymcu-backend-sdk>=0.1.0a1",
-    "pymcu-toolchain-sdk>=0.1.0a1",
+    "pymcu-sdk>=0.1.0a1",
     # Pull in the pre-built avr-gcc toolchain wheel so `pip install
     # pymcu-compiler[avr]` is self-contained (no manual toolchain step).
     # Wheels exist only for linux x86_64, win amd64 and macOS arm64; on other
@@ -30,8 +29,7 @@ avr = "pymcu.toolchain.avr:AvrToolchainPlugin"
 avr = "pymcu.backend.avr:AvrBackendPlugin"
 
 [tool.uv.sources]
-pymcu-backend-sdk = {git = "https://github.com/PyMCU/pymcu", subdirectory = "extensions/pymcu-backend-sdk"}
-pymcu-toolchain-sdk = {git = "https://github.com/PyMCU/pymcu", subdirectory = "extensions/pymcu-toolchain-sdk"}
+pymcu-sdk = {git = "https://github.com/PyMCU/pymcu", subdirectory = "extensions/pymcu-sdk"}
 
 [project.urls]
 Homepage = "https://github.com/PyMCU/pymcu-avr"
