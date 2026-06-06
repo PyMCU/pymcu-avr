@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "development", "feature/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  integration:
+    name: Integration Tests (AVR)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    container:
+      image: ghcr.io/pymcu/pymcu:latest
+      options: --user root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: |
+          uv venv .venv
+          uv pip install --python .venv pymcu-compiler pymcu-stdlib
+          uv pip install --python .venv pymcu-backend-sdk pymcu-toolchain-sdk
+          uv pip install --python .venv -e . --no-deps
+
+      - name: Configure environment
+        run: |
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+
+      - name: Build pymcuc-avr backend CLI
+        run: |
+          dotnet publish src/csharp/cli/PyMCU.Backend.AVR.Cli.csproj \
+            -c Release -o build/bin --nologo
+
+      - name: Add build/bin to PATH
+        run: echo "$GITHUB_WORKSPACE/build/bin" >> $GITHUB_PATH
+
+      - name: Restore integration test packages
+        run: dotnet restore tests/integration/PyMCU.IntegrationTests.csproj --nologo
+
+      - name: Run integration tests
+        run: |
+          dotnet test tests/integration/PyMCU.IntegrationTests.csproj \
+            --no-restore \
+            --logger "trx;LogFileName=integration-results.trx" \
+            --logger "console;verbosity=normal" \
+            --blame-hang-timeout 120s \
+            --results-directory test-results \
+            --nologo \
+            -- NUnit.NumberOfTestWorkers=1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: test-results/
+          retention-days: 15
