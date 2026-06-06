@@ -21,10 +21,18 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout pymcu-avr
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          path: pymcu-avr
+
+      # Checkout monorepo to build pymcuc compiler and install SDKs.
+      # TODO: replace with `pip install pymcu-compiler` once published to PyPI.
+      - name: Checkout pymcu monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: PyMCU/PyMCU
+          path: pymcu
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
@@ -36,30 +44,41 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install Python dependencies
+      - name: Build pymcuc compiler
+        working-directory: pymcu
         run: |
-          uv venv .venv
-          uv pip install --python .venv pymcu-compiler pymcu-stdlib
-          uv pip install --python .venv pymcu-backend-sdk pymcu-toolchain-sdk
-          uv pip install --python .venv -e . --no-deps
-
-      - name: Configure environment
-        run: |
-          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
-          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+          dotnet publish src/compiler/PyMCU.csproj \
+            -c Release -o ../pymcu-avr/build/bin --nologo
 
       - name: Build pymcuc-avr backend CLI
+        working-directory: pymcu-avr
         run: |
           dotnet publish src/csharp/cli/PyMCU.Backend.AVR.Cli.csproj \
             -c Release -o build/bin --nologo
 
-      - name: Add build/bin to PATH
-        run: echo "$GITHUB_WORKSPACE/build/bin" >> $GITHUB_PATH
+      - name: Install Python dependencies
+        working-directory: pymcu-avr
+        run: |
+          uv venv .venv
+          uv pip install --python .venv ../pymcu/extensions/pymcu-toolchain-sdk
+          uv pip install --python .venv ../pymcu/extensions/pymcu-backend-sdk
+          uv pip install --python .venv ../pymcu/lib
+          uv pip install --python .venv -e ../pymcu
+          uv pip install --python .venv -e . --no-deps
+
+      - name: Configure environment
+        working-directory: pymcu-avr
+        run: |
+          echo "$GITHUB_WORKSPACE/pymcu-avr/.venv/bin" >> $GITHUB_PATH
+          echo "$GITHUB_WORKSPACE/pymcu-avr/build/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/pymcu-avr/.venv" >> $GITHUB_ENV
 
       - name: Restore integration test packages
+        working-directory: pymcu-avr
         run: dotnet restore tests/integration/PyMCU.IntegrationTests.csproj --nologo
 
       - name: Run integration tests
+        working-directory: pymcu-avr
         run: |
           dotnet test tests/integration/PyMCU.IntegrationTests.csproj \
             --no-restore \
@@ -75,5 +94,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: integration-test-results
-          path: test-results/
+          path: pymcu-avr/test-results/
           retention-days: 15
