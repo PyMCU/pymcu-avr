@@ -59,6 +59,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+_VERBOSE = os.environ.get("PYMCU_VERBOSE") == "1"
+
 from rich.console import Console
 from rich.prompt import Confirm
 
@@ -431,7 +433,8 @@ class AvrgasToolchain(ExternalToolchain):
             str(asm_file),
             "-o", str(obj_out),
         ]
-        self.console.print(f"[debug] avr-as: {' '.join(cmd)}", style="dim")
+        if _VERBOSE:
+            self.console.print(f"[debug] avr-as: {' '.join(cmd)}", style="dim")
         try:
             subprocess.run(cmd, check=True, capture_output=True)
         except subprocess.CalledProcessError as e:
@@ -485,9 +488,10 @@ class AvrgasToolchain(ExternalToolchain):
                 str(src),
                 "-o", str(obj),
             ]
-            self.console.print(
-                f"[debug] {compiler_label}: {' '.join(cmd)}", style="dim"
-            )
+            if _VERBOSE:
+                self.console.print(
+                    f"[debug] {compiler_label}: {' '.join(cmd)}", style="dim"
+                )
             # avr-gcc 15.x calls 'as' (not 'avr-as') from COMPILER_PATH then PATH.
             # avr/bin/as is absent in the wheel; ensure bin/as → avr-as exists so
             # the assembler is found via PATH (bin/ is prepended below).
@@ -545,7 +549,8 @@ class AvrgasToolchain(ExternalToolchain):
             "-o", str(elf_out),
         ]
 
-        self.console.print(f"[debug] avr-gcc (link): {' '.join(cmd)}", style="dim")
+        if _VERBOSE:
+            self.console.print(f"[debug] avr-gcc (link): {' '.join(cmd)}", style="dim")
         _gcc_bin_path = Path(avr_gcc).parent
         self._ensure_avr_tool_symlinks(_gcc_bin_path)
         _link_env = os.environ.copy()

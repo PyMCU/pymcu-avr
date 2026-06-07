@@ -53,14 +53,15 @@ public static class PymcuCompiler
         finally { BuildGate.Release(); }
     }
 
+    // Verbose when the test runner itself is in debug mode.
+    // RUNNER_DEBUG=1 is set automatically by GitHub Actions when
+    // "Enable debug logging" is enabled in repository settings.
+    private static readonly bool Verbose =
+        Environment.GetEnvironmentVariable("PYMCU_VERBOSE") == "1" ||
+        Environment.GetEnvironmentVariable("RUNNER_DEBUG")  == "1";
+
     private static string CompileImpl(string exampleDir, string name)
     {
-        Console.WriteLine($"[PymcuCompiler] RepoRoot    : {RepoRoot}");
-        Console.WriteLine($"[PymcuCompiler] PymcuExe    : {PymcuExe} (exists={File.Exists(PymcuExe)})");
-        Console.WriteLine($"[PymcuCompiler] ExampleDir  : {exampleDir} (exists={Directory.Exists(exampleDir)})");
-        Console.WriteLine($"[PymcuCompiler] PATH        : {Environment.GetEnvironmentVariable("PATH")}");
-        Console.WriteLine($"[PymcuCompiler] VIRTUAL_ENV : {Environment.GetEnvironmentVariable("VIRTUAL_ENV")}");
-
         if (!Directory.Exists(exampleDir))
             throw new DirectoryNotFoundException(
                 $"Example directory not found: {exampleDir}");
@@ -77,7 +78,8 @@ public static class PymcuCompiler
             RedirectStandardError  = true,
             UseShellExecute = false,
         };
-        psi.Environment["PYMCU_VERBOSE"] = "1";
+        if (Verbose)
+            psi.Environment["PYMCU_VERBOSE"] = "1";
         psi.Environment["PATH"] = venvBin + Path.PathSeparator + psi.Environment["PATH"];
 
         using var proc = Process.Start(psi)
@@ -90,9 +92,21 @@ public static class PymcuCompiler
         var stdout   = stdoutTask.GetAwaiter().GetResult();
         var stderr   = stderrTask.GetAwaiter().GetResult();
 
-        Console.WriteLine($"[PymcuCompiler] Exit: {(finished ? proc.ExitCode.ToString() : "TIMEOUT")}");
-        if (!string.IsNullOrWhiteSpace(stdout)) Console.WriteLine($"stdout:\n{stdout}");
-        if (!string.IsNullOrWhiteSpace(stderr)) Console.WriteLine($"stderr:\n{stderr}");
+        var failed = !finished || proc.ExitCode != 0;
+        if (failed || Verbose)
+        {
+            if (failed)
+            {
+                Console.WriteLine($"[PymcuCompiler] Build failed: {name}");
+                Console.WriteLine($"[PymcuCompiler] RepoRoot    : {RepoRoot}");
+                Console.WriteLine($"[PymcuCompiler] ExampleDir  : {exampleDir}");
+                Console.WriteLine($"[PymcuCompiler] PATH        : {psi.Environment["PATH"]}");
+                Console.WriteLine($"[PymcuCompiler] VIRTUAL_ENV : {Environment.GetEnvironmentVariable("VIRTUAL_ENV")}");
+            }
+            Console.WriteLine($"[PymcuCompiler] Exit: {(finished ? proc.ExitCode.ToString() : "TIMEOUT")}");
+            if (!string.IsNullOrWhiteSpace(stdout)) Console.WriteLine($"stdout:\n{stdout}");
+            if (!string.IsNullOrWhiteSpace(stderr)) Console.WriteLine($"stderr:\n{stderr}");
+        }
 
         if (!finished)
         {
