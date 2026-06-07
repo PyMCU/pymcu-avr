@@ -75,20 +75,16 @@ jobs:
           echo "$GITHUB_WORKSPACE/pymcu-avr/build/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/pymcu-avr/.venv" >> $GITHUB_ENV
 
-      # Pre-download the toolchain wheel binaries on the CI runner before the tests
-      # start. avr-gcc 15.2.0 from the wheel works here: ubuntu-latest (24.04) uses
-      # glibc 2.39, matching the build environment. avrgas.py adds bin/ to PATH so
-      # collect2 can find avr-ld during the link step.
-      # Pre-download the toolchain wheel and fix permissions.
-      # GitHub Actions artifact upload uses ZIP which strips Unix execute bits.
-      # The 15.2.0.post6 wheel was packaged without chmod; cc1 and collect2 in
-      # libexec/ land without +x. Fix: chmod after seeding.
+      # Pre-download the toolchain and fix execute bits.
+      # avr-gcc 15.2.0 from the wheel runs on ubuntu-latest (glibc 2.39, matching
+      # the build environment). The 15.2.0.post6 wheel was built before the
+      # chmod fix in pymcu-avr-toolchain, so cc1/collect2 in libexec/ land
+      # without +x after ZIP artifact extraction. Fix manually here.
       - name: Pre-download AVR toolchain
         working-directory: pymcu-avr
         run: |
           ROOT=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
             "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir().parent)" | tail -1)
-          echo "Toolchain root: $ROOT"
           find "$ROOT/bin" "$ROOT/libexec" -type f -exec chmod +x {} \; 2>/dev/null || true
           "$ROOT/bin/avr-gcc" --version
 
