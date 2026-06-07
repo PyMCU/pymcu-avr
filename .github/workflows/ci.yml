@@ -43,6 +43,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install AVR system toolchain
+        run: sudo apt-get install -y --no-install-recommends gcc-avr avr-libc binutils-avr
+
       - name: Build pymcuc compiler
         working-directory: pymcu
         run: |
