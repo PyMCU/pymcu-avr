@@ -44,7 +44,7 @@ jobs:
           uv pip install --python .venv pymcu-avr-toolchain pytest
 
       - name: Run toolchain smoke tests
-        run: uv run --python .venv pytest tests/toolchain/ -v --tb=short
+        run: uv run --python .venv --no-project pytest tests/toolchain/ -v --tb=short
 
   # ---------------------------------------------------------------------------
   # Full integration tests (AVR simulator). Linux only — simulator runs only on
