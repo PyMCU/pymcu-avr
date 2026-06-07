@@ -46,19 +46,6 @@ jobs:
       - name: Install AVR system toolchain
         run: sudo apt-get install -y --no-install-recommends gcc-avr avr-libc binutils-avr
 
-      - name: Seed toolchain cache with system avr-gcc
-        working-directory: pymcu-avr
-        run: |
-          CACHE_KEY=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c "from importlib.metadata import version; print(version('pymcu-avr-toolchain'))")
-          CACHE_BIN="$HOME/.pymcu/tools/linux-x86_64/pymcu-avr-toolchain/$CACHE_KEY/bin"
-          mkdir -p "$CACHE_BIN"
-          for tool in avr-gcc avr-as avr-g++ avr-ld avr-ar avr-objcopy avr-objdump avr-nm avr-strip avr-size avr-ranlib; do
-            [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$CACHE_BIN/$tool" && chmod 755 "$CACHE_BIN/$tool"
-          done
-          echo "$CACHE_KEY" > "$HOME/.pymcu/tools/linux-x86_64/pymcu-avr-toolchain/$CACHE_KEY/.sentinel"
-          echo "Seeded $CACHE_BIN with system avr-gcc"
-          ls "$CACHE_BIN"
-
       - name: Build pymcuc compiler
         working-directory: pymcu
         run: |
@@ -86,6 +73,22 @@ jobs:
           echo "$GITHUB_WORKSPACE/pymcu-avr/.venv/bin" >> $GITHUB_PATH
           echo "$GITHUB_WORKSPACE/pymcu-avr/build/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/pymcu-avr/.venv" >> $GITHUB_ENV
+
+      # pymcu-avr-toolchain downloads avr-gcc 15.2.0 on first use (relocation issue).
+      # Overwrite that cache with system avr-gcc so tests use a known-working linker.
+      - name: Seed toolchain cache with system avr-gcc
+        working-directory: pymcu-avr
+        run: |
+          CACHE_KEY=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
+            "from importlib.metadata import version; print(version('pymcu-avr-toolchain'))")
+          CACHE_BIN="$HOME/.pymcu/tools/linux-x86_64/pymcu-avr-toolchain/$CACHE_KEY/bin"
+          mkdir -p "$CACHE_BIN"
+          for tool in avr-gcc avr-as avr-g++ avr-ld avr-ar avr-objcopy avr-objdump avr-nm avr-strip avr-size avr-ranlib; do
+            [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$CACHE_BIN/$tool" && chmod 755 "$CACHE_BIN/$tool"
+          done
+          echo "$CACHE_KEY" > "$HOME/.pymcu/tools/linux-x86_64/pymcu-avr-toolchain/$CACHE_KEY/.sentinel"
+          echo "Seeded $CACHE_BIN with system avr-gcc"
+          ls "$CACHE_BIN"
 
       - name: Restore integration test packages
         working-directory: pymcu-avr
