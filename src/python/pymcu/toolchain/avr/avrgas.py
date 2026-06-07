@@ -507,11 +507,13 @@ class AvrgasToolchain(ExternalToolchain):
         cmd = [
             avr_gcc,
             f"-mmcu={self.chip}",
-            "-nostartfiles",   # our assembly provides the entry point; skip crt0.o
+            "-nostartfiles",     # our assembly provides the entry point; skip crt0.o
+            "-nodefaultlibs",    # suppress spec-driven -lc/-latmega328p (avr-gcc 15.x)
             "-T", str(linker_script),
             str(firmware_obj),
             *[str(o) for o in c_objects],
             "-lm",
+            "-lgcc",             # GCC internal functions (__mulhi3, __divmodhi4, etc.)
             "-o", str(elf_out),
         ]
 
