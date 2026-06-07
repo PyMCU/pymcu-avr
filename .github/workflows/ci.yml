@@ -47,6 +47,58 @@ jobs:
         run: uv run --python .venv --no-project pytest tests/toolchain/ -v --tb=short
 
   # ---------------------------------------------------------------------------
+  # Unit tests for the C# AVR backend (codegen, linear scan, peephole).
+  # Requires pymcu sibling checkout for the compiler/IR project references.
+  # ---------------------------------------------------------------------------
+  unit:
+    name: Unit Tests (.NET)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout pymcu-avr
+        uses: actions/checkout@v4
+        with:
+          path: pymcu-avr
+
+      - name: Checkout pymcu monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: PyMCU/PyMCU
+          ref: development  # TODO: remove after PR #34 is merged to main
+          path: pymcu
+          submodules: false
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Restore packages
+        working-directory: pymcu-avr
+        run: dotnet restore tests/unit/PyMCU.AVR.UnitTests.csproj --nologo
+
+      - name: Run unit tests
+        working-directory: pymcu-avr
+        run: |
+          dotnet test tests/unit/PyMCU.AVR.UnitTests.csproj \
+            --no-restore \
+            --logger "trx;LogFileName=unit-results.trx" \
+            --logger "console;verbosity=normal" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory test-results \
+            --nologo
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: pymcu-avr/test-results/
+          retention-days: 15
+
+  # ---------------------------------------------------------------------------
   # Full integration tests (AVR simulator). Linux only — simulator runs only on
   # Linux and requires the full compiler + Python environment.
   # ---------------------------------------------------------------------------
