@@ -31,8 +31,13 @@ jobs:
             os: windows-latest
 
     steps:
+      # Both repos checked out as siblings so the relative csproj path
+      # ../../../../pymcu/extensions/pymcu-sdk/csharp/PyMCU.Backend.SDK.csproj
+      # resolves correctly from src/csharp/lib/ inside pymcu-avr/.
       - name: Checkout pymcu-avr
         uses: actions/checkout@v4
+        with:
+          path: pymcu-avr
 
       - name: Checkout pymcu monorepo (SDK dependency)
         uses: actions/checkout@v4
@@ -42,16 +47,18 @@ jobs:
           path: pymcu
           sparse-checkout: |
             extensions/pymcu-sdk/csharp
+            global.json
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "10.x"
+          global-json-file: pymcu/global.json
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
       - name: Build wheel
+        working-directory: pymcu-avr
         env:
           DOTNET_RID: ${{ matrix.dotnet_rid }}
           WHEEL_PLATFORM_TAG: ${{ matrix.wheel_platform_tag }}
@@ -61,7 +68,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.name }}
-          path: dist/*.whl
+          path: pymcu-avr/dist/*.whl
           retention-days: 15
 
   publish-pypi:
