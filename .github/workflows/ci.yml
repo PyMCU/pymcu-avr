@@ -74,21 +74,21 @@ jobs:
           echo "$GITHUB_WORKSPACE/pymcu-avr/build/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/pymcu-avr/.venv" >> $GITHUB_ENV
 
-      # pymcu-avr-toolchain downloads avr-gcc 15.2.0 on first use (relocation issue).
-      # Overwrite that cache with system avr-gcc so tests use a known-working linker.
-      - name: Seed toolchain cache with system avr-gcc
+      # pymcu-avr-toolchain downloads avr-gcc 15.2.0 on first use, but the wheel
+      # binary has a relocation issue (hardcoded prefix) and fails to link.
+      # Fix: let the download populate the full cache dir, then replace
+      # the broken avr-gcc binaries with the system ones (which know their lib paths).
+      - name: Pre-download toolchain and replace with system avr-gcc
         working-directory: pymcu-avr
         run: |
-          CACHE_KEY=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
-            "from importlib.metadata import version; print(version('pymcu-avr-toolchain'))")
-          CACHE_BIN="$HOME/.pymcu/tools/linux-x86_64/pymcu-avr-toolchain/$CACHE_KEY/bin"
-          mkdir -p "$CACHE_BIN"
+          BIN_DIR=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
+            "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir())")
+          echo "Toolchain cache at: $BIN_DIR"
           for tool in avr-gcc avr-as avr-g++ avr-ld avr-ar avr-objcopy avr-objdump avr-nm avr-strip avr-size avr-ranlib; do
-            [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$CACHE_BIN/$tool" && chmod 755 "$CACHE_BIN/$tool"
+            [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$BIN_DIR/$tool" && chmod 755 "$BIN_DIR/$tool"
           done
-          printf '%s' "$CACHE_KEY" > "$HOME/.pymcu/tools/linux-x86_64/pymcu-avr-toolchain/$CACHE_KEY/.sentinel"
-          echo "Seeded $CACHE_BIN with system avr-gcc"
-          ls "$CACHE_BIN"
+          echo "Replaced downloaded binaries with system avr-gcc"
+          "$BIN_DIR/avr-gcc" --version
 
       - name: Restore integration test packages
         working-directory: pymcu-avr
