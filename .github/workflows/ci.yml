@@ -44,6 +44,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install AVR system toolchain
+        run: sudo apt-get install -y --no-install-recommends gcc-avr avr-libc binutils-avr
+
       - name: Build pymcuc compiler
         working-directory: pymcu
         run: |
@@ -75,14 +78,22 @@ jobs:
           echo "$GITHUB_WORKSPACE/pymcu-avr/build/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/pymcu-avr/.venv" >> $GITHUB_ENV
 
-      # Pre-download the toolchain so it's ready before tests run.
-      # avrgas.py now adds bin/ to PATH when calling avr-gcc, so collect2
-      # can find avr-ld without the hardcoded-prefix relocation issue.
-      - name: Pre-download AVR toolchain
+      # pymcu-avr-toolchain downloads avr-gcc 15.2.0 on first use. The wheel's
+      # avr-gcc fails _validate_wheel_gcc() because its spec files are not found
+      # at the hardcoded compile-time prefix. As a workaround, pre-download the
+      # cache structure and replace the wheel binaries with the system ones so
+      # validation passes. avrgas.py adds bin/ to PATH for the link step.
+      - name: Pre-download toolchain and replace with system avr-gcc
         working-directory: pymcu-avr
         run: |
-          "$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
-            "import pymcu_avr_toolchain; pymcu_avr_toolchain.get_bin_dir()" 2>&1 | tail -2
+          BIN_DIR=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
+            "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir())" | tail -1)
+          echo "Toolchain cache at: $BIN_DIR"
+          for tool in avr-gcc avr-as avr-g++ avr-ld avr-ar avr-objcopy avr-objdump avr-nm avr-strip avr-size avr-ranlib; do
+            [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$BIN_DIR/$tool" && chmod 755 "$BIN_DIR/$tool"
+          done
+          echo "System avr-gcc version in cache:"
+          /usr/bin/avr-gcc --version
 
       - name: Restore integration test packages
         working-directory: pymcu-avr
