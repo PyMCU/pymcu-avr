@@ -175,6 +175,30 @@ class AvrgasToolchain(ExternalToolchain):
             return None
 
     @staticmethod
+    def _ensure_avr_tool_symlinks(bin_dir: Path) -> None:
+        """
+        Create un-prefixed symlinks for avr-gcc's internal tool lookup.
+
+        avr-gcc 15.x searches COMPILER_PATH (…/avr/bin/) then PATH for tools
+        like 'as' and 'ld' without the 'avr-' prefix. The wheel's avr/bin/
+        doesn't contain these, so we create symlinks in bin/ (which callers
+        prepend to PATH) so the right tool is found.
+        """
+        for sym_name, target in (("as", "avr-as"), ("ld", "avr-ld")):
+            sym = bin_dir / sym_name
+            if not sym.exists() and (bin_dir / target).exists():
+                with contextlib.suppress(OSError):
+                    sym.symlink_to(target)
+        # Also create in avr/bin/ so COMPILER_PATH lookup succeeds first.
+        avr_bin = bin_dir.parent / "avr" / "bin"
+        if avr_bin.is_dir():
+            for sym_name, rel_target in (("as", "../../bin/avr-as"), ("ld", "../../bin/avr-ld")):
+                sym = avr_bin / sym_name
+                if not sym.exists() and (bin_dir / f"avr-{sym_name}").exists():
+                    with contextlib.suppress(OSError):
+                        sym.symlink_to(rel_target)
+
+    @staticmethod
     def _validate_wheel_gcc(gcc_path: str) -> bool:
         """
         Return True if the wheel's avr-gcc can resolve device-specific specs.
@@ -464,9 +488,13 @@ class AvrgasToolchain(ExternalToolchain):
             self.console.print(
                 f"[debug] {compiler_label}: {' '.join(cmd)}", style="dim"
             )
-            # avr-gcc calls cc1 as a helper; ensure bin/ is on PATH so cc1 is found
+            # avr-gcc 15.x calls 'as' (not 'avr-as') from COMPILER_PATH then PATH.
+            # avr/bin/as is absent in the wheel; ensure bin/as → avr-as exists so
+            # the assembler is found via PATH (bin/ is prepended below).
+            _cc_bin_path = Path(compiler).parent
+            self._ensure_avr_tool_symlinks(_cc_bin_path)
             _compile_env = os.environ.copy()
-            _cc_bin = str(Path(compiler).parent)
+            _cc_bin = str(_cc_bin_path)
             if _cc_bin not in _compile_env.get("PATH", "").split(os.pathsep):
                 _compile_env["PATH"] = _cc_bin + os.pathsep + _compile_env.get("PATH", "")
             try:
@@ -518,19 +546,8 @@ class AvrgasToolchain(ExternalToolchain):
         ]
 
         self.console.print(f"[debug] avr-gcc (link): {' '.join(cmd)}", style="dim")
-        # avr-gcc 15.x uses collect2 which searches COMPILER_PATH then PATH for 'ld'.
-        # The wheel's toolchain has avr/bin/ in COMPILER_PATH but avr/bin/ld is absent.
-        # Create symlinks so both COMPILER_PATH and PATH lookups succeed.
         _gcc_bin_path = Path(avr_gcc).parent
-        _toolchain_root = _gcc_bin_path.parent
-        for _ld_link, _target in [
-            (_gcc_bin_path / "ld", "avr-ld"),                    # PATH fallback
-            (_toolchain_root / "avr" / "bin" / "ld", "../../bin/avr-ld"),  # COMPILER_PATH
-        ]:
-            if not _ld_link.exists() and (_gcc_bin_path / "avr-ld").exists():
-                with contextlib.suppress(OSError):
-                    _ld_link.parent.mkdir(parents=True, exist_ok=True)
-                    _ld_link.symlink_to(_target)
+        self._ensure_avr_tool_symlinks(_gcc_bin_path)
         _link_env = os.environ.copy()
         _gcc_bin = str(_gcc_bin_path)
         if _gcc_bin not in _link_env.get("PATH", "").split(os.pathsep):
