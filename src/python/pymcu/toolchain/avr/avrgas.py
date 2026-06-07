@@ -516,23 +516,32 @@ class AvrgasToolchain(ExternalToolchain):
         ]
 
         self.console.print(f"[debug] avr-gcc (link): {' '.join(cmd)}", style="dim")
-        # avr-gcc 15.x uses collect2 which looks for plain 'ld' (not 'avr-ld').
-        # collect2 searches COMPILER_PATH then PATH. Ensure bin/ld → avr-ld exists
-        # so that when we add bin/ to PATH below, collect2 finds the right linker.
+        # avr-gcc 15.x uses collect2 which searches COMPILER_PATH then PATH for 'ld'.
+        # The wheel's toolchain has avr/bin/ in COMPILER_PATH but avr/bin/ld is absent.
+        # Create symlinks so both COMPILER_PATH and PATH lookups succeed.
         _gcc_bin_path = Path(avr_gcc).parent
-        _ld_link = _gcc_bin_path / "ld"
-        if not _ld_link.exists() and (_gcc_bin_path / "avr-ld").exists():
-            with contextlib.suppress(OSError):
-                _ld_link.symlink_to("avr-ld")
+        _toolchain_root = _gcc_bin_path.parent
+        for _ld_link, _target in [
+            (_gcc_bin_path / "ld", "avr-ld"),                    # PATH fallback
+            (_toolchain_root / "avr" / "bin" / "ld", "../../bin/avr-ld"),  # COMPILER_PATH
+        ]:
+            if not _ld_link.exists() and (_gcc_bin_path / "avr-ld").exists():
+                with contextlib.suppress(OSError):
+                    _ld_link.parent.mkdir(parents=True, exist_ok=True)
+                    _ld_link.symlink_to(_target)
         _link_env = os.environ.copy()
         _gcc_bin = str(_gcc_bin_path)
         if _gcc_bin not in _link_env.get("PATH", "").split(os.pathsep):
             _link_env["PATH"] = _gcc_bin + os.pathsep + _link_env.get("PATH", "")
-        try:
-            subprocess.run(cmd, check=True, capture_output=True, env=_link_env)
-        except subprocess.CalledProcessError as e:
-            err = e.stderr.decode() if e.stderr else e.stdout.decode()
-            raise RuntimeError(f"avr-gcc link failed:\n{err}")
+        result = subprocess.run(cmd, capture_output=True, env=_link_env)
+        if result.returncode != 0:
+            stdout = (result.stdout or b"").decode("utf-8", errors="replace")
+            stderr = (result.stderr or b"").decode("utf-8", errors="replace")
+            detail = stderr or stdout
+            raise RuntimeError(
+                f"avr-gcc link failed (exit {result.returncode}):\n"
+                f"stderr={stderr!r}\nstdout={stdout!r}\n{detail}"
+            )
         return elf_out
 
     def elf_to_hex(self, elf_file: Path) -> Path:
