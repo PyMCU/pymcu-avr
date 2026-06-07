@@ -90,6 +90,21 @@ jobs:
           echo "Replaced downloaded binaries with system avr-gcc"
           /usr/bin/avr-gcc --version
 
+      - name: Diagnose avr-gcc
+        working-directory: pymcu-avr
+        run: |
+          BIN=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
+            "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir())")
+          echo "=== cache bin dir: $BIN ==="
+          ls -la "$BIN" | head -20
+          echo "=== avr-gcc version ==="
+          "$BIN/avr-gcc" --version || echo "exit: $? (cannot run)"
+          file "$BIN/avr-gcc" || true
+          echo "=== /usr/bin/avr-gcc version ==="
+          /usr/bin/avr-gcc --version
+          echo "=== test link with /usr/bin/avr-gcc ==="
+          echo 'int main(void) { return 0; }' | /usr/bin/avr-gcc -x c - -mmcu=atmega328p -o /dev/null 2>&1 || echo "exit: $?"
+
       - name: Restore integration test packages
         working-directory: pymcu-avr
         run: dotnet restore tests/integration/PyMCU.IntegrationTests.csproj --nologo
