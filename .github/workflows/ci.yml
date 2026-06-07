@@ -66,6 +66,8 @@ jobs:
           uv pip install --python .venv pymcu-avr-toolchain
           uv pip install --python .venv -e ../pymcu
           uv pip install --python .venv -e . --no-deps
+          uv pip install --python .venv -e ../pymcu/external/pymcu-micropython
+          uv pip install --python .venv -e ../pymcu/external/pymcu-circuitpython
 
       - name: Configure environment
         working-directory: pymcu-avr
