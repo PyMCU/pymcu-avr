@@ -49,30 +49,15 @@ jobs:
       - name: Seed toolchain cache with system avr-gcc
         working-directory: pymcu-avr
         run: |
-          python3 -c "
-          import shutil, os
-          from pathlib import Path
-          from importlib.metadata import version
-
-          tools_dir = Path(os.environ.get('PYMCU_TOOLS_DIR', str(Path.home() / '.pymcu' / 'tools')))
-          cache_key = version('pymcu-avr-toolchain')
-          cache_dir = tools_dir / 'linux-x86_64' / 'pymcu-avr-toolchain' / cache_key
-          bin_dir = cache_dir / 'bin'
-          bin_dir.mkdir(parents=True, exist_ok=True)
-
-          tools = ['avr-gcc','avr-as','avr-g++','avr-ld','avr-ar','avr-objcopy',
-                   'avr-objdump','avr-nm','avr-strip','avr-size','avr-ranlib']
-          for t in tools:
-              src = Path('/usr/bin') / t
-              if src.exists():
-                  dst = bin_dir / t
-                  shutil.copy2(src, dst)
-                  os.chmod(dst, 0o755)
-
-          (cache_dir / '.sentinel').write_text(cache_key)
-          print(f'Seeded {bin_dir} with system avr-gcc')
-          print('Tools:', [f.name for f in sorted(bin_dir.iterdir())])
-          "
+          CACHE_KEY=$(.venv/bin/python -c "from importlib.metadata import version; print(version('pymcu-avr-toolchain'))")
+          CACHE_BIN="$HOME/.pymcu/tools/linux-x86_64/pymcu-avr-toolchain/$CACHE_KEY/bin"
+          mkdir -p "$CACHE_BIN"
+          for tool in avr-gcc avr-as avr-g++ avr-ld avr-ar avr-objcopy avr-objdump avr-nm avr-strip avr-size avr-ranlib; do
+            [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$CACHE_BIN/$tool" && chmod 755 "$CACHE_BIN/$tool"
+          done
+          echo "$CACHE_KEY" > "$HOME/.pymcu/tools/linux-x86_64/pymcu-avr-toolchain/$CACHE_KEY/.sentinel"
+          echo "Seeded $CACHE_BIN with system avr-gcc"
+          ls "$CACHE_BIN"
 
       - name: Build pymcuc compiler
         working-directory: pymcu
