@@ -49,7 +49,7 @@ jobs:
       - name: Seed toolchain cache with system avr-gcc
         working-directory: pymcu-avr
         run: |
-          CACHE_KEY=$(.venv/bin/python -c "from importlib.metadata import version; print(version('pymcu-avr-toolchain'))")
+          CACHE_KEY=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c "from importlib.metadata import version; print(version('pymcu-avr-toolchain'))")
           CACHE_BIN="$HOME/.pymcu/tools/linux-x86_64/pymcu-avr-toolchain/$CACHE_KEY/bin"
           mkdir -p "$CACHE_BIN"
           for tool in avr-gcc avr-as avr-g++ avr-ld avr-ar avr-objcopy avr-objdump avr-nm avr-strip avr-size avr-ranlib; do
