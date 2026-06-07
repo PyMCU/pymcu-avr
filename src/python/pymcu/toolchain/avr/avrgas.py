@@ -49,6 +49,7 @@ If the user already has avr-gcc on PATH (Homebrew, apt, WinAVR), it is used
 directly without any download.
 """
 
+import contextlib
 import os
 import platform
 import re
@@ -515,10 +516,16 @@ class AvrgasToolchain(ExternalToolchain):
         ]
 
         self.console.print(f"[debug] avr-gcc (link): {' '.join(cmd)}", style="dim")
-        # avr-gcc invokes collect2 → avr-ld during link. collect2 resolves avr-ld
-        # via PATH, so the toolchain bin/ must be on PATH for the subprocess.
+        # avr-gcc 15.x uses collect2 which looks for plain 'ld' (not 'avr-ld').
+        # collect2 searches COMPILER_PATH then PATH. Ensure bin/ld → avr-ld exists
+        # so that when we add bin/ to PATH below, collect2 finds the right linker.
+        _gcc_bin_path = Path(avr_gcc).parent
+        _ld_link = _gcc_bin_path / "ld"
+        if not _ld_link.exists() and (_gcc_bin_path / "avr-ld").exists():
+            with contextlib.suppress(OSError):
+                _ld_link.symlink_to("avr-ld")
         _link_env = os.environ.copy()
-        _gcc_bin = str(Path(avr_gcc).parent)
+        _gcc_bin = str(_gcc_bin_path)
         if _gcc_bin not in _link_env.get("PATH", "").split(os.pathsep):
             _link_env["PATH"] = _gcc_bin + os.pathsep + _link_env.get("PATH", "")
         try:
