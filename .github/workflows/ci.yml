@@ -7,6 +7,49 @@ on:
     branches: ["main"]
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Toolchain supply-chain smoke test: runs on all target platforms.
+  # Verifies that pymcu-avr-toolchain installs correctly and that the full
+  # compile → link → objcopy pipeline works without system AVR tools.
+  # ---------------------------------------------------------------------------
+  toolchain-smoke:
+    name: Toolchain smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout pymcu-avr
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          # Disable package cache so the latest published pymcu-avr-toolchain
+          # is always installed, not a stale cached copy.
+          enable-cache: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install toolchain + test deps
+        run: |
+          uv venv .venv
+          uv pip install --python .venv pymcu-avr-toolchain pytest
+
+      - name: Run toolchain smoke tests
+        run: uv run --python .venv pytest tests/toolchain/ -v --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Full integration tests (AVR simulator). Linux only — simulator runs only on
+  # Linux and requires the full compiler + Python environment.
+  # ---------------------------------------------------------------------------
   integration:
     name: Integration Tests (AVR)
     runs-on: ubuntu-latest
