@@ -60,6 +60,7 @@ jobs:
         run: |
           uv venv .venv
           uv pip install --python .venv pymcu-sdk pymcu-stdlib
+          uv pip install --python .venv pymcu-avr-toolchain
           uv pip install --python .venv -e ../pymcu
           uv pip install --python .venv -e . --no-deps
 
