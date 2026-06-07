@@ -49,6 +49,7 @@ If the user already has avr-gcc on PATH (Homebrew, apt, WinAVR), it is used
 directly without any download.
 """
 
+import os
 import platform
 import re
 import shutil
@@ -462,8 +463,13 @@ class AvrgasToolchain(ExternalToolchain):
             self.console.print(
                 f"[debug] {compiler_label}: {' '.join(cmd)}", style="dim"
             )
+            # avr-gcc calls cc1 as a helper; ensure bin/ is on PATH so cc1 is found
+            _compile_env = os.environ.copy()
+            _cc_bin = str(Path(compiler).parent)
+            if _cc_bin not in _compile_env.get("PATH", "").split(os.pathsep):
+                _compile_env["PATH"] = _cc_bin + os.pathsep + _compile_env.get("PATH", "")
             try:
-                subprocess.run(cmd, check=True, capture_output=True)
+                subprocess.run(cmd, check=True, capture_output=True, env=_compile_env)
             except subprocess.CalledProcessError as e:
                 err = e.stderr.decode() if e.stderr else e.stdout.decode()
                 raise RuntimeError(f"{compiler_label} failed on {src.name}:\n{err}")
@@ -509,8 +515,14 @@ class AvrgasToolchain(ExternalToolchain):
         ]
 
         self.console.print(f"[debug] avr-gcc (link): {' '.join(cmd)}", style="dim")
+        # avr-gcc invokes collect2 → avr-ld during link. collect2 resolves avr-ld
+        # via PATH, so the toolchain bin/ must be on PATH for the subprocess.
+        _link_env = os.environ.copy()
+        _gcc_bin = str(Path(avr_gcc).parent)
+        if _gcc_bin not in _link_env.get("PATH", "").split(os.pathsep):
+            _link_env["PATH"] = _gcc_bin + os.pathsep + _link_env.get("PATH", "")
         try:
-            subprocess.run(cmd, check=True, capture_output=True)
+            subprocess.run(cmd, check=True, capture_output=True, env=_link_env)
         except subprocess.CalledProcessError as e:
             err = e.stderr.decode() if e.stderr else e.stdout.decode()
             raise RuntimeError(f"avr-gcc link failed:\n{err}")

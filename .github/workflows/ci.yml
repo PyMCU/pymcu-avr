@@ -44,9 +44,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install AVR system toolchain
-        run: sudo apt-get install -y --no-install-recommends gcc-avr avr-libc binutils-avr
-
       - name: Build pymcuc compiler
         working-directory: pymcu
         run: |
@@ -78,39 +75,14 @@ jobs:
           echo "$GITHUB_WORKSPACE/pymcu-avr/build/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/pymcu-avr/.venv" >> $GITHUB_ENV
 
-      # pymcu-avr-toolchain downloads avr-gcc 15.2.0 on first use, but the wheel
-      # binary has a relocation issue (hardcoded prefix) and fails to link.
-      # Fix: let the download populate the full cache dir, then replace
-      # the broken avr-gcc binaries with the system ones (which know their lib paths).
-      # NOTE: system avr-gcc is 5.4.0 on ubuntu-22.04; some CP/MP compat tests need
-      # avr-gcc >= 10.x and will fail until the toolchain relocation is fixed upstream.
-      - name: Pre-download toolchain and replace with system avr-gcc
+      # Pre-download the toolchain so it's ready before tests run.
+      # avrgas.py now adds bin/ to PATH when calling avr-gcc, so collect2
+      # can find avr-ld without the hardcoded-prefix relocation issue.
+      - name: Pre-download AVR toolchain
         working-directory: pymcu-avr
         run: |
-          # get_bin_dir() prints download progress to stdout; tail -1 gets just the path
-          BIN_DIR=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
-            "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir())" | tail -1)
-          echo "Toolchain cache at: $BIN_DIR"
-          for tool in avr-gcc avr-as avr-g++ avr-ld avr-ar avr-objcopy avr-objdump avr-nm avr-strip avr-size avr-ranlib; do
-            [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$BIN_DIR/$tool" && chmod 755 "$BIN_DIR/$tool"
-          done
-          echo "Replaced downloaded binaries with system avr-gcc"
-          /usr/bin/avr-gcc --version
-
-      - name: Diagnose avr-gcc
-        working-directory: pymcu-avr
-        run: |
-          BIN=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
-            "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir())" | tail -1)
-          echo "=== cache bin dir: $BIN ==="
-          ls -la "$BIN" | head -20
-          echo "=== avr-gcc version ==="
-          "$BIN/avr-gcc" --version || echo "exit: $? (cannot run)"
-          file "$BIN/avr-gcc" || true
-          echo "=== /usr/bin/avr-gcc version ==="
-          /usr/bin/avr-gcc --version
-          echo "=== test link with /usr/bin/avr-gcc ==="
-          echo 'int main(void) { return 0; }' | /usr/bin/avr-gcc -x c - -mmcu=atmega328p -o /dev/null 2>&1 || echo "exit: $?"
+          "$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
+            "import pymcu_avr_toolchain; pymcu_avr_toolchain.get_bin_dir()" 2>&1 | tail -2
 
       - name: Restore integration test packages
         working-directory: pymcu-avr
