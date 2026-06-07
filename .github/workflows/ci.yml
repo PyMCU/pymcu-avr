@@ -79,13 +79,20 @@ jobs:
       # start. avr-gcc 15.2.0 from the wheel works here: ubuntu-latest (24.04) uses
       # glibc 2.39, matching the build environment. avrgas.py adds bin/ to PATH so
       # collect2 can find avr-ld during the link step.
-      - name: Pre-download AVR toolchain
+      - name: Pre-download AVR toolchain and diagnose
         working-directory: pymcu-avr
         run: |
-          AVRGCC=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
-            "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir() / 'avr-gcc')" | tail -1)
-          echo "avr-gcc path: $AVRGCC"
+          BINDIR=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
+            "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir())" | tail -1)
+          AVRGCC="$BINDIR/avr-gcc"
+          echo "=== avr-gcc version ==="
           "$AVRGCC" --version
+          echo "=== libgcc path (tests spec relocation) ==="
+          "$AVRGCC" -mmcu=atmega328p --print-libgcc-file-name
+          echo "=== test compile+link (empty main) ==="
+          echo 'int main(void) { return 0; }' > /tmp/test_main.c
+          "$AVRGCC" -mmcu=atmega328p -Os -c /tmp/test_main.c -o /tmp/test_main.o 2>&1 && echo "compile OK" || echo "compile FAILED: $?"
+          "$AVRGCC" -mmcu=atmega328p -nostartfiles /tmp/test_main.o -lm -o /tmp/test_main.elf -v 2>&1 || echo "link exit: $?"
 
       - name: Restore integration test packages
         working-directory: pymcu-avr
