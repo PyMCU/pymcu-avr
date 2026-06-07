@@ -9,7 +9,7 @@ on:
 jobs:
   integration:
     name: Integration Tests (AVR)
-    runs-on: ubuntu-22.04  # 22.04 has avr-gcc 10.x; ubuntu-latest (24.04) only has 7.3.0
+    runs-on: ubuntu-latest
     permissions:
       contents: read
 
@@ -44,9 +44,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install AVR system toolchain
-        run: sudo apt-get install -y --no-install-recommends gcc-avr avr-libc binutils-avr
-
       - name: Build pymcuc compiler
         working-directory: pymcu
         run: |
@@ -78,22 +75,17 @@ jobs:
           echo "$GITHUB_WORKSPACE/pymcu-avr/build/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/pymcu-avr/.venv" >> $GITHUB_ENV
 
-      # pymcu-avr-toolchain downloads avr-gcc 15.2.0 on first use. The wheel's
-      # avr-gcc fails _validate_wheel_gcc() because its spec files are not found
-      # at the hardcoded compile-time prefix. As a workaround, pre-download the
-      # cache structure and replace the wheel binaries with the system ones so
-      # validation passes. avrgas.py adds bin/ to PATH for the link step.
-      - name: Pre-download toolchain and replace with system avr-gcc
+      # Pre-download the toolchain wheel binaries on the CI runner before the tests
+      # start. avr-gcc 15.2.0 from the wheel works here: ubuntu-latest (24.04) uses
+      # glibc 2.39, matching the build environment. avrgas.py adds bin/ to PATH so
+      # collect2 can find avr-ld during the link step.
+      - name: Pre-download AVR toolchain
         working-directory: pymcu-avr
         run: |
-          BIN_DIR=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
-            "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir())" | tail -1)
-          echo "Toolchain cache at: $BIN_DIR"
-          for tool in avr-gcc avr-as avr-g++ avr-ld avr-ar avr-objcopy avr-objdump avr-nm avr-strip avr-size avr-ranlib; do
-            [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$BIN_DIR/$tool" && chmod 755 "$BIN_DIR/$tool"
-          done
-          echo "System avr-gcc version in cache:"
-          /usr/bin/avr-gcc --version
+          "$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
+            "import pymcu_avr_toolchain; d = pymcu_avr_toolchain.get_bin_dir(); print(f'Toolchain bin: {d}')"
+          "$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
+            "import pymcu_avr_toolchain; print((pymcu_avr_toolchain.get_bin_dir() / 'avr-gcc'))" | xargs -I{} {} --version
 
       - name: Restore integration test packages
         working-directory: pymcu-avr
