@@ -9,7 +9,7 @@ on:
 jobs:
   integration:
     name: Integration Tests (AVR)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # 22.04 has avr-gcc 10.x; ubuntu-latest (24.04) only has 7.3.0
     permissions:
       contents: read
 
