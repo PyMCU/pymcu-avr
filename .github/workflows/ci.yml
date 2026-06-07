@@ -78,22 +78,19 @@ jobs:
           echo "$GITHUB_WORKSPACE/pymcu-avr/build/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/pymcu-avr/.venv" >> $GITHUB_ENV
 
-      # pymcu-avr-toolchain downloads avr-gcc 15.2.0 on first use, but the wheel
-      # binary has a relocation issue (hardcoded prefix) and fails to link.
-      # Fix: let the download populate the full cache dir, then replace
-      # the broken avr-gcc binaries with the system ones (which know their lib paths).
-      - name: Pre-download toolchain and replace with system avr-gcc
+      # pymcu-avr-toolchain downloads avr-gcc 15.2.0. The wheel binary has hardcoded
+      # libexec/ prefix. Fix: set GCC_EXEC_PREFIX to the toolchain root so avr-gcc
+      # finds its helpers (collect2, cc1, etc.) at the extracted location.
+      - name: Pre-download toolchain and set GCC_EXEC_PREFIX
         working-directory: pymcu-avr
         run: |
           # get_bin_dir() prints download progress to stdout; tail -1 gets just the path
           BIN_DIR=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
             "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir())" | tail -1)
-          echo "Toolchain cache at: $BIN_DIR"
-          for tool in avr-gcc avr-as avr-g++ avr-ld avr-ar avr-objcopy avr-objdump avr-nm avr-strip avr-size avr-ranlib; do
-            [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$BIN_DIR/$tool" && chmod 755 "$BIN_DIR/$tool"
-          done
-          echo "Replaced downloaded binaries with system avr-gcc"
-          /usr/bin/avr-gcc --version
+          TOOLCHAIN_ROOT=$(dirname "$BIN_DIR")
+          echo "Toolchain root: $TOOLCHAIN_ROOT"
+          echo "GCC_EXEC_PREFIX=$TOOLCHAIN_ROOT/" >> "$GITHUB_ENV"
+          "$BIN_DIR/avr-gcc" --version || echo "avr-gcc cannot run (expected, relocation issue)"
 
       - name: Diagnose avr-gcc
         working-directory: pymcu-avr
