@@ -82,10 +82,10 @@ jobs:
       - name: Pre-download AVR toolchain
         working-directory: pymcu-avr
         run: |
-          "$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
-            "import pymcu_avr_toolchain; d = pymcu_avr_toolchain.get_bin_dir(); print(f'Toolchain bin: {d}')"
-          "$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
-            "import pymcu_avr_toolchain; print((pymcu_avr_toolchain.get_bin_dir() / 'avr-gcc'))" | xargs -I{} {} --version
+          AVRGCC=$("$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c \
+            "import pymcu_avr_toolchain; print(pymcu_avr_toolchain.get_bin_dir() / 'avr-gcc')" | tail -1)
+          echo "avr-gcc path: $AVRGCC"
+          "$AVRGCC" --version
 
       - name: Restore integration test packages
         working-directory: pymcu-avr
