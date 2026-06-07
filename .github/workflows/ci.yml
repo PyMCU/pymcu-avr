@@ -27,6 +27,7 @@ jobs:
           repository: PyMCU/PyMCU
           ref: development  # TODO: remove after PR #34 is merged to main
           path: pymcu
+          submodules: recursive
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
