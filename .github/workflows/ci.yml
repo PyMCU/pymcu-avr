@@ -88,7 +88,7 @@ jobs:
             [ -f "/usr/bin/$tool" ] && cp "/usr/bin/$tool" "$BIN_DIR/$tool" && chmod 755 "$BIN_DIR/$tool"
           done
           echo "Replaced downloaded binaries with system avr-gcc"
-          "$BIN_DIR/avr-gcc" --version
+          /usr/bin/avr-gcc --version
 
       - name: Restore integration test packages
         working-directory: pymcu-avr
