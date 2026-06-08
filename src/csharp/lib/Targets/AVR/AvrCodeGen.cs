@@ -1746,6 +1746,92 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         StoreRegInto("R24", u.Dst, type);
     }
 
+    // Destination-targeted in-place codegen for 8-bit Add/Sub/And/Or/Xor where the result
+    // lives directly in dst's home register. This removes the codegen's "stage through R24,
+    // store home" round-trip: for `x = x + y` with x in a home register it collapses to a
+    // single `ADD Rx, Ry` (vs MOV/op/MOV). Returns false — emitting nothing — whenever the
+    // AVR register classes or operand shapes don't permit the in-place form, so the caller
+    // falls back to the existing staged path. Validation is done up front; emission only
+    // happens once the whole op is known to be feasible.
+    private bool TryCompileBinaryInPlace(Binary b)
+    {
+        DataType type = GetValType(b.Dst);
+        if (type is not (DataType.UINT8 or DataType.INT8)) return false;
+        if (b.Op is not (IrBinOp.Add or IrBinOp.Sub or IrBinOp.BitAnd
+                         or IrBinOp.BitOr or IrBinOp.BitXor)) return false;
+
+        // dst must be register-resident; an SRAM dst gains nothing from in-place codegen.
+        string? rd = OperandHomeReg(b.Dst);
+        if (rd is null) return false;
+        bool rdUpper = int.Parse(rd[1..]) >= 16;   // R16-R31 accept LDI/SUBI/ANDI/ORI
+
+        // src1 must reach rd via MOV/LDD (any register) — not LDI, which is illegal for the
+        // low half. So only an 8-bit Variable/Temporary qualifies (constants/addresses out).
+        if (b.Src1 is not (Variable or Temporary)) return false;
+        if (GetValType(b.Src1).SizeOf() != 1) return false;
+
+        string? rs1 = OperandHomeReg(b.Src1);
+        string? rs2 = OperandHomeReg(b.Src2);
+
+        // Restrict to the augmented form (dst == src1, i.e. src1 already in rd). For
+        // dst != src1 the staged path leaves the result in R24 where the next op can reuse
+        // it, so an in-place `MOV rd,src1; OP rd,...` tends to merely move the extra MOV
+        // rather than remove it. The augmented case is the unambiguous win: the staged path
+        // is always MOV/op/MOV, the in-place form collapses it to a single op on rd.
+        if (rs1 != rd) return false;
+
+        // src1 already lives in rd, so no load clobbers it; src2 in rd just means `x op x`.
+
+        string mnem = b.Op switch
+        {
+            IrBinOp.Add    => "ADD",
+            IrBinOp.Sub    => "SUB",
+            IrBinOp.BitAnd => "AND",
+            IrBinOp.BitOr  => "OR",
+            IrBinOp.BitXor => "EOR",
+            _              => "",
+        };
+
+        // --- Constant src2: must fit an immediate/inc-dec form valid for rd's class. ---
+        if (b.Src2 is Constant c)
+        {
+            if (b.Op is IrBinOp.BitXor) return false;     // no immediate EOR form
+            int v = c.Value & 0xFF;
+            string? emit = b.Op switch
+            {
+                IrBinOp.Add when v == 1   => "INC",
+                IrBinOp.Add when v == 0xFF => "DEC",
+                IrBinOp.Sub when v == 1   => "DEC",
+                IrBinOp.Sub when v == 0xFF => "INC",
+                _ => null,
+            };
+            if (emit is null && !rdUpper) return false;   // immediate form needs R16-R31
+
+            LoadIntoReg(b.Src1, rd, type);
+            if (emit is not null) Emit(emit, rd);
+            else switch (b.Op)
+            {
+                case IrBinOp.Add:    Emit("SUBI", rd, $"{(byte)(-v)}"); break;
+                case IrBinOp.Sub:    Emit("SUBI", rd, $"{v}"); break;
+                case IrBinOp.BitAnd: Emit("ANDI", rd, $"{v}"); break;
+                case IrBinOp.BitOr:  Emit("ORI",  rd, $"{v}"); break;
+            }
+            return true;
+        }
+
+        // --- Register/SRAM src2: OP rd, <reg>. ---
+        if (b.Src2 is (Variable or Temporary) && GetValType(b.Src2).SizeOf() == 1)
+        {
+            LoadIntoReg(b.Src1, rd, type);
+            string s2 = rs2 ?? "R18";
+            if (rs2 is null) LoadIntoReg(b.Src2, "R18", type);
+            Emit(mnem, rd, s2);
+            return true;
+        }
+
+        return false;
+    }
+
     private void CompileBinary(Binary b)
     {
         DataType type = GetValType(b.Dst);
@@ -1757,6 +1843,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             CompileFloatBinary(b);
             return;
         }
+
+        // Destination-targeted in-place fast path (8-bit reg-reg / immediate arithmetic):
+        // compute the result directly in dst's home register, skipping the R24 stage and
+        // the store-back (and the src1 load when dst == src1). Falls back to the staged
+        // path below when AVR register classes or the operand shape don't permit it.
+        if (TryCompileBinaryInPlace(b)) return;
         // For Div/Mod and shift ops the source may be wider than the destination
         // (e.g. uint16 >> 8 → uint8 must operate as 16-bit to read the high byte).
         var src1Type = GetValType(b.Src1);
