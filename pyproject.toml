@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pymcu-avr"
-version = "0.1.0a1"
+version = "0.1.0a1.post1"
 description = "AVR support for pymcu-compiler: codegen backend + toolchain driver"
 readme = "README.md"
 authors = [
