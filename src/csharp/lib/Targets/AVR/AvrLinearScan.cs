@@ -114,6 +114,11 @@ public static class AvrLinearScan
                     VisitVal(cl.Dst, i);
                     foreach (var a in cl.Args) VisitVal(a, i);
                     break;
+                case FlashLoadPtr flp:
+                    VisitVal(flp.Ptr, i);
+                    VisitVal(flp.Index, i);
+                    VisitVal(flp.Dst, i);
+                    break;
                 case LoadIndirect li:
                     VisitVal(li.SrcPtr, i);
                     VisitVal(li.Dst, i);

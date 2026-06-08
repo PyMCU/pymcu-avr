@@ -375,6 +375,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 if (size >= 2) Emit("LDI", regH, $"hi8(gs({fr.FunctionName}))");
                 return;
             }
+            case FlashStrAddr fs:
+            {
+                // 16-bit flash BYTE address of an interned string (FlashData label is
+                // "__flash_" + name, same convention as ArrayLoadFlash). Loaded byte-wise
+                // via LPM by FlashLoadPtr, so this is a byte address (no gs()/word scaling).
+                string fsLabel = "__flash_" + fs.Name.Replace('.', '_');
+                Emit("LDI", reg, $"lo8({fsLabel})");
+                if (size >= 2) Emit("LDI", regH, $"hi8({fsLabel})");
+                return;
+            }
             case MemoryAddress mem:
             {
                 if (mem.Address is >= 0x20 and <= 0x5F)
@@ -1117,6 +1127,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 break;
             case ArrayLoad al: CompileArrayLoad(al); break;
             case ArrayLoadFlash alf: CompileArrayLoadFlash(alf); break;
+            case FlashLoadPtr flp: CompileFlashLoadPtr(flp); break;
             case FlashData fd: _flashArrayPool[fd.Name] = fd.Bytes; break;
             case ArrayStore ast: CompileArrayStore(ast); break;
             case BytearrayLoad bl: CompileBytearrayLoad(bl); break;
@@ -2824,6 +2835,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         StoreRegInto("R24", alf.Dst, DataType.UINT8);
     }
 
+    private void CompileFlashLoadPtr(FlashLoadPtr flp)
+    {
+        // Dst = flash[Ptr + Index] via LPM, where Ptr is a runtime 16-bit flash byte-address
+        // (e.g. a const[str] passed by reference into a non-@inline subroutine). Mirrors
+        // CompileArrayLoadFlash but with a register-held base instead of a fixed label.
+        LoadIntoReg(flp.Ptr, "R30", DataType.UINT16);  // Z = base flash byte-address
+        LoadIntoReg(flp.Index, "R24");                 // index -> R24 (8-bit)
+        Emit("ADD", "R30", "R24");                     // Z += index
+        Emit("ADC", "R31", "R1");                      // propagate carry (R1 == 0)
+        Emit("LPM", "R24", "Z");                       // load byte from flash
+        StoreRegInto("R24", flp.Dst, DataType.UINT8);
+    }
+
     private void EmitFlashArrayPool(TextWriter os)
     {
         if (_flashArrayPool.Count == 0) return;
@@ -3070,6 +3094,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 ArrayLoad al        => IsV(varName, al.Index),
                 ArrayStore ast      => IsV(varName, ast.Index) || IsV(varName, ast.Src),
                 ArrayLoadFlash alf  => IsV(varName, alf.Index),
+                FlashLoadPtr flp    => IsV(varName, flp.Ptr) || IsV(varName, flp.Index),
                 BytearrayLoad bl    => bl.PtrName == varName || IsV(varName, bl.Index),
                 BytearrayStore bst  => bst.PtrName == varName || IsV(varName, bst.Index) || IsV(varName, bst.Src),
                 LoadIndirect li     => IsV(varName, li.SrcPtr),
