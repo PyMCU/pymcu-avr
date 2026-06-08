@@ -2560,9 +2560,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             var absBase = 0x0100 + baseOffset;
             Emit("LDI", "R30", $"low({absBase})");
             Emit("LDI", "R31", $"high({absBase})");
-            Emit("CLR", "R16"); // R16 = 0 (Clears carry, but we don't care yet)
             Emit("ADD", "R30", "R24"); // Add offset to Z low byte (Generates carry if overflow)
-            Emit("ADC", "R31", "R16"); // Add 0 + carry to Z high byte
+            Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
             Emit("LD", "R24", "Z");
             if (is16) Emit("LDD", "R25", "Z+1");
         }
@@ -2606,9 +2605,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             var absBase = 0x0100 + baseOffset;
             Emit("LDI", "R30", $"low({absBase})");
             Emit("LDI", "R31", $"high({absBase})");
-            Emit("CLR", "R16"); // R16 = 0
             Emit("ADD", "R30", "R24"); // Z_low = Z_low + offset (Sets Carry if overflow)
-            Emit("ADC", "R31", "R16"); // Z_high = Z_high + 0 + Carry
+            Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
             Emit("ST", "Z", "R18");
             if (is16) Emit("STD", "Z+1", "R19");
         }
@@ -3534,9 +3532,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
 
         string noHandlerLabel = $"L_no_handler_{_labelCounter++}";
-        Emit("MOV", "R16", "R24");
-        Emit("OR", "R16", "R25");
-        Emit("TST", "R16");
+        // Test R24:R25 == 0 without R16 (the allocator may hold a value there): R26 is
+        // X-low scratch, never in the allocation pool.
+        Emit("MOV", "R26", "R24");
+        Emit("OR", "R26", "R25");
+        Emit("TST", "R26");
         Emit("BREQ", noHandlerLabel);
         Emit("CALL", "longjmp");
         EmitLabel(noHandlerLabel);
