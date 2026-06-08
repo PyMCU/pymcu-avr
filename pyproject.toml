@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pymcu-avr"
-version = "0.1.0a1.post1"
+version = "0.1.0a1.post2"
 description = "AVR support for pymcu-compiler: codegen backend + toolchain driver"
 readme = "README.md"
 authors = [
@@ -14,12 +14,11 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
     "pymcu-sdk>=0.1.0a1",
-    # Pull in the pre-built avr-gcc toolchain wheel so `pip install
-    # pymcu-compiler[avr]` is self-contained (no manual toolchain step).
-    # Wheels exist only for linux x86_64, win amd64 and macOS arm64; on other
-    # platforms (linux arm64, macOS Intel) the user supplies avr-gcc via the
-    # system package manager and the AvrgasToolchain falls back to PATH.
-    "pymcu-avr-toolchain>=15.2.0; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64') or (sys_platform == 'darwin' and platform_machine == 'arm64')",
+    # Pull in the pre-built avr-gcc 7.3.0 toolchain wheel so that
+    # `pip install pymcu-compiler[avr]` is self-contained.
+    # Wheels cover all supported platforms; the toolchain is auto-downloaded
+    # from the PlatformIO CDN on first use if no bundled binary is present.
+    "pymcu-avr-toolchain>=1!7.3.0; sys_platform == 'linux' or sys_platform == 'win32' or sys_platform == 'darwin'",
 ]
 
 [project.entry-points."pymcu.toolchains"]
