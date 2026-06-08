@@ -72,6 +72,22 @@ from pymcu.toolchain.sdk import ExternalToolchain
 # internally with the correct chip-specific flags.
 _REQUIRED_BINS = ["avr-as", "avr-objcopy", "avr-gcc"]
 _CPP_EXTENSIONS = {".cpp", ".cc", ".cxx", ".C"}
+
+# macOS jetsam (OOM killer) sends SIGKILL (-9) to processes under memory
+# pressure. This is transient and never a real tool failure, so retry a few
+# times before surfacing it. On other platforms -9 simply never occurs.
+_SIGKILL = -9
+_SIGKILL_RETRIES = 3
+
+
+def _run(cmd: list, **kwargs) -> subprocess.CompletedProcess:
+    """Run a subprocess with automatic SIGKILL retry (macOS jetsam defence)."""
+    for attempt in range(_SIGKILL_RETRIES + 1):
+        result = subprocess.run(cmd, **kwargs)
+        if result.returncode == _SIGKILL and attempt < _SIGKILL_RETRIES:
+            continue
+        break
+    return result
 _WHEEL_PKG = "pymcu-avr-toolchain"
 
 
@@ -435,10 +451,9 @@ class AvrgasToolchain(ExternalToolchain):
         ]
         if _VERBOSE:
             self.console.print(f"[debug] avr-as: {' '.join(cmd)}", style="dim")
-        try:
-            subprocess.run(cmd, check=True, capture_output=True)
-        except subprocess.CalledProcessError as e:
-            err = e.stderr.decode() if e.stderr else e.stdout.decode()
+        result = _run(cmd, capture_output=True)
+        if result.returncode != 0:
+            err = (result.stderr or result.stdout or b"").decode("utf-8", errors="replace")
             raise RuntimeError(f"avr-as failed:\n{err}")
         return obj_out
 
@@ -501,10 +516,9 @@ class AvrgasToolchain(ExternalToolchain):
             _cc_bin = str(_cc_bin_path)
             if _cc_bin not in _compile_env.get("PATH", "").split(os.pathsep):
                 _compile_env["PATH"] = _cc_bin + os.pathsep + _compile_env.get("PATH", "")
-            try:
-                subprocess.run(cmd, check=True, capture_output=True, env=_compile_env)
-            except subprocess.CalledProcessError as e:
-                err = e.stderr.decode() if e.stderr else e.stdout.decode()
+            result = _run(cmd, capture_output=True, env=_compile_env)
+            if result.returncode != 0:
+                err = (result.stderr or result.stdout or b"").decode("utf-8", errors="replace")
                 raise RuntimeError(f"{compiler_label} failed on {src.name}:\n{err}")
             objects.append(obj)
         return objects
@@ -557,7 +571,7 @@ class AvrgasToolchain(ExternalToolchain):
         _gcc_bin = str(_gcc_bin_path)
         if _gcc_bin not in _link_env.get("PATH", "").split(os.pathsep):
             _link_env["PATH"] = _gcc_bin + os.pathsep + _link_env.get("PATH", "")
-        result = subprocess.run(cmd, capture_output=True, env=_link_env)
+        result = _run(cmd, capture_output=True, env=_link_env)
         if result.returncode != 0:
             stdout = (result.stdout or b"").decode("utf-8", errors="replace")
             stderr = (result.stderr or b"").decode("utf-8", errors="replace")
