@@ -258,6 +258,53 @@ class AvrgasToolchain(ExternalToolchain):
             f"{name} not found. Run 'pymcu build' to install the AVR toolchain."
         )
 
+    def _find_avr_libc_lib_dir(self, avr_gcc: str) -> "Optional[Path]":
+        """
+        Return the avr/lib directory that contains libm.a (avr-libc).
+
+        Search order:
+        1. Bundled toolchain (bin/../avr/lib) — present when the wheel was
+           built with avr-libc included (post-15.2.0.post16 wheels).
+        2. Walk up from libgcc.a of the given avr-gcc — finds the avr-libc
+           that lives alongside that specific GCC installation.
+        3. System avr-gcc fallback — if the bundled avr-gcc is from a wheel
+           that pre-dates avr-libc bundling, check whatever avr-gcc is on
+           PATH (e.g. Homebrew avr-gcc@9 which ships avr-libc in its keg).
+        """
+        def _avr_lib_from_gcc(gcc: str) -> "Optional[Path]":
+            try:
+                r = subprocess.run(
+                    [gcc, f"-mmcu={self.chip}", "--print-libgcc-file-name"],
+                    capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
+                )
+                for prefix in Path(r.stdout.strip()).parents:
+                    candidate = prefix / "avr" / "lib"
+                    if (candidate / "libm.a").exists():
+                        return candidate
+            except Exception:
+                pass
+            return None
+
+        # 1. Bundled toolchain avr/lib
+        bundled = Path(avr_gcc).parent.parent / "avr" / "lib"
+        if (bundled / "libm.a").exists():
+            return bundled
+
+        # 2. Walk up from this GCC's libgcc path
+        found = _avr_lib_from_gcc(avr_gcc)
+        if found:
+            return found
+
+        # 3. System avr-gcc on PATH (e.g. Homebrew keg that includes avr-libc)
+        system_gcc = shutil.which("avr-gcc")
+        if system_gcc and system_gcc != avr_gcc:
+            found = _avr_lib_from_gcc(system_gcc)
+            if found:
+                return found
+
+        return None
+
     # ------------------------------------------------------------------
     # Toolchain availability check
     # ------------------------------------------------------------------
@@ -551,6 +598,8 @@ class AvrgasToolchain(ExternalToolchain):
             linker_script = ld_script_path
 
         _gcc_bin_path = Path(avr_gcc).parent
+        _avr_lib_path = self._find_avr_libc_lib_dir(avr_gcc)
+
         cmd = [
             avr_gcc,
             # -B overrides GCC's hardcoded COMPILER_PATH so it finds the bundled
@@ -562,6 +611,10 @@ class AvrgasToolchain(ExternalToolchain):
             "-T", str(linker_script),
             str(firmware_obj),
             *[str(o) for o in c_objects],
+            # Explicitly point to the avr/lib that has libm.a and avr-libc so the
+            # linker finds them even when a system avr-ld is called via collect2.
+            *([f"-L{_avr_lib_path}"] if _avr_lib_path is not None else []),
+            "-lm",               # AVR soft-float support (avr-libc)
             "-lgcc",             # GCC internal functions (__mulhi3, __divmodhi4, etc.)
             "-o", str(elf_out),
         ]
