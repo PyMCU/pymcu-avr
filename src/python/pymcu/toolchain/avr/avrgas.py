@@ -550,27 +550,32 @@ class AvrgasToolchain(ExternalToolchain):
             ld_script_path.write_text(self._default_ld_script())
             linker_script = ld_script_path
 
+        _gcc_bin_path = Path(avr_gcc).parent
         cmd = [
             avr_gcc,
+            # -B overrides GCC's hardcoded COMPILER_PATH so it finds the bundled
+            # ld/as/collect2 instead of any system avr-binutils installation.
+            f"-B{_gcc_bin_path}",
             f"-mmcu={self.chip}",
             "-nostartfiles",     # our assembly provides the entry point; skip crt0.o
             "-nodefaultlibs",    # suppress spec-driven -lc/-latmega328p (avr-gcc 15.x)
             "-T", str(linker_script),
             str(firmware_obj),
             *[str(o) for o in c_objects],
-            "-lm",
             "-lgcc",             # GCC internal functions (__mulhi3, __divmodhi4, etc.)
             "-o", str(elf_out),
         ]
 
         if _VERBOSE:
             self.console.print(f"[debug] avr-gcc (link): {' '.join(cmd)}", style="dim")
-        _gcc_bin_path = Path(avr_gcc).parent
         self._ensure_avr_tool_symlinks(_gcc_bin_path)
         _link_env = os.environ.copy()
         _gcc_bin = str(_gcc_bin_path)
         if _gcc_bin not in _link_env.get("PATH", "").split(os.pathsep):
             _link_env["PATH"] = _gcc_bin + os.pathsep + _link_env.get("PATH", "")
+        # COMPILER_PATH tells collect2 where to find ld, overriding any path
+        # compiled into collect2 at build time (e.g. a Homebrew avr-binutils prefix).
+        _link_env["COMPILER_PATH"] = _gcc_bin + os.pathsep + _link_env.get("COMPILER_PATH", "")
         result = _run(cmd, capture_output=True, env=_link_env)
         if result.returncode != 0:
             stdout = (result.stdout or b"").decode("utf-8", errors="replace")
