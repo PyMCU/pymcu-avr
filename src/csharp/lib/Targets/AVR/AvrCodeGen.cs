@@ -47,6 +47,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
     private string MakeLabel(string prefix = ".L") => $"{prefix}_{_labelCounter++}";
     private static string GetHighReg(string reg) => "R" + (int.Parse(reg[1..]) + 1);
+
+    // If the value is resident in an allocated home register (named-var R4-R15 pool or
+    // R16/R17 temporary pool), return that register's low byte; otherwise null. Used by
+    // reg-reg ALU emitters to consume the operand directly instead of staging it through
+    // R18. Reading a register as the second ALU operand never clobbers it, so this is
+    // safe for both pools.
+    private string? OperandHomeReg(Val v)
+    {
+        var name = v switch { Variable x => x.Name, Temporary t => t.Name, _ => null };
+        if (name == null) return null;
+        if (_regLayout.TryGetValue(name, out var r)) return r;
+        if (_tmpRegLayout.TryGetValue(name, out var r2)) return r2;
+        return null;
+    }
     private void Emit(string m) => _assembly.Add(AvrAsmLine.MakeInstruction(m));
     private void Emit(string m, string o1) => _assembly.Add(AvrAsmLine.MakeInstruction(m, o1));
     private void Emit(string m, string o1, string o2) => _assembly.Add(AvrAsmLine.MakeInstruction(m, o1, o2));
@@ -1920,15 +1934,31 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
         }
 
-        if (!usedImm) LoadIntoReg(b.Src2, "R18", opType);
+        // Second operand. When it already lives in a home register of the matching
+        // width, use that register pair directly as the ALU operand instead of staging
+        // it through R18 — this drops one MOV per reg-reg arithmetic op (the codegen's
+        // "stage-through-R18" pattern is otherwise pure overhead for register-resident
+        // operands). Only for non-widening reg-reg ops; variable shifts clobber R18 and
+        // 32-bit values have no register homes, so both keep staging.
+        string s2lo = "R18", s2hi = "R19";
+        if (!usedImm)
+        {
+            bool coalesceable = !is32
+                && b.Op is IrBinOp.Add or IrBinOp.Sub or IrBinOp.BitAnd
+                        or IrBinOp.BitOr or IrBinOp.BitXor
+                && GetValType(b.Src2).SizeOf() == opType.SizeOf();
+            string? home = coalesceable ? OperandHomeReg(b.Src2) : null;
+            if (home != null) { s2lo = home; s2hi = GetHighReg(home); }
+            else LoadIntoReg(b.Src2, "R18", opType);
+        }
 
         switch (b.Op)
         {
             case IrBinOp.Add:
                 if (!usedImm)
                 {
-                    Emit("ADD", "R24", "R18");
-                    if (is16 || is32) Emit("ADC", "R25", "R19");
+                    Emit("ADD", "R24", s2lo);
+                    if (is16 || is32) Emit("ADC", "R25", s2hi);
                     if (is32) { Emit("ADC", "R22", "R20"); Emit("ADC", "R23", "R21"); }
                 }
 
@@ -1936,8 +1966,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case IrBinOp.Sub:
                 if (!usedImm)
                 {
-                    Emit("SUB", "R24", "R18");
-                    if (is16 || is32) Emit("SBC", "R25", "R19");
+                    Emit("SUB", "R24", s2lo);
+                    if (is16 || is32) Emit("SBC", "R25", s2hi);
                     if (is32) { Emit("SBC", "R22", "R20"); Emit("SBC", "R23", "R21"); }
                 }
 
@@ -1945,8 +1975,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case IrBinOp.BitAnd:
                 if (!usedImm)
                 {
-                    Emit("AND", "R24", "R18");
-                    if (is16 || is32) Emit("AND", "R25", "R19");
+                    Emit("AND", "R24", s2lo);
+                    if (is16 || is32) Emit("AND", "R25", s2hi);
                     if (is32) { Emit("AND", "R22", "R20"); Emit("AND", "R23", "R21"); }
                 }
 
@@ -1954,15 +1984,15 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case IrBinOp.BitOr:
                 if (!usedImm)
                 {
-                    Emit("OR", "R24", "R18");
-                    if (is16 || is32) Emit("OR", "R25", "R19");
+                    Emit("OR", "R24", s2lo);
+                    if (is16 || is32) Emit("OR", "R25", s2hi);
                     if (is32) { Emit("OR", "R22", "R20"); Emit("OR", "R23", "R21"); }
                 }
 
                 break;
             case IrBinOp.BitXor:
-                Emit("EOR", "R24", "R18");
-                if (is16 || is32) Emit("EOR", "R25", "R19");
+                Emit("EOR", "R24", s2lo);
+                if (is16 || is32) Emit("EOR", "R25", s2hi);
                 if (is32) { Emit("EOR", "R22", "R20"); Emit("EOR", "R23", "R21"); }
                 break;
             case IrBinOp.LShift:
