@@ -490,7 +490,153 @@ public static class AvrPeephole
                 result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         }
 
+        // --- Dead temporary-register move elimination (R16/R17) ---
+        EliminateDeadTempMoves(result);
+
         result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         return result;
+    }
+
+    // Registers the linear-scan allocator uses as short-lived temporaries (never
+    // call-saved/restored, never a return register). A MOV that writes one of these
+    // and is never read afterwards is the home-store of a call result the comparison
+    // already consumed from R24 -- pure dead weight.
+    private static readonly int[] TempRegs = { 16, 17 };
+
+    // Mnemonics whose first operand is a pure destination (written, not read).
+    private static readonly HashSet<string> PureWriteOp1 = new()
+    {
+        "MOV", "LDI", "LDD", "LDS", "IN", "POP", "CLR", "SER", "LPM", "ELPM",
+    };
+
+    /// <summary>
+    /// Removes <c>MOV R16/R17, Rs</c> instructions whose destination is dead — never
+    /// read on any path before being overwritten or before the function returns.
+    ///
+    /// Uses a backward liveness restricted to the two temporary registers, which makes
+    /// the exit condition exact (R16/R17 are scratch: not return values and, if ever
+    /// pushed, restored by a POP that kills the value first, so they are dead at every
+    /// RET). Safety is asymmetric by design: reads are over-approximated (unknown
+    /// mnemonics, raw inline asm and calls are treated as reading the temps, keeping
+    /// them live) while writes are under-approximated (only an unambiguous pure write
+    /// kills liveness). The pass bails entirely on computed jumps it cannot resolve.
+    /// </summary>
+    private static void EliminateDeadTempMoves(List<AvrAsmLine> lines)
+    {
+        int n = lines.Count;
+        if (n == 0) return;
+
+        var labelIndex = new Dictionary<string, int>();
+        for (int i = 0; i < n; i++)
+            if (lines[i].Type == AvrAsmLine.LineType.Label)
+                labelIndex[lines[i].LabelText] = i;
+
+        // Successors per line. null entry => bail (unresolved control flow).
+        var succ = new List<int>[n];
+        for (int i = 0; i < n; i++)
+        {
+            var line = lines[i];
+            if (line.Type != AvrAsmLine.LineType.Instruction)
+            {
+                succ[i] = i + 1 < n ? new List<int> { i + 1 } : new List<int>();
+                continue;
+            }
+
+            string m = line.Mnemonic;
+            if (m is "RET" or "RETI")
+            {
+                succ[i] = new List<int>(); // exit: temps are dead here
+            }
+            else if (m is "RJMP" or "JMP")
+            {
+                if (!labelIndex.TryGetValue(line.Op1, out int t)) return; // unknown target -> bail
+                succ[i] = new List<int> { t };
+            }
+            else if (m is "IJMP" or "EIJMP")
+            {
+                return; // computed jump -> bail
+            }
+            else if (m.StartsWith("BR"))
+            {
+                var s = new List<int>();
+                if (labelIndex.TryGetValue(line.Op1, out int t)) s.Add(t);
+                else return; // unknown branch target -> bail
+                if (i + 1 < n) s.Add(i + 1);
+                succ[i] = s;
+            }
+            else
+            {
+                // Everything else (incl. CALL/RCALL/ICALL) falls through.
+                succ[i] = i + 1 < n ? new List<int> { i + 1 } : new List<int>();
+            }
+        }
+
+        // Raw lines may be hand-written asm with arbitrary register effects; treat them
+        // as reading the temps so nothing around them is touched.
+        // Assembler directives (.equ/.org/.byte/.global/...) emit no code and touch no
+        // register; only hand-written inline-asm Raw lines have unknown register effects.
+        static bool IsDirective(AvrAsmLine l)
+            => l.Type == AvrAsmLine.LineType.Raw && l.Content.TrimStart().StartsWith(".");
+
+        bool Reads(AvrAsmLine line, int r)
+        {
+            if (line.Type == AvrAsmLine.LineType.Raw)
+                // Hand-written inline asm: assume it reads the temp only if the register
+                // name appears in its text (so register-free Raw like NOP delays stay
+                // transparent). Over-approximate — any textual mention counts as a read.
+                return !IsDirective(line)
+                       && line.Content.Contains("R" + r, StringComparison.OrdinalIgnoreCase);
+            if (line.Type != AvrAsmLine.LineType.Instruction) return false;
+            string m = line.Mnemonic;
+            // CALL/RCALL/ICALL do NOT read the temp registers: PyMCU passes arguments in
+            // R24/R22/R20/R18 (never R16/R17), and callees that use a temp internally
+            // (e.g. __div8) push/pop it rather than taking it as input. The operand of a
+            // call is a label, so it reads no register here either way.
+            if (PureWriteOp1.Contains(m)) return ParseReg(line.Op2) == r; // Op1 is the destination
+            return ParseReg(line.Op1) == r || ParseReg(line.Op2) == r;
+        }
+
+        bool PureWrites(AvrAsmLine line, int r)
+        {
+            if (line.Type != AvrAsmLine.LineType.Instruction) return false;
+            return PureWriteOp1.Contains(line.Mnemonic)
+                   && ParseReg(line.Op1) == r
+                   && ParseReg(line.Op2) != r;
+        }
+
+        // Backward liveness fixpoint, one bit per temp register.
+        int t0 = TempRegs.Length;
+        var liveIn = new bool[n, t0];
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (int i = n - 1; i >= 0; i--)
+            {
+                for (int ti = 0; ti < t0; ti++)
+                {
+                    int r = TempRegs[ti];
+                    bool outLive = false;
+                    foreach (int s in succ[i]) outLive |= liveIn[s, ti];
+                    bool inLive = Reads(lines[i], r) || (!PureWrites(lines[i], r) && outLive);
+                    if (inLive != liveIn[i, ti]) { liveIn[i, ti] = inLive; changed = true; }
+                }
+            }
+        }
+
+        // Remove MOV <temp>, Rs whose destination is dead on exit.
+        for (int i = 0; i < n; i++)
+        {
+            var line = lines[i];
+            if (line.Type != AvrAsmLine.LineType.Instruction || line.Mnemonic != "MOV") continue;
+            int dst = ParseReg(line.Op1);
+            int src = ParseReg(line.Op2);
+            int ti = Array.IndexOf(TempRegs, dst);
+            if (ti < 0 || src < 0 || src == dst) continue;
+
+            bool outLive = false;
+            foreach (int s in succ[i]) outLive |= liveIn[s, ti];
+            if (!outLive) lines[i] = AvrAsmLine.MakeEmpty();
+        }
     }
 }
