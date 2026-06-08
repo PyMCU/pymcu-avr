@@ -778,15 +778,21 @@ public class AVRCodeGenTests
     public void Float_Return_LoadsIntoR22R25()
     {
         // Returning a float variable must load into R22:R25 (soft-float return convention).
-        // Copy gives the variable a stack slot; Return must then emit 4 LDD instructions.
-        var fc = new FloatConstant(1.0);
+        // The intervening Copy(fc2 -> b) clobbers all four bytes of R22:R25 (1.1f and 7.0f
+        // share no byte values), so returning `a` cannot reuse the registers from its own
+        // Copy and must genuinely reload its slot via 4 LDDs. (Without the clobber,
+        // store-to-load forwarding correctly elides the reload, since a's value is still in
+        // R22:R25 — see ForwardStores in AvrPeephole.)
+        var fc = new FloatConstant(1.1);
+        var fc2 = new FloatConstant(7.0);
         var a = new Variable("a", DataType.FLOAT);
+        var b = new Variable("b", DataType.FLOAT);
         var prog = new ProgramIR();
         prog.Functions.Add(new Function
         {
             Name = "main",
             ReturnType = DataType.FLOAT,
-            Body = [new Copy(fc, a), new Return(a)]
+            Body = [new Copy(fc, a), new Copy(fc2, b), new Return(a)]
         });
 
         var asm = Compile(prog);

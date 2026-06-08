@@ -78,6 +78,106 @@ public class AvrAsmLine
 
 public static class AvrPeephole
 {
+    // Mnemonics that write exactly their first operand register and nothing else
+    // relevant to slot tracking. (STD/LDD are handled separately; LD/ST and the
+    // pointer/multi-register writers are deliberately excluded so they hit the
+    // conservative clear-all path.)
+    private static readonly HashSet<string> SingleDstWriters = new()
+    {
+        "MOV", "LDI", "LDS", "IN", "POP", "CLR", "SER", "COM", "NEG", "INC", "DEC",
+        "LSR", "LSL", "ASR", "ROR", "ROL", "SWAP", "AND", "ANDI", "OR", "ORI", "EOR",
+        "ADD", "ADC", "SUB", "SUBI", "SBC", "SBCI", "BLD", "SBR", "CBR",
+    };
+
+    // Mnemonics that touch no general-purpose register (status flags, I/O bits,
+    // memory stores, control). These leave slot tracking intact.
+    private static readonly HashSet<string> NonRegWriters = new()
+    {
+        "CP", "CPC", "CPI", "TST", "OUT", "PUSH", "SBI", "CBI", "SBIS", "SBIC",
+        "SBRS", "SBRC", "BST", "NOP", "SEC", "CLC", "SEI", "CLI", "SET", "CLT",
+        "SEZ", "CLZ", "WDR", "SLEEP",
+    };
+
+    /// <summary>
+    /// Basic-block-local store-to-load forwarding. <c>slotReg[off]</c> records the
+    /// general-purpose register that currently holds the same value as stack slot
+    /// <c>Y+off</c>. A reload that re-reads a slot the register already mirrors,
+    /// and a store of a value already present in the slot, are removed. Tracking
+    /// is invalidated whenever the mirrored register is overwritten and cleared
+    /// entirely at any block boundary or unmodeled instruction.
+    /// </summary>
+    private static void ForwardStores(List<AvrAsmLine> lines, ref bool changed)
+    {
+        var slotReg = new Dictionary<int, int>();
+
+        void KillReg(int r)
+        {
+            if (r < 0) return;
+            List<int>? dead = null;
+            foreach (var kv in slotReg)
+                if (kv.Value == r) (dead ??= new()).Add(kv.Key);
+            if (dead != null)
+                foreach (var k in dead) slotReg.Remove(k);
+        }
+
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var ln = lines[i];
+            if (ln.Type is AvrAsmLine.LineType.Comment
+                        or AvrAsmLine.LineType.Empty
+                        or AvrAsmLine.LineType.DebugMarker)
+                continue;
+            if (ln.Type != AvrAsmLine.LineType.Instruction)
+            {
+                slotReg.Clear(); // label / raw / anything non-instruction
+                continue;
+            }
+
+            switch (ln.Mnemonic)
+            {
+                case "STD":
+                {
+                    int off = ParseYOffset(ln.Op1);
+                    int rx = ParseReg(ln.Op2);
+                    if (off < 0 || rx < 0) { slotReg.Clear(); break; }
+                    if (slotReg.TryGetValue(off, out int cur) && cur == rx)
+                    {
+                        // Slot already holds this register's (unchanged) value.
+                        lines[i] = AvrAsmLine.MakeEmpty();
+                        changed = true;
+                        break;
+                    }
+                    slotReg[off] = rx;
+                    break;
+                }
+                case "LDD":
+                {
+                    int off = ParseYOffset(ln.Op2);
+                    int ry = ParseReg(ln.Op1);
+                    if (off < 0 || ry < 0) { slotReg.Clear(); break; }
+                    if (slotReg.TryGetValue(off, out int rx) && rx == ry)
+                    {
+                        // Register already mirrors this slot — redundant reload.
+                        lines[i] = AvrAsmLine.MakeEmpty();
+                        changed = true;
+                        break;
+                    }
+                    KillReg(ry);          // ry is overwritten by the load
+                    slotReg[off] = ry;    // ry now mirrors Y+off
+                    break;
+                }
+                default:
+                {
+                    if (SingleDstWriters.Contains(ln.Mnemonic))
+                        KillReg(ParseReg(ln.Op1));
+                    else if (!NonRegWriters.Contains(ln.Mnemonic))
+                        slotReg.Clear(); // unknown / multi-write / flow: forget everything
+                    break;
+                }
+            }
+        }
+    }
+
     private static bool IsFlowTerminator(AvrAsmLine line)
     {
         return line.Type == AvrAsmLine.LineType.Instruction &&
@@ -367,6 +467,27 @@ public static class AvrPeephole
             }
 
             result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
+        }
+
+        // --- Basic-block store-to-load forwarding & redundant load/store removal ---
+        // The adjacent STD/LDD patterns above only fire when the store and the
+        // reload sit next to each other. 16-bit values interleave their lo/hi
+        // halves (STD lo; STD hi; LDD lo; LDD hi), and call results get parked in
+        // a slot then immediately reloaded for a compare, so the redundant reload
+        // is never adjacent to its store. ForwardStores tracks, per basic block,
+        // which register still mirrors each Y+offset slot and drops reloads that
+        // re-read a value the register already holds (and re-stores of an
+        // unchanged value). It is conservative by construction: anything it does
+        // not explicitly model as a pure reader or single-register writer clears
+        // all tracking, so it never forwards a stale value across an unknown
+        // effect, a call, a branch, or a label.
+        var sfChanged = true;
+        while (sfChanged)
+        {
+            sfChanged = false;
+            ForwardStores(result, ref sfChanged);
+            if (sfChanged)
+                result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         }
 
         result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
