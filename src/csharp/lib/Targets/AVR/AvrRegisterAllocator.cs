@@ -32,6 +32,27 @@ public static class AvrRegisterAllocator
         var useCount = new Dictionary<string, int>();
         var varTypes = new Dictionary<string, DataType>();
 
+        // First pass: collect names that MUST live in SRAM because some codegen
+        // path resolves them by address rather than through _regLayout. Registerizing
+        // any of these would desynchronize address-based and register-based accesses.
+        //  - GcRoot/GcUnroot push the variable's absolute SRAM address onto the shadow
+        //    stack (GetGcRefSramAddr throws if the name is not in the stack layout).
+        //  - Bytearray / array base names are dereferenced via their SRAM offset.
+        var unsafeNames = new HashSet<string>();
+        foreach (var instr in program.Functions.SelectMany(func => func.Body))
+        {
+            switch (instr)
+            {
+                case GcRoot gr when NameOf(gr.Var) is { } gn: unsafeNames.Add(gn); break;
+                case GcUnroot gu when NameOf(gu.Var) is { } un: unsafeNames.Add(un); break;
+                case BytearrayLoad bl: unsafeNames.Add(bl.PtrName); break;
+                case BytearrayStore bs: unsafeNames.Add(bs.PtrName); break;
+                case ArrayLoad al: unsafeNames.Add(al.ArrayName); break;
+                case ArrayStore ast: unsafeNames.Add(ast.ArrayName); break;
+                case ArrayLoadFlash alf: unsafeNames.Add(alf.ArrayName); break;
+            }
+        }
+
         foreach (var instr in program.Functions.SelectMany(func => func.Body))
         {
             switch (instr)
@@ -111,12 +132,22 @@ public static class AvrRegisterAllocator
             }
         }
 
-        // Collect eligible: only UINT8/UINT16 (1-2 bytes). Exclude UINT32+ because the
-        // global allocator has no callee-save/restore, so multi-byte values spanning a
-        // function call boundary would be clobbered by the callee's own register usage.
+        // Collect eligible: only UINT8/UINT16/INT8/INT16 (1-2 bytes). Exclude:
+        //  - UINT32+/FLOAT (multi-byte; not handled by this fixed R4-R15 layout here).
+        //  - GC_REF/FUNCREF pointers (need an address / shadow-stack handling).
+        //  - unsafe names that some path resolves by SRAM address (see first pass).
+        // Note: R4-R15 are NEVER used as codegen scratch, and this allocator assigns a
+        // globally-unique register per name. So a value in R4-R15 survives any call
+        // (the callee's own named vars get different registers; leaf scratch is R16-R27).
+        // That invariant — not a DotCount heuristic — is what makes cross-call safety hold,
+        // so inline-expanded locals (dotted names) are eligible too.
         var sorted = useCount
-            .Where(kv => varTypes.TryGetValue(kv.Key, out var dt) && SizeOfType(dt) <= 2)
-            .OrderByDescending(kv => kv.Value).ToList();
+            .Where(kv => varTypes.TryGetValue(kv.Key, out var dt)
+                         && SizeOfType(dt) <= 2
+                         && dt != DataType.GC_REF && dt != DataType.FUNCREF
+                         && !unsafeNames.Contains(kv.Key))
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal).ToList();
 
         var result = new Dictionary<string, string>();
         var nextReg = 4;
@@ -132,12 +163,16 @@ public static class AvrRegisterAllocator
 
         return result;
 
-        static int DotCount(string s) => s.Count(c => c == '.');
+        static string? NameOf(Val val) => val switch
+        {
+            Variable v  => v.Name,
+            Temporary t => t.Name,
+            _           => null,
+        };
 
         void CountVal(Val val)
         {
             if (val is not Variable v) return;
-            if (DotCount(v.Name) >= 2) return;
             useCount.TryGetValue(v.Name, out int count);
             useCount[v.Name] = count + 1;
             varTypes[v.Name] = v.Type;
