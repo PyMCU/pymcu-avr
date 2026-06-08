@@ -97,8 +97,9 @@ class AvrgasToolchain(ExternalToolchain):
     Downloads a self-contained pre-built avr-gcc toolchain into
     ~/.pymcu/tools/ so no system package installation is required.
 
-    Pre-built releases are sourced from Zak Kemble's avr-gcc-build project:
-    https://github.com/ZakKemble/avr-gcc-build
+    Pre-built toolchain wheels are distributed as pymcu-avr-toolchain on PyPI,
+    sourced from the PlatformIO toolchain-atmelavr package (avr-gcc 7.3.0):
+    https://github.com/PyMCU/pymcu-avr-toolchain
     """
 
     # RAMSTART per chip family (byte offset of first SRAM byte in AVR data space).
