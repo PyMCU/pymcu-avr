@@ -2649,18 +2649,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         else if (bl.Index is Constant cIdx3)
         {
-            Emit("LDI", "R16", $"{cIdx3.Value}");
-            Emit("CLR", "R17");
-            Emit("ADD", "R30", "R16");
-            Emit("ADC", "R31", "R17");
+            // Scratch in R26 (X-low) + R1 (zero reg), never the R16/R17 the linear-scan
+            // allocator hands out -- so a register-allocated value survives this load.
+            Emit("LDI", "R26", $"{cIdx3.Value}");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R1");
             Emit("LD", "R24", "Z");
         }
         else
         {
-            LoadIntoReg(bl.Index, "R16");
-            Emit("CLR", "R17");
-            Emit("ADD", "R30", "R16");
-            Emit("ADC", "R31", "R17");
+            LoadIntoReg(bl.Index, "R26");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R1");
             Emit("LD", "R24", "Z");
         }
 
@@ -2705,18 +2705,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         else if (bs.Index is Constant cIdx3)
         {
-            Emit("LDI", "R16", $"{cIdx3.Value}");
-            Emit("CLR", "R17");
-            Emit("ADD", "R30", "R16");
-            Emit("ADC", "R31", "R17");
+            // Scratch in R26 (X-low) + R1 (zero reg), never the R16/R17 the linear-scan
+            // allocator hands out -- so a register-allocated value survives this store.
+            Emit("LDI", "R26", $"{cIdx3.Value}");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R1");
             Emit("ST", "Z", "R18");
         }
         else
         {
-            LoadIntoReg(bs.Index, "R16");
-            Emit("CLR", "R17");
-            Emit("ADD", "R30", "R16");
-            Emit("ADC", "R31", "R17");
+            LoadIntoReg(bs.Index, "R26");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R1");
             Emit("ST", "Z", "R18");
         }
     }
