@@ -493,8 +493,129 @@ public static class AvrPeephole
         // --- Dead temporary-register move elimination (R16/R17) ---
         EliminateDeadTempMoves(result);
 
+        // --- Conditional branch shortening ---
+        ShortenBranches(result);
+
         result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         return result;
+    }
+
+    // Inverse pairs for the AVR status-flag conditional branches. EmitBranch lowers a
+    // "branch to target if cond" as `inv(cond) skip; RJMP target; skip:` so the RJMP can
+    // reach any distance. When target is within a conditional branch's own ±64-word reach,
+    // the whole triple collapses back to a single `cond target`.
+    private static readonly Dictionary<string, string> BranchInverse = new()
+    {
+        { "BREQ", "BRNE" }, { "BRNE", "BREQ" }, { "BRCS", "BRCC" }, { "BRCC", "BRCS" },
+        { "BRSH", "BRLO" }, { "BRLO", "BRSH" }, { "BRLT", "BRGE" }, { "BRGE", "BRLT" },
+        { "BRMI", "BRPL" }, { "BRPL", "BRMI" }, { "BRVS", "BRVC" }, { "BRVC", "BRVS" },
+        { "BRHS", "BRHC" }, { "BRHC", "BRHS" }, { "BRTS", "BRTC" }, { "BRTC", "BRTS" },
+        { "BRIE", "BRID" }, { "BRID", "BRIE" },
+    };
+
+    // Word size of a line for branch-distance accounting. Returns false for anything whose
+    // size (or effect on the address counter) we cannot account for — Raw inline-asm and
+    // assembler directives — so a candidate whose span contains one is left untouched.
+    private static bool TryWordSize(AvrAsmLine ln, out int words)
+    {
+        words = 0;
+        switch (ln.Type)
+        {
+            case AvrAsmLine.LineType.Instruction:
+                words = ln.Mnemonic is "CALL" or "JMP" or "LDS" or "STS" ? 2 : 1;
+                return true;
+            case AvrAsmLine.LineType.Label:
+            case AvrAsmLine.LineType.Comment:
+            case AvrAsmLine.LineType.Empty:
+            case AvrAsmLine.LineType.DebugMarker:
+                return true;   // occupy no flash
+            default:
+                return false;  // Raw / unknown -> bail this candidate
+        }
+    }
+
+    private static int NextSignificant(List<AvrAsmLine> lines, int idx)
+    {
+        for (int x = idx + 1; x < lines.Count; ++x)
+            if (lines[x].Type is not (AvrAsmLine.LineType.Comment
+                                       or AvrAsmLine.LineType.Empty
+                                       or AvrAsmLine.LineType.DebugMarker))
+                return x;
+        return -1;
+    }
+
+    private static int CountLabelRefs(List<AvrAsmLine> lines, string label)
+    {
+        int c = 0;
+        foreach (var ln in lines)
+            if (ln.Type == AvrAsmLine.LineType.Instruction && ln.Op1 == label
+                && (ln.Mnemonic.StartsWith("BR") || ln.Mnemonic is "RJMP" or "JMP" or "RCALL" or "CALL"))
+                ++c;
+        return c;
+    }
+
+    // Branch displacement k in words, where the target is reached as PC+1+k. Returns null
+    // when the span between branch and target contains an unsizable line.
+    private static int? BranchDisplacement(List<AvrAsmLine> lines, int branchIdx, int targetIdx)
+    {
+        int sum = 0;
+        if (targetIdx > branchIdx)
+        {
+            for (int x = branchIdx + 1; x < targetIdx; ++x)
+            {
+                if (!TryWordSize(lines[x], out int w)) return null;
+                sum += w;
+            }
+            return sum;                 // forward
+        }
+        for (int x = targetIdx; x < branchIdx; ++x)
+        {
+            if (!TryWordSize(lines[x], out int w)) return null;
+            sum += w;
+        }
+        return -sum - 1;                // backward
+    }
+
+    // Collapse `inv(cond) skip; RJMP target; skip:` into `cond target` whenever target is
+    // within the conditional branch's ±64-word reach. Shortening only ever reduces the
+    // distance seen by other branches, so the fixed-point loop is monotone and a candidate
+    // validated in the current (longer) layout stays in range after every later removal.
+    // If a displacement is mis-estimated as in-range, the assembler rejects the build — a
+    // loud, test-caught failure, never silently wrong code.
+    private static void ShortenBranches(List<AvrAsmLine> lines)
+    {
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            for (int i = 0; i < lines.Count; ++i)
+            {
+                var br = lines[i];
+                if (br.Type != AvrAsmLine.LineType.Instruction) continue;
+                if (!BranchInverse.ContainsKey(br.Mnemonic)) continue;
+
+                int j = NextSignificant(lines, i);
+                if (j < 0 || lines[j].Mnemonic != "RJMP") continue;
+                int k = NextSignificant(lines, j);
+                if (k < 0 || lines[k].Type != AvrAsmLine.LineType.Label) continue;
+                if (lines[k].LabelText != br.Op1) continue;       // the skip label
+                if (CountLabelRefs(lines, br.Op1) != 1) continue;  // referenced only here
+
+                string target = lines[j].Op1;
+                int targetIdx = lines.FindIndex(l => l.Type == AvrAsmLine.LineType.Label
+                                                     && l.LabelText == target);
+                if (targetIdx < 0) continue;
+
+                int? disp = BranchDisplacement(lines, i, targetIdx);
+                if (disp is null or < -64 or > 63) continue;
+
+                lines[i] = AvrAsmLine.MakeInstruction(BranchInverse[br.Mnemonic], target);
+                lines.RemoveAt(k);   // remove higher index first
+                lines.RemoveAt(j);
+                changed = true;
+                break;               // restart: indices and distances have shifted
+            }
+        }
     }
 
     // Registers the linear-scan allocator uses as short-lived temporaries (never
