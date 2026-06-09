@@ -1756,7 +1756,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private bool TryCompileBinaryInPlace(Binary b)
     {
         DataType type = GetValType(b.Dst);
-        if (type is not (DataType.UINT8 or DataType.INT8)) return false;
+        if (type is not (DataType.UINT8 or DataType.INT8
+                         or DataType.UINT16 or DataType.INT16)) return false;
+        int size = type.SizeOf();   // 1 or 2
         if (b.Op is not (IrBinOp.Add or IrBinOp.Sub or IrBinOp.BitAnd
                          or IrBinOp.BitOr or IrBinOp.BitXor)) return false;
 
@@ -1766,9 +1768,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         bool rdUpper = int.Parse(rd[1..]) >= 16;   // R16-R31 accept LDI/SUBI/ANDI/ORI
 
         // src1 must reach rd via MOV/LDD (any register) — not LDI, which is illegal for the
-        // low half. So only an 8-bit Variable/Temporary qualifies (constants/addresses out).
+        // low half. So only a same-width Variable/Temporary qualifies (constants/addresses out).
         if (b.Src1 is not (Variable or Temporary)) return false;
-        if (GetValType(b.Src1).SizeOf() != 1) return false;
+        if (GetValType(b.Src1).SizeOf() != size) return false;
 
         string? rs1 = OperandHomeReg(b.Src1);
         string? rs2 = OperandHomeReg(b.Src2);
@@ -1795,6 +1797,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // --- Constant src2: must fit an immediate/inc-dec form valid for rd's class. ---
         if (b.Src2 is Constant c)
         {
+            // 16-bit immediates need SUBI/SBCI on an R16-R31 pair; register-pair homes here
+            // are always R4-R15 (the temporary pool is 8-bit), so fall back for 16-bit consts.
+            if (size != 1) return false;
             if (b.Op is IrBinOp.BitXor) return false;     // no immediate EOR form
             int v = c.Value & 0xFF;
             string? emit = b.Op switch
@@ -1819,13 +1824,24 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             return true;
         }
 
-        // --- Register/SRAM src2: OP rd, <reg>. ---
-        if (b.Src2 is (Variable or Temporary) && GetValType(b.Src2).SizeOf() == 1)
+        // --- Register/SRAM src2: byte-wise OP rd, <reg>. ---
+        if (b.Src2 is (Variable or Temporary) && GetValType(b.Src2).SizeOf() == size)
         {
             LoadIntoReg(b.Src1, rd, type);
             string s2 = rs2 ?? "R18";
             if (rs2 is null) LoadIntoReg(b.Src2, "R18", type);
             Emit(mnem, rd, s2);
+            if (size == 2)
+            {
+                // High byte carries the borrow/carry for Add/Sub (ADC/SBC).
+                string highMnem = b.Op switch
+                {
+                    IrBinOp.Add => "ADC",
+                    IrBinOp.Sub => "SBC",
+                    _           => mnem,   // AND/OR/EOR are byte-independent
+                };
+                Emit(highMnem, GetHighReg(rd), GetHighReg(s2));
+            }
             return true;
         }
 
