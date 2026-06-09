@@ -529,9 +529,45 @@ public static class AvrPeephole
             case AvrAsmLine.LineType.Empty:
             case AvrAsmLine.LineType.DebugMarker:
                 return true;   // occupy no flash
+            case AvrAsmLine.LineType.Raw:
+                return TryRawWordSize(ln.Content, out words);
             default:
-                return false;  // Raw / unknown -> bail this candidate
+                return false;
         }
+    }
+
+    // Size a Raw block (e.g. an inline-asm body emitted as one multi-line string) by counting
+    // its instruction words. Returns false on anything that emits data or moves the origin
+    // (.org/.byte/.word/...) — those we cannot account for in a relative distance, so the
+    // candidate spanning them is left untouched.
+    private static bool TryRawWordSize(string content, out int words)
+    {
+        words = 0;
+        foreach (var rawLine in content.Split('\n'))
+        {
+            var line = rawLine;
+            int sc = line.IndexOf(';');
+            if (sc >= 0) line = line[..sc];
+            line = line.Trim();
+            if (line.Length == 0 || line.EndsWith(":")) continue;   // blank / label
+
+            string head = line.Split(new[] { ' ', '\t', ',' }, 2,
+                                     StringSplitOptions.RemoveEmptyEntries)[0];
+            if (head.StartsWith("."))
+            {
+                switch (head.ToLowerInvariant())
+                {
+                    case ".equ": case ".set": case ".global": case ".extern":
+                    case ".def": case ".undef": case ".list": case ".nolist":
+                    case ".cseg": case ".dseg":
+                        continue;          // zero-size assembler metadata
+                    default:
+                        return false;      // .org / data directive / unknown
+                }
+            }
+            words += head.ToUpperInvariant() is "CALL" or "JMP" or "LDS" or "STS" ? 2 : 1;
+        }
+        return true;
     }
 
     private static int NextSignificant(List<AvrAsmLine> lines, int idx)
