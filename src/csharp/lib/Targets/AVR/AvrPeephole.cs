@@ -530,6 +530,20 @@ public static class AvrPeephole
                 result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         }
 
+        // --- Park/unpark round-trip elimination (call-argument shuffle) ---
+        // `MOV Rh,Rs; <set up other args>; MOV Rd,Rh` parks a value in a home and
+        // reloads it because Rs (R24) is reused for another argument. When nothing
+        // between touches Rh or Rd and Rh is dead afterward, write the value straight
+        // into Rd instead and drop the reload.
+        var prChanged = true;
+        while (prChanged)
+        {
+            prChanged = false;
+            EliminateParkRoundTrip(result, ref prChanged);
+            if (prChanged)
+                result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
+        }
+
         result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         return result;
     }
@@ -664,6 +678,118 @@ public static class AvrPeephole
             ? int.TryParse(s.AsSpan(2), System.Globalization.NumberStyles.HexNumber, null, out value)
             : int.TryParse(s, out value);
         return ok && value is >= 0 and <= 0xFF;
+    }
+
+    // Conservatively over-approximates whether `line` may read register r. Must err
+    // toward "yes": any unrecognised instruction is assumed to read r so the
+    // park-round-trip pass never reorders a value past a hidden use.
+    private static bool ReadsReg(AvrAsmLine line, int r)
+    {
+        if (line.Type is AvrAsmLine.LineType.Comment or AvrAsmLine.LineType.Empty
+                      or AvrAsmLine.LineType.DebugMarker or AvrAsmLine.LineType.Label)
+            return false;
+        if (line.Type == AvrAsmLine.LineType.Raw)
+            return !IsDirectiveLine(line);
+        string m = line.Mnemonic;
+        int op1 = ParseReg(line.Op1), op2 = ParseReg(line.Op2);
+        if (m is "CALL" or "RCALL" or "ICALL" or "EICALL") return r is >= 18 and <= 25;  // PyMCU arg regs
+        if (m is "RET" or "RETI") return r is 24 or 25;                                  // return value
+        if (m.StartsWith("BR") || m is "RJMP" or "JMP" or "NOP" or "SEI" or "CLI"
+            or "WDR" or "SLEEP" or "SEC" or "CLC" or "SEZ" or "CLZ") return false;
+        if (m is "LDI" or "CLR" or "SER" or "LDS" or "IN" or "POP") return false;        // pure dest, no GP read
+        if (m == "MOV") return op2 == r;
+        if (m == "MOVW") return op2 == r || op2 + 1 == r;
+        if (m is "LD" or "LDD") return r is >= 26 and <= 31;                             // pointer (X/Y/Z)
+        if (m is "LPM" or "ELPM") return r is 30 or 31;                                  // Z
+        if (m is "ST" or "STD") return op2 == r || r is >= 26 and <= 31;                 // value + pointer
+        if (m is "STS" or "OUT") return op2 == r;                                        // value
+        if (m == "PUSH") return op1 == r;
+        if (m is "ADIW" or "SBIW") return op1 == r || op1 + 1 == r;
+        return op1 == r || op2 == r;   // ALU / compare / shift / unrecognised -> reads its operands
+    }
+
+    // Collapses a park/unpark round-trip the call-argument setup leaves behind:
+    //   MOV Rh, Rs ; <ops setting up other args, clobbering Rs> ; MOV Rd, Rh ; CALL
+    // becomes
+    //   MOV Rd, Rs ; <ops> ; CALL
+    // moving the value straight into its final register instead of stashing it in a
+    // home and reloading it. Sound only when, between the two MOVs, nothing reads or
+    // writes Rh or Rd and there is no call/branch/label (so reordering is safe), and
+    // Rh is dead after the unpark (so dropping its definition loses nothing).
+    private static void EliminateParkRoundTrip(List<AvrAsmLine> lines, ref bool changed)
+    {
+        for (int i = 0; i < lines.Count; i++)
+        {
+            if (lines[i].Type != AvrAsmLine.LineType.Instruction || lines[i].Mnemonic != "MOV")
+                continue;
+            int rh = ParseReg(lines[i].Op1), rs = ParseReg(lines[i].Op2);   // park: MOV Rh, Rs
+            if (rh < 0 || rs < 0 || rh == rs) continue;
+
+            for (int j = i + 1; j < lines.Count; j++)
+            {
+                var lj = lines[j];
+                if (lj.Type is AvrAsmLine.LineType.Comment or AvrAsmLine.LineType.Empty
+                            or AvrAsmLine.LineType.DebugMarker) continue;
+                if (lj.Type != AvrAsmLine.LineType.Instruction) break;      // label / raw -> bail
+                string m = lj.Mnemonic;
+
+                if (m == "MOV" && ParseReg(lj.Op2) == rh)                   // candidate unpark MOV Rd, Rh
+                {
+                    int rd = ParseReg(lj.Op1);
+                    if (rd >= 0 && rd != rh && rd != rs
+                        && !RegTouchedBetween(lines, i, j, rd)
+                        && RegDeadAfter(lines, j, rh))
+                    {
+                        lines[i] = AvrAsmLine.MakeInstruction("MOV", "R" + rd, "R" + rs);
+                        lines[j] = AvrAsmLine.MakeEmpty();
+                        changed = true;
+                    }
+                    break;   // first unpark candidate decides; stop scanning this park
+                }
+
+                // Reordering is unsafe across control flow, and Rh must stay intact.
+                if (m is "CALL" or "RCALL" or "ICALL" or "EICALL" or "RET" or "RETI"
+                    or "RJMP" or "JMP" || m.StartsWith("BR")) break;
+                if (ReadsReg(lj, rh) || WritesReg(lj, rh)) break;
+            }
+        }
+    }
+
+    // True if register r is read or written by any instruction strictly between i and j.
+    private static bool RegTouchedBetween(List<AvrAsmLine> lines, int i, int j, int r)
+    {
+        for (int k = i + 1; k < j; k++)
+            if (ReadsReg(lines[k], r) || WritesReg(lines[k], r)) return true;
+        return false;
+    }
+
+    // True if register r is provably dead after index j: scanning the straight-line
+    // continuation, it is redefined (written) before any read. The reasoning only
+    // holds without path divergence, so this bails (returns false) at any branch,
+    // jump, label, RET, or non-directive raw asm — a write seen past a conditional
+    // branch does not redefine r on the not-taken path (e.g. a `min = x` guarded by
+    // `BRSH`). A plain CALL is transparent: it returns to the next instruction and,
+    // per ReadsReg/WritesReg, only touches the argument/scratch registers.
+    private static bool RegDeadAfter(List<AvrAsmLine> lines, int j, int r)
+    {
+        for (int k = j + 1; k < lines.Count; k++)
+        {
+            var lk = lines[k];
+            if (lk.Type is AvrAsmLine.LineType.Comment or AvrAsmLine.LineType.Empty
+                        or AvrAsmLine.LineType.DebugMarker) continue;
+            if (lk.Type == AvrAsmLine.LineType.Raw)
+            {
+                if (IsDirectiveLine(lk)) continue;   // assembler metadata: no register effect
+                return false;                        // hand-written asm: unknown effects -> bail
+            }
+            if (lk.Type == AvrAsmLine.LineType.Label) return false;
+            string m = lk.Mnemonic;
+            if (m is "RET" or "RETI" or "RJMP" or "JMP" or "IJMP" or "EIJMP" || m.StartsWith("BR"))
+                return false;                        // path divergence -> linear reasoning unsound
+            if (ReadsReg(lk, r)) return false;       // used before redefinition -> live
+            if (WritesReg(lk, r)) return true;       // redefined first -> dead
+        }
+        return false;
     }
 
     // Inverse pairs for the AVR status-flag conditional branches. EmitBranch lowers a
