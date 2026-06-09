@@ -493,11 +493,66 @@ public static class AvrPeephole
         // --- Dead temporary-register move elimination (R16/R17) ---
         EliminateDeadTempMoves(result);
 
+        // --- Fuse adjacent immediate ORI/ANDI on the same register ---
+        // The @inline driver composition emits split constant masks (e.g.
+        // (nib & 0xF0) | _RS | _BL -> ORI Rd,1; ORI Rd,8). Runs after the dead
+        // temp-move pass so the staging MOV the codegen parks between the two ops
+        // is gone, leaving them consecutive. Folding them is a flat win:
+        // Rd = (Rd op a) op b == Rd op (a op b) — the second op alone fixes Rd and
+        // SREG, and nothing significant reads the intermediate.
+        var fiChanged = true;
+        while (fiChanged)
+        {
+            fiChanged = false;
+            FuseImmediates(result, ref fiChanged);
+            if (fiChanged)
+                result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
+        }
+
         // --- Conditional branch shortening ---
         ShortenBranches(result);
 
         result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         return result;
+    }
+
+    // Fuses two consecutive same-register immediate ops (ORI Rd,a; ORI Rd,b ->
+    // ORI Rd,a|b; likewise ANDI -> a&b). The two need only be consecutive among
+    // *significant* lines — comments/empties/debug markers between them are fine —
+    // but a label or raw asm between bails (control could enter, or Rd/flags be
+    // touched, between them).
+    private static void FuseImmediates(List<AvrAsmLine> lines, ref bool changed)
+    {
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var a = lines[i];
+            if (a.Type != AvrAsmLine.LineType.Instruction) continue;
+            if (a.Mnemonic is not ("ORI" or "ANDI")) continue;
+
+            int j = NextSignificant(lines, i);
+            if (j < 0) continue;
+            var b = lines[j];
+            if (b.Type != AvrAsmLine.LineType.Instruction) continue;   // label / raw between
+            if (b.Mnemonic != a.Mnemonic || b.Op1 != a.Op1) continue;  // same op, same Rd
+            if (!TryParseImm8(a.Op2, out int va) || !TryParseImm8(b.Op2, out int vb)) continue;
+
+            // Rd = (Rd op a) op b == Rd op (a op b); b alone fixes Rd and SREG and
+            // nothing significant reads the intermediate, so flags are preserved.
+            int fused = a.Mnemonic == "ORI" ? (va | vb) : (va & vb);
+            lines[i] = AvrAsmLine.MakeEmpty();
+            lines[j] = AvrAsmLine.MakeInstruction(a.Mnemonic, a.Op1, fused.ToString());
+            changed = true;
+        }
+    }
+
+    private static bool TryParseImm8(string s, out int value)
+    {
+        value = 0;
+        s = s.Trim();
+        bool ok = s.StartsWith("0x") || s.StartsWith("0X")
+            ? int.TryParse(s.AsSpan(2), System.Globalization.NumberStyles.HexNumber, null, out value)
+            : int.TryParse(s, out value);
+        return ok && value is >= 0 and <= 0xFF;
     }
 
     // Inverse pairs for the AVR status-flag conditional branches. EmitBranch lowers a
