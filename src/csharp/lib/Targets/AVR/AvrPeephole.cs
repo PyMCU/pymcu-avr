@@ -512,6 +512,24 @@ public static class AvrPeephole
         // --- Conditional branch shortening ---
         ShortenBranches(result);
 
+        // --- Redundant register-reload elimination across branches ---
+        // After `MOV d,s` both registers hold the same value, but the main alias
+        // pass clears its facts at every conditional branch (a join-point
+        // precaution), so a reload `MOV s,d` the codegen emits after a
+        // compare+branch survives even though the register is unchanged on the
+        // fall-through (the decimal-print's `MOV R9,R24; CPI; BRLO; MOV R24,R9`).
+        // Runs AFTER ShortenBranches, which collapses the `BRcc skip; RJMP t; skip:`
+        // lowering back to a single `BRcc t` and removes the skip label that would
+        // otherwise (conservatively) stop the scan.
+        var rrChanged = true;
+        while (rrChanged)
+        {
+            rrChanged = false;
+            EliminateRedundantReloads(result, ref rrChanged);
+            if (rrChanged)
+                result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
+        }
+
         result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         return result;
     }
@@ -542,6 +560,99 @@ public static class AvrPeephole
             lines[i] = AvrAsmLine.MakeEmpty();
             lines[j] = AvrAsmLine.MakeInstruction(a.Mnemonic, a.Op1, fused.ToString());
             changed = true;
+        }
+    }
+
+    // True for an assembler directive Raw line (.equ/.org/.byte/...): emits no code,
+    // touches no register. Hand-written inline asm Raw lines are NOT directives.
+    private static bool IsDirectiveLine(AvrAsmLine l)
+        => l.Type == AvrAsmLine.LineType.Raw && l.Content.TrimStart().StartsWith(".");
+
+    // Instructions whose only register effect is writing operand 1.
+    private static readonly HashSet<string> WritesOp1Only = new()
+    {
+        "MOV", "LDI", "LD", "LDD", "LDS", "IN", "POP", "LPM", "ELPM", "CLR", "SER", "COM",
+        "NEG", "INC", "DEC", "LSL", "LSR", "ASR", "ROL", "ROR", "SWAP", "ADD", "ADC", "SUB",
+        "SUBI", "SBC", "SBCI", "AND", "ANDI", "OR", "ORI", "EOR", "BLD",
+    };
+
+    // Instructions that touch flags / memory / PC / SP only — no general-purpose
+    // register destination.
+    private static readonly HashSet<string> WritesNoReg = new()
+    {
+        "CP", "CPC", "CPI", "CPSE", "TST", "ST", "STD", "STS", "OUT", "PUSH", "SBI", "CBI",
+        "SBIS", "SBIC", "SBRC", "SBRS", "NOP", "RJMP", "JMP", "SEI", "CLI", "WDR", "SLEEP",
+        "BREAK", "RET", "RETI", "SEC", "CLC", "SEZ", "CLZ",
+    };
+
+    // Conservatively over-approximates whether `line` may write register r. Used by the
+    // redundant-reload pass to decide when a tracked value is still intact, so it MUST
+    // err toward "yes" (anything unrecognised counts as a write, ending the scan).
+    private static bool WritesReg(AvrAsmLine line, int r)
+    {
+        switch (line.Type)
+        {
+            case AvrAsmLine.LineType.Comment:
+            case AvrAsmLine.LineType.Empty:
+            case AvrAsmLine.LineType.DebugMarker:
+            case AvrAsmLine.LineType.Label:
+                return false;
+            case AvrAsmLine.LineType.Raw:
+                return !IsDirectiveLine(line);    // unknown hand-written asm -> assume it writes
+        }
+
+        string m = line.Mnemonic;
+        if (m.StartsWith("BR")) return false;                       // conditional/relative branches
+        if (WritesNoReg.Contains(m)) return false;
+        // Calls clobber the scratch/arg/return registers; R4-R15, the Y pointer and the
+        // zero register survive (PyMCU never uses R4-R15 as scratch).
+        if (m is "CALL" or "RCALL" or "ICALL" or "EICALL")
+            return r is not ((>= 4 and <= 15) or 28 or 29 or 1);
+        if (m is "MUL" or "MULS" or "MULSU" or "FMUL" or "FMULS" or "FMULSU")
+            return r is 0 or 1;
+        if (m is "MOVW" or "ADIW" or "SBIW")
+        {
+            int d = ParseReg(line.Op1);
+            return d == r || d + 1 == r;
+        }
+        if (WritesOp1Only.Contains(m))
+            return ParseReg(line.Op1) == r;
+        return true;                                                // unrecognised -> conservative
+    }
+
+    // Removes a `MOV x,y` whose {x,y} both already hold the same value because a prior
+    // `MOV d,s` (with {x,y} == {d,s}) made them equal and nothing wrote either register
+    // in between. Stops at any write of d or s and at any label (a possible alternate
+    // entry where the equality may not hold).
+    private static void EliminateRedundantReloads(List<AvrAsmLine> lines, ref bool changed)
+    {
+        for (int i = 0; i < lines.Count; i++)
+        {
+            if (lines[i].Type != AvrAsmLine.LineType.Instruction || lines[i].Mnemonic != "MOV")
+                continue;
+            int d = ParseReg(lines[i].Op1), s = ParseReg(lines[i].Op2);
+            if (d < 0 || s < 0 || d == s) continue;
+
+            for (int j = i + 1; j < lines.Count; j++)
+            {
+                var lj = lines[j];
+                if (lj.Type is AvrAsmLine.LineType.Comment or AvrAsmLine.LineType.Empty
+                            or AvrAsmLine.LineType.DebugMarker) continue;
+                if (lj.Type == AvrAsmLine.LineType.Label) break;
+
+                if (lj.Type == AvrAsmLine.LineType.Instruction && lj.Mnemonic == "MOV")
+                {
+                    int x = ParseReg(lj.Op1), y = ParseReg(lj.Op2);
+                    if ((x == d && y == s) || (x == s && y == d))
+                    {
+                        lines[j] = AvrAsmLine.MakeEmpty();   // copies a value the dest already holds
+                        changed = true;
+                        continue;                            // {d,s} still equal; keep scanning
+                    }
+                }
+
+                if (WritesReg(lj, d) || WritesReg(lj, s)) break;
+            }
         }
     }
 
