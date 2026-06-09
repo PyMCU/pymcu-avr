@@ -426,19 +426,19 @@ class AvrgasToolchain(ExternalToolchain):
             # AVRA labels are word-addressed; GNU AS labels are byte-addressed.
             # "label * 2" (word→byte conversion) must be removed for GNU AS.
             line = _re.sub(r"\b(hi8|lo8)\((\w+)\s*\*\s*2\)", r"\1(\2)", line)
-            # RCALL  →  CALL
-            # avr-ld may generate R_AVR_13_PCREL relocations for RCALL that
-            # overflow when calling external C symbols in FFI builds.
-            # Upgrade RCALL unconditionally to the 2-word CALL so the linker
-            # never truncates a relocation.
-            #
-            # RJMP is intentionally NOT converted to JMP: the vector table
-            # uses RJMP+NOP (4 bytes per slot) and the .org spacing is also
-            # 4 bytes; converting to JMP (4 bytes) + NOP would make each used
-            # slot 6 bytes and the next .org would move backwards.  RJMP range
-            # is ±2047 words which is sufficient for all targets within a
-            # single assembly file.
+            # RCALL → CALL  and  RJMP → JMP.
+            # RCALL/RJMP carry 13-bit PC-relative relocations (±2047 words ≈ ±4 KB).
+            # That is enough for small programs but a large one (or an FFI call to a
+            # distant C symbol) overflows them — "relocation truncated to fit:
+            # R_AVR_13_PCREL". Emitting the unconditional 2-word forms (CALL/JMP,
+            # 22-bit absolute, full address space) is always safe; the linker's
+            # relaxation (-mrelax, added to the link command) shrinks each one back
+            # to RCALL/RJMP wherever the target is in range, so small programs keep
+            # the compact encoding while large ones still link. The atmega-style
+            # vector table is 4-byte-per-slot (.org spacing), which a 4-byte JMP
+            # fills exactly.
             line = _re.sub(r"\bRCALL\b", "CALL", line)
+            line = _re.sub(r"\bRJMP\b", "JMP", line)
             # .db ...  →  .byte ...
             line = _re.sub(r"^\s*\.db\b", ".byte", line)
 
@@ -607,6 +607,7 @@ class AvrgasToolchain(ExternalToolchain):
             # ld/as/collect2 instead of any system avr-binutils installation.
             f"-B{_gcc_bin_path}",
             f"-mmcu={self.chip}",
+            "-mrelax",           # relax CALL/JMP -> RCALL/RJMP where the target is in range
             "-nostartfiles",     # our assembly provides the entry point; skip crt0.o
             "-nodefaultlibs",    # suppress spec-driven -lc/-latmega328p (avr-gcc 15.x)
             "-T", str(linker_script),
