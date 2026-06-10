@@ -469,6 +469,21 @@ public static class AvrPeephole
             result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         }
 
+        // --- Redundant variable-index array-address (Z) materialization removal ---
+        // arr[i] (variable i) lowers to a 6-instruction recipe building base+i*scale
+        // into Z, then LD/ST through Z (which leaves Z intact). Two accesses to the same
+        // array with the same index in one straight-line region rebuild the identical
+        // recipe; with the index source and Z untouched between them, the rebuild is
+        // dead. Runs before ForwardStores so the canonical recipe is still intact.
+        var zsChanged = true;
+        while (zsChanged)
+        {
+            zsChanged = false;
+            EliminateRedundantZSetup(result, ref zsChanged);
+            if (zsChanged)
+                result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
+        }
+
         // --- Basic-block store-to-load forwarding & redundant load/store removal ---
         // The adjacent STD/LDD patterns above only fire when the store and the
         // reload sit next to each other. 16-bit values interleave their lo/hi
@@ -706,6 +721,125 @@ public static class AvrPeephole
         if (m == "PUSH") return op1 == r;
         if (m is "ADIW" or "SBIW") return op1 == r || op1 + 1 == r;
         return op1 == r || op2 == r;   // ALU / compare / shift / unrecognised -> reads its operands
+    }
+
+    // A materialized variable-index array address living in Z (R30:R31), as emitted by
+    // CompileArrayLoad/Store: an index load into R24, an optional LSL (16-bit scale),
+    // then LDI R30,c0; LDI R31,c1; ADD R30,R24; ADC R31,R1. The following LD/ST reads
+    // Z without modifying it, so Z stays valid until the index source or Z is touched.
+    private readonly struct ZBlock
+    {
+        public readonly int Start;    // line index of the index load (first line)
+        public readonly int End;      // line index of the ADC R31,R1 (last line)
+        public readonly int SrcReg;   // index source register (MOV idxload), else -1
+        public readonly int SrcSlot;  // index source Y+offset (LDD idxload), else -1
+        public readonly string Recipe;// canonical signature: idxload|lsl|c0|c1
+        public ZBlock(int start, int end, int srcReg, int srcSlot, string recipe)
+            => (Start, End, SrcReg, SrcSlot, Recipe) = (start, end, srcReg, srcSlot, recipe);
+    }
+
+    // Parses the 5/6-line Z-address recipe starting at significant line `i`. The index
+    // scratch is always R24 (LoadIntoReg(index, "R24")); the LSL is present only for
+    // 2-byte elements. Returns false unless the whole canonical shape is present.
+    private static bool TryParseZBlock(List<AvrAsmLine> lines, int i, out ZBlock block)
+    {
+        block = default;
+        var idx = lines[i];
+        if (idx.Type != AvrAsmLine.LineType.Instruction || idx.Op1 != "R24") return false;
+        int srcReg = -1, srcSlot = -1;
+        if (idx.Mnemonic == "MOV") { srcReg = ParseReg(idx.Op2); if (srcReg < 0) return false; }
+        else if (idx.Mnemonic == "LDD") { srcSlot = ParseYOffset(idx.Op2); if (srcSlot < 0) return false; }
+        else return false;
+
+        int j = NextSignificant(lines, i);
+        if (j < 0) return false;
+        bool hasLsl = lines[j].Type == AvrAsmLine.LineType.Instruction
+                      && lines[j].Mnemonic == "LSL" && lines[j].Op1 == "R24";
+        if (hasLsl) { j = NextSignificant(lines, j); if (j < 0) return false; }
+
+        var ldi0 = lines[j];
+        if (ldi0.Type != AvrAsmLine.LineType.Instruction || ldi0.Mnemonic != "LDI" || ldi0.Op1 != "R30")
+            return false;
+        int j1 = NextSignificant(lines, j);
+        if (j1 < 0) return false;
+        var ldi1 = lines[j1];
+        if (ldi1.Type != AvrAsmLine.LineType.Instruction || ldi1.Mnemonic != "LDI" || ldi1.Op1 != "R31")
+            return false;
+        int j2 = NextSignificant(lines, j1);
+        if (j2 < 0) return false;
+        var add = lines[j2];
+        if (add.Type != AvrAsmLine.LineType.Instruction || add.Mnemonic != "ADD"
+            || add.Op1 != "R30" || add.Op2 != "R24") return false;
+        int j3 = NextSignificant(lines, j2);
+        if (j3 < 0) return false;
+        var adc = lines[j3];
+        if (adc.Type != AvrAsmLine.LineType.Instruction || adc.Mnemonic != "ADC"
+            || adc.Op1 != "R31" || adc.Op2 != "R1") return false;
+
+        string recipe = $"{idx.Mnemonic}|{idx.Op2}|{hasLsl}|{ldi0.Op2}|{ldi1.Op2}";
+        block = new ZBlock(i, j3, srcReg, srcSlot, recipe);
+        return true;
+    }
+
+    // True if `line` may invalidate the standing Z address `z`: a control-flow boundary
+    // (label/jump/branch/RET, or a CALL — which clobbers Z per WritesReg), a write to Z
+    // itself, a write to the index source register, or — for a slot-sourced index — any
+    // memory store that might alias the slot. Conservative: the same path-divergence
+    // discipline as RegDeadAfter, so a stale Z is never reused across a join.
+    private static bool InvalidatesZ(AvrAsmLine line, ZBlock z)
+    {
+        switch (line.Type)
+        {
+            case AvrAsmLine.LineType.Label: return true;
+            case AvrAsmLine.LineType.Raw: return !IsDirectiveLine(line);
+            case AvrAsmLine.LineType.Instruction: break;
+            default: return false;
+        }
+        string m = line.Mnemonic;
+        if (m is "RJMP" or "JMP" or "IJMP" or "EIJMP" or "RET" or "RETI" || m.StartsWith("BR"))
+            return true;
+        if (WritesReg(line, 30) || WritesReg(line, 31)) return true;   // Z corrupted (incl. CALL)
+        if (z.SrcReg >= 0 && WritesReg(line, z.SrcReg)) return true;    // index changed
+        if (z.SrcSlot >= 0 && m is "STD" or "ST" or "STS") return true; // slot may be overwritten
+        return false;
+    }
+
+    // Drops the second materialization of an array address that Z already holds. Walks
+    // the stream tracking the live Z recipe; when an identical recipe is rebuilt while
+    // the index source and Z are provably intact (the walk nulls the fact at any
+    // invalidating line), the rebuild — index load, optional LSL, two LDIs, ADD, ADC —
+    // is deleted. The following LD/ST keeps using the address still sitting in Z.
+    private static void EliminateRedundantZSetup(List<AvrAsmLine> lines, ref bool changed)
+    {
+        ZBlock? live = null;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var t = lines[i].Type;
+            if (t is AvrAsmLine.LineType.Comment or AvrAsmLine.LineType.Empty
+                  or AvrAsmLine.LineType.DebugMarker)
+                continue;
+
+            if (TryParseZBlock(lines, i, out ZBlock cur))
+            {
+                if (live is ZBlock p && p.Recipe == cur.Recipe)
+                {
+                    for (int k = cur.Start; k <= cur.End; k++)
+                        lines[k] = AvrAsmLine.MakeEmpty();
+                    int c = cur.Start - 1;          // drop the "...index via Z" comment too
+                    if (c >= 0 && lines[c].Type == AvrAsmLine.LineType.Comment)
+                        lines[c] = AvrAsmLine.MakeEmpty();
+                    changed = true;
+                    i = cur.End;                    // Z still holds p's address; keep `live`
+                    continue;
+                }
+                live = cur;
+                i = cur.End;
+                continue;
+            }
+
+            if (live is ZBlock z && InvalidatesZ(lines[i], z))
+                live = null;
+        }
     }
 
     // Collapses a park/unpark round-trip the call-argument setup leaves behind:
