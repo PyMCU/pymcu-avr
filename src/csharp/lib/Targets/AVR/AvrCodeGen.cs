@@ -45,6 +45,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private int _bssSize;
     private bool _needsGc;      // mirrors program.NeedsGc for use in CompileFunction
 
+    // Divmod fusion (per function): __div16 already produces both quotient (R24:R25)
+    // and remainder (R26:R27). When the same dividend is divided AND mod'd by the same
+    // divisor in one basic block (the decimal-print digit loop: r = v % 10; v = v // 10),
+    // the pair collapses to a single __div16 call. _divModFuse maps the primary Binary
+    // (where the call is emitted) to the two result destinations; _divModSkip holds the
+    // secondary Binary, which emits nothing. Reference identity, rebuilt each function.
+    private Dictionary<Binary, (Val Quot, Val Rem)> _divModFuse =
+        new(ReferenceEqualityComparer.Instance);
+    private HashSet<Binary> _divModSkip = new(ReferenceEqualityComparer.Instance);
+
     private string MakeLabel(string prefix = ".L") => $"{prefix}_{_labelCounter++}";
     private static string GetHighReg(string reg) => "R" + (int.Parse(reg[1..]) + 1);
 
@@ -876,6 +886,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         _tmpRegLayout = AvrLinearScan.Allocate(func);
         foreach (var (name, _) in _tmpRegLayout)
             _allTmpRegNames.Add(name);
+
+        DetectDivModFusions(func);
 
         EmitLabel(func.Name);
 
@@ -1848,8 +1860,147 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         return false;
     }
 
+    // The operand size the Div/Mod lowering runs at: src1 may be wider than dst
+    // (e.g. uint16 // 10 -> uint8 reads the full 16-bit dividend), so the routine is
+    // chosen from the wider of the two. Mirrors the opType computed in CompileBinary.
+    private DataType DivModOpType(Binary b)
+    {
+        var s1 = GetValType(b.Src1);
+        var d = GetValType(b.Dst);
+        return s1.SizeOf() > d.SizeOf() ? s1 : d;
+    }
+
+    // Finds same-operand divide/modulo pairs in a single basic block and records the
+    // fusion. Only unsigned 16-bit (the __div16 contract: quotient in R24:R25, remainder
+    // in R26:R27) is fused. The pair is valid only when, between the two ops, neither the
+    // dividend nor the divisor is rewritten and the second op's destination is never read
+    // or written (its result is materialized early, at the primary) — and no control flow
+    // intervenes, so the two run as one straight line. Mirror images (v % k before v // k
+    // and v // k before v % k) are both handled.
+    private void DetectDivModFusions(Function func)
+    {
+        _divModFuse.Clear();
+        _divModSkip.Clear();
+        var body = func.Body;
+
+        bool Fusable(Binary x) =>
+            x.Op is IrBinOp.Mod or IrBinOp.Div or IrBinOp.FloorDiv
+            && DivModOpType(x).SizeOf() == 2
+            && !IsSignedType(GetValType(x.Src1));
+        static bool IsMod(IrBinOp op) => op is IrBinOp.Mod;
+        static bool IsDiv(IrBinOp op) => op is IrBinOp.Div or IrBinOp.FloorDiv;
+
+        for (int i = 0; i < body.Count; i++)
+        {
+            if (body[i] is not Binary p || !Fusable(p)) continue;
+            if (_divModSkip.Contains(p)) continue;            // already a prior pair's secondary
+
+            for (int j = i + 1; j < body.Count; j++)
+            {
+                var inst = body[j];
+
+                if (inst is Binary s && Fusable(s)
+                    && ((IsMod(p.Op) && IsDiv(s.Op)) || (IsDiv(p.Op) && IsMod(s.Op)))
+                    && Equals(s.Src1, p.Src1) && Equals(s.Src2, p.Src2)
+                    && !Equals(p.Dst, s.Dst))
+                {
+                    // Verify the second op's destination is untouched in the window; its
+                    // value is stored at the primary, so a read/write between would diverge.
+                    bool clean = true;
+                    for (int k = i + 1; k < j && clean; k++)
+                        if (TouchesVal(body[k], s.Dst, read: true)
+                            || TouchesVal(body[k], s.Dst, read: false))
+                            clean = false;
+                    if (clean)
+                    {
+                        var (quot, rem) = IsMod(p.Op) ? (s.Dst, p.Dst) : (p.Dst, s.Dst);
+                        _divModFuse[p] = (quot, rem);
+                        _divModSkip.Add(s);
+                    }
+                    break;   // this primary is resolved (paired, or a blocking divmod hit)
+                }
+
+                // Only a constrained set of side-effect-free, control-flow-free instructions
+                // may sit between the pair, and none may rewrite the dividend or divisor.
+                if (!IsFusionTransparent(inst)
+                    || TouchesVal(inst, p.Src1, read: false)
+                    || TouchesVal(inst, p.Src2, read: false))
+                    break;
+            }
+        }
+    }
+
+    // Instructions allowed between a fused divmod pair: pure data ops with no control flow
+    // and no opaque memory/register clobber. A CALL, jump, label, return, indirect store,
+    // or anything unrecognised ends the search (conservative).
+    private static bool IsFusionTransparent(Instruction inst) => inst switch
+    {
+        Binary or Unary or Copy or Bitcast or ArrayStore or ArrayLoad or ArrayLoadFlash
+            or BytearrayLoad or FlashLoadPtr or BitCheck => true,
+        _ => false,
+    };
+
+    // Conservative read/write test for the scalar Val v. Writes: the instruction's
+    // destination/target equals v. Reads: v appears as a source operand. ArrayStore
+    // writes array memory (never a scalar Val), so it only reads. Unhandled cases fall
+    // through to false here because IsFusionTransparent already gates the instruction set.
+    private static bool TouchesVal(Instruction inst, Val v, bool read)
+    {
+        if (read)
+            return inst switch
+            {
+                Binary x => Equals(x.Src1, v) || Equals(x.Src2, v),
+                Unary x => Equals(x.Src, v),
+                Copy x => Equals(x.Src, v),
+                Bitcast x => Equals(x.Src, v),
+                ArrayStore x => Equals(x.Index, v) || Equals(x.Src, v),
+                ArrayLoad x => Equals(x.Index, v),
+                ArrayLoadFlash x => Equals(x.Index, v),
+                BytearrayLoad x => Equals(x.Index, v),
+                FlashLoadPtr x => Equals(x.Ptr, v) || Equals(x.Index, v),
+                BitCheck x => Equals(x.Source, v),
+                _ => false,
+            };
+        return inst switch
+        {
+            Binary x => Equals(x.Dst, v),
+            Unary x => Equals(x.Dst, v),
+            Copy x => Equals(x.Dst, v),
+            Bitcast x => Equals(x.Dst, v),
+            ArrayLoad x => Equals(x.Dst, v),
+            ArrayLoadFlash x => Equals(x.Dst, v),
+            BytearrayLoad x => Equals(x.Dst, v),
+            FlashLoadPtr x => Equals(x.Dst, v),
+            BitCheck x => Equals(x.Dst, v),
+            _ => false,
+        };
+    }
+
+    // Emits one __div16 for a fused divide/modulo pair and stores both results: the
+    // quotient (R24:R25) and the remainder (R26:R27). The remainder is stashed clear of
+    // StoreRegInto's scratch (R20:R21, free here — the divisor in R18:R19 is dead after
+    // the call) so neither store clobbers the other.
+    private void EmitFusedDivMod(Binary primary, Val quotDst, Val remDst)
+    {
+        var opType = DivModOpType(primary);     // unsigned 16-bit (gated in DetectDivModFusions)
+        LoadIntoReg(primary.Src1, "R24", opType);
+        LoadIntoReg(primary.Src2, "R18", opType);
+        Emit("CALL", "__div16");                 // R24:R25 = quotient, R26:R27 = remainder
+        Emit("MOVW", "R20", "R26");              // stash remainder in R21:R20
+        StoreRegInto("R24", quotDst, opType);    // store quotient (may use X = R26:R27)
+        Emit("MOVW", "R24", "R20");              // remainder -> R24:R25
+        StoreRegInto("R24", remDst, opType);
+    }
+
     private void CompileBinary(Binary b)
     {
+        if (_divModSkip.Contains(b)) return;                 // folded into its paired __div16
+        if (_divModFuse.TryGetValue(b, out var pair))
+        {
+            EmitFusedDivMod(b, pair.Quot, pair.Rem);
+            return;
+        }
+
         DataType type = GetValType(b.Dst);
         // Delegate float operations to soft-float routines.
         if (type == DataType.FLOAT
