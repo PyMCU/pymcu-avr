@@ -1,0 +1,8 @@
+[project]
+name = "analog-inout"
+version = "0.1.0"
+[tool.pymcu]
+target = "atmega328p"
+frequency = 16000000
+sources = "src"
+entry = "main.py"
