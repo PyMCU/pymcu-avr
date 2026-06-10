@@ -143,32 +143,46 @@ public static class AvrLinearScan
             }
         }
 
-        // Collect eligible (UINT8, no call span), sort by def
+        // Collect eligible (1- or 2-byte scalar temps that do not span a call), by def.
+        // 16-bit temps were previously always spilled to stack slots; allowing them to
+        // occupy the R16:R17 pair removes the store/reload traffic the codegen otherwise
+        // emits around every uint16 temporary (StoreRegInto/LoadIntoReg already drive the
+        // high byte via GetHighReg, so a pair-homed temp needs no codegen change).
         var eligible = intervals.Values
-            .Where(iv => !iv.SpansCall && iv.Type == DataType.UINT8)
+            .Where(iv => !iv.SpansCall && (iv.Type.SizeOf() == 1 || iv.Type.SizeOf() == 2))
             .OrderBy(iv => iv.Def)
             .ToList();
 
-        // Greedy assignment to R16/R17
+        // Two byte-slots: slot[0] = R16, slot[1] = R17. An 8-bit temp takes one slot; a
+        // 16-bit temp takes the pair (R16:R17, low in R16). Greedy with last-use expiry.
         var result = new Dictionary<string, string>();
-        var active = new LiveInterval?[2];
+        var slot = new LiveInterval?[2];
 
         foreach (var iv in eligible)
         {
             for (int k = 0; k < 2; ++k)
-            {
-                if (active[k] != null && active[k]!.LastUse < iv.Def)
-                    active[k] = null;
-            }
+                if (slot[k] != null && slot[k]!.LastUse < iv.Def)
+                    slot[k] = null;
 
-            for (int k = 0; k < 2; ++k)
+            if (iv.Type.SizeOf() == 2)
             {
-                if (active[k] == null)
+                // Needs the whole pair free.
+                if (slot[0] == null && slot[1] == null)
                 {
-                    result[iv.Name] = k == 0 ? "R16" : "R17";
-                    active[k] = iv;
-                    break;
+                    result[iv.Name] = "R16";
+                    slot[0] = iv;
+                    slot[1] = iv;
                 }
+            }
+            else
+            {
+                for (int k = 0; k < 2; ++k)
+                    if (slot[k] == null)
+                    {
+                        result[iv.Name] = k == 0 ? "R16" : "R17";
+                        slot[k] = iv;
+                        break;
+                    }
             }
         }
 
