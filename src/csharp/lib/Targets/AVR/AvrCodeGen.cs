@@ -55,6 +55,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         new(ReferenceEqualityComparer.Instance);
     private HashSet<Binary> _divModSkip = new(ReferenceEqualityComparer.Instance);
 
+    // Byte-pack fusion (per function): reconstructing a 16-bit value from two bytes --
+    // result = (hi << 8) | lo  (or + lo) -- is just "low byte = lo, high byte = hi", but
+    // the generic widen+shift+add lowering spends ~10 instructions on it. Every 16-bit
+    // sensor read (ADC ADCH/ADCL, BMP280, DHT, ...) hits this. _bytePackFuse maps the
+    // combining Binary (Add/BitOr, where the packed value is emitted) to the (hi, lo)
+    // byte sources; _bytePackSkip holds the now-dead `hi << 8` shift.
+    private Dictionary<Binary, (Val Hi, Val Lo)> _bytePackFuse =
+        new(ReferenceEqualityComparer.Instance);
+    private HashSet<Binary> _bytePackSkip = new(ReferenceEqualityComparer.Instance);
+
     private string MakeLabel(string prefix = ".L") => $"{prefix}_{_labelCounter++}";
     private static string GetHighReg(string reg) => "R" + (int.Parse(reg[1..]) + 1);
 
@@ -888,6 +898,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             _allTmpRegNames.Add(name);
 
         DetectDivModFusions(func);
+        DetectBytePackFusions(func);
 
         EmitLabel(func.Name);
 
@@ -1992,12 +2003,90 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         StoreRegInto("R24", remDst, opType);
     }
 
+    // Detects the byte-pack idiom -- result = (hi << 8) <op> lo, op in {Add, BitOr} -- in a
+    // single basic block and records the fusion. The shift's destination must be a 16-bit
+    // value used only by the combine; the other combine operand (lo) must be a byte (so its
+    // value lands entirely in the low byte with no carry/overlap). Both operand orders of a
+    // commutative combine are handled. Between the two ops nothing may rewrite hi or lo, the
+    // shift's result must stay untouched, and no control flow may intervene.
+    private void DetectBytePackFusions(Function func)
+    {
+        _bytePackFuse.Clear();
+        _bytePackSkip.Clear();
+        var body = func.Body;
+
+        // tmp is safe to drop only if the combine is its sole reader.
+        int UsesOf(Val v)
+        {
+            int c = 0;
+            foreach (var ins in body)
+                if (TouchesVal(ins, v, read: true)) c++;
+            return c;
+        }
+
+        for (int i = 0; i < body.Count; i++)
+        {
+            if (body[i] is not Binary sh || sh.Op != IrBinOp.LShift) continue;
+            if (sh.Src2 is not Constant { Value: 8 }) continue;
+            if (GetValType(sh.Dst).SizeOf() != 2) continue;          // shift result is 16-bit
+            Val tmp = sh.Dst;
+
+            for (int j = i + 1; j < body.Count; j++)
+            {
+                var inst = body[j];
+
+                if (inst is Binary cmb && cmb.Op is IrBinOp.Add or IrBinOp.BitOr
+                    && GetValType(cmb.Dst).SizeOf() == 2)
+                {
+                    Val? lo = Equals(cmb.Src1, tmp) ? cmb.Src2
+                            : Equals(cmb.Src2, tmp) ? cmb.Src1 : null;
+                    if (lo != null && GetValType(lo).SizeOf() == 1 && UsesOf(tmp) == 1)
+                    {
+                        bool clean = true;
+                        for (int k = i + 1; k < j && clean; k++)
+                            if (TouchesVal(body[k], tmp, read: true)
+                                || TouchesVal(body[k], sh.Src1, read: false)
+                                || TouchesVal(body[k], lo, read: false))
+                                clean = false;
+                        if (clean)
+                        {
+                            _bytePackFuse[cmb] = (sh.Src1, lo);
+                            _bytePackSkip.Add(sh);
+                        }
+                    }
+                    break;   // tmp's combine resolved
+                }
+
+                if (!IsFusionTransparent(inst)
+                    || TouchesVal(inst, tmp, read: true)
+                    || TouchesVal(inst, sh.Src1, read: false))
+                    break;
+            }
+        }
+    }
+
+    // Emits result = (hi << 8) | lo as a direct byte placement: low byte = lo, high byte =
+    // the low byte of hi (matching a 16-bit shift-by-8). hi -> R25 first so loading lo into
+    // R24 cannot clobber it (neither byte source is ever homed in the R24/R25 scratch pair).
+    private void EmitBytePack(Binary combine, Val hi, Val lo)
+    {
+        LoadIntoReg(hi, "R25", DataType.UINT8);
+        LoadIntoReg(lo, "R24", DataType.UINT8);
+        StoreRegInto("R24", combine.Dst, GetValType(combine.Dst));
+    }
+
     private void CompileBinary(Binary b)
     {
         if (_divModSkip.Contains(b)) return;                 // folded into its paired __div16
         if (_divModFuse.TryGetValue(b, out var pair))
         {
             EmitFusedDivMod(b, pair.Quot, pair.Rem);
+            return;
+        }
+        if (_bytePackSkip.Contains(b)) return;               // dead `hi << 8`, folded into the pack
+        if (_bytePackFuse.TryGetValue(b, out var bp))
+        {
+            EmitBytePack(b, bp.Hi, bp.Lo);
             return;
         }
 
