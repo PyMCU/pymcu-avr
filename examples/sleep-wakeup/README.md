@@ -5,7 +5,8 @@ Enter sleep mode and wake on an external interrupt.
 ## What it does
 
 Puts the MCU into idle sleep with `sleep_idle()`, using an INT0 button (**PD2**)
-as the wake source. The wake ISR sets a `GPIOR0` flag; the main loop wakes,
+as the wake source. The wake ISR sets a plain module global (auto-promoted to
+`GPIOR0` by the compiler); the main loop wakes,
 prints `WAKE`, and repeats five times before printing `DONE`.
 
 ## Hardware

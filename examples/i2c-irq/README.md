@@ -7,7 +7,8 @@ Interrupt-driven I2C **peripheral** (TWI slave) at address 0x42.
 Configures the TWI hardware as an I2C peripheral and registers an ISR with
 `i2c.irq(handler)` (no `@interrupt` decorator or manual `TWIE`/`SEI` writes).
 The ISR runs the TWI state machine — inspecting `TWSR`, ACKing each event, and
-saving received data bytes to `GPIOR0` for the main loop to print as hex.
+saving received data bytes to a plain module global (auto-promoted to a `GPIOR`
+register by the compiler) for the main loop to print as hex.
 
 > The ISR **must** re-arm the interrupt by writing `TWCR` with `TWINT=1`
 > (`0xC4 = TWINT|TWEA|TWEN`) or the peripheral stalls.
@@ -26,7 +27,7 @@ saving received data bytes to `GPIOR0` for the main loop to print as hex.
 ## Key concepts
 
 - TWI peripheral mode + interrupt-driven state machine
-- `GPIOR0` as an atomic flag between ISR and main loop
+- ISR-shared plain global between ISR and main — auto-promoted to a `GPIOR` register
 
 ## Build & flash
 

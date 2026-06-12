@@ -5,6 +5,10 @@
 # Blinks PB5 LED on each sample. INT0 (PD2, falling edge) toggles verbose
 # <-> compact display mode.
 #
+# Each ISR signals main through its own plain module global. Both are
+# detected as ISR-shared (volatile semantics) and auto-promoted to GPIOR
+# registers -- no manual GPIOR idiom needed.
+#
 # Hardware: Arduino Uno
 #   ADC input: PC0 (A0)
 #   LED:       PB5 (Arduino pin 13)
@@ -19,19 +23,26 @@
 #   64 overflows => ADC sample every ~262 ms
 #
 from pymcu.types import uint8, uint16
-from pymcu.chips.atmega328p import GPIOR0, TIFR0
+from pymcu.chips.atmega328p import TIFR0
 from pymcu.hal.gpio import Pin
 from pymcu.hal.uart import UART
 from pymcu.hal.timer import Timer
 from pymcu.hal.adc import AnalogPin
 
+# One flag per ISR, polled and cleared by main. ISR-shared -> auto-promoted
+# to GPIOR registers; both start at 0 on reset.
+ovf_f: uint8 = 0   # Timer0 overflow
+btn_f: uint8 = 0   # INT0 mode toggle
+
 
 def timer0_ovf_isr():
-    GPIOR0[0] = 1
+    global ovf_f
+    ovf_f = 1
 
 
 def int0_isr():
-    GPIOR0[1] = 1
+    global btn_f
+    btn_f = 1
 
 
 def main():
@@ -44,8 +55,6 @@ def main():
     timer.irq(timer0_ovf_isr)
     btn.irq(Pin.IRQ_FALLING, int0_isr)
 
-    GPIOR0[0] = 0
-    GPIOR0[1] = 0
     uart.println("SENSOR DASHBOARD")
 
     raw:     uint8  = 0
@@ -57,8 +66,8 @@ def main():
 
     while True:
         # Timer0 OVF: count ticks, sample ADC every 64 (~262 ms)
-        if GPIOR0[0] == 1:
-            GPIOR0[0] = 0
+        if ovf_f == 1:
+            ovf_f = 0
             TIFR0[0] = 1       # clear TOV0 flag (write-1-to-clear)
             tick += 1
             if tick == 64:
@@ -91,8 +100,8 @@ def main():
                     uart.write('\n')
 
         # INT0: toggle verbose/compact mode
-        if GPIOR0[1] == 1:
-            GPIOR0[1] = 0
+        if btn_f == 1:
+            btn_f = 0
             if verbose == 1:
                 verbose = 0
                 uart.println("MODE:COMPACT")

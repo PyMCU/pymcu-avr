@@ -5,7 +5,8 @@ Pin Change Interrupt (PCINT0) button counter.
 ## What it does
 
 A button on **PB0** fires PCINT0 on any edge. `btn.irq(3, pcint0_isr)` sets
-`PCMSK0`, `PCICR`, and `SEI` automatically. The ISR sets a `GPIOR0` flag; the
+`PCMSK0`, `PCICR`, and `SEI` automatically. The ISR sets a plain module global
+(auto-promoted to `GPIOR0` by the compiler); the
 main loop reads PB0 to distinguish a press (low) from a release (high) and only
 counts presses, printing `COUNT:NN`.
 

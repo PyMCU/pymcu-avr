@@ -2,7 +2,9 @@
 #
 # Demonstrates:
 #   - Pin.irq(): sets up INT0 (IRQ_FALLING), enables interrupt mask and SEI automatically
-#   - GPIOR0 atomic flag pattern: ISR sets bit (SBI), main clears it (CBI)
+#   - ISR<->main signaling through a plain module global: the compiler detects
+#     it as ISR-shared (volatile semantics) and promotes it to GPIOR0, so the
+#     flag accesses compile to single-cycle OUT/IN — no manual GPIOR idiom
 #   - No manual EICRA/EIMSK register writes or asm("SEI") needed
 #
 # Hardware: Arduino Uno
@@ -11,14 +13,18 @@
 #   - Serial terminal at 9600 baud — receives count byte on each press
 #
 from pymcu.types import uint8
-from pymcu.chips.atmega328p import GPIOR0
 from pymcu.hal.gpio import Pin
 from pymcu.hal.uart import UART
 
+# Set by the ISR, polled and cleared by main. ISR-shared -> auto-promoted
+# to GPIOR0; starts at 0 on reset.
+pressed: uint8 = 0
+
 
 def int0_isr():
-    # Minimal ISR: set event flag with SBI (atomic, no registers corrupted)
-    GPIOR0[0] = 1
+    # Minimal ISR: set the shared event flag (compiles to OUT on GPIOR0)
+    global pressed
+    pressed = 1
 
 
 def main():
@@ -26,15 +32,14 @@ def main():
     btn  = Pin("PD2", Pin.IN, pull=Pin.PULL_UP)
     uart = UART(9600)
 
-    GPIOR0[0] = 0
     btn.irq(Pin.IRQ_FALLING, int0_isr)   # configures INT0 + enables SEI
 
     count: uint8 = 0
     uart.println("INT COUNTER")
 
     while True:
-        if GPIOR0[0] == 1:           # SBIS 0x1E, 0
-            GPIOR0[0] = 0            # CBI 0x1E, 0
+        if pressed == 1:
+            pressed = 0
             count += 1
             led.toggle()
             uart.write(count)        # send raw count byte over UART

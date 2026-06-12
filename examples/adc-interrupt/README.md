@@ -9,9 +9,11 @@ instead of polling. `adc.irq(adc_isr)` registers the handler at the ADC vector,
 enables `ADIE`, and sets the global interrupt flag (`SEI`) for you — no
 `@interrupt` decorator or `asm("SEI")` needed.
 
-The ISR reads `ADCL` first (which latches `ADCH`), stashes the low byte in
-`GPIOR1`, and signals the main loop through bit `GPIOR0[1]`. The main loop prints
-the result over UART and kicks off the next conversion.
+The ISR reads `ADCL` first (which latches `ADCH`) and publishes the low byte
+plus a done flag through two plain module globals. The compiler detects both as
+ISR-shared (volatile semantics) and auto-promotes them to `GPIOR` registers, so
+the handoff is single-cycle I/O with zero SRAM. The main loop prints the result
+over UART and kicks off the next conversion.
 
 ## Hardware
 
@@ -27,7 +29,7 @@ conversion.
 ## Key concepts
 
 - `AnalogPin.irq()` — zero-boilerplate ISR registration
-- `GPIOR0`/`GPIOR1` general-purpose I/O registers used as atomic flags/storage
+- ISR-shared plain globals — auto-promoted to `GPIOR` registers by the compiler
 - Reading `ADCL` before `ADCH` to latch a coherent result
 
 ## Build & flash

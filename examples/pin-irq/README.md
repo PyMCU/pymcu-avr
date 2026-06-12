@@ -6,8 +6,9 @@ Minimal external interrupt: INT0 falling-edge on PD2.
 
 The simplest possible `Pin.irq()` demo. `btn.irq(Pin.IRQ_FALLING, on_press)`
 configures INT0 for falling-edge triggering and enables global interrupts. The
-ISR sets an atomic `GPIOR0` flag; the main loop counts presses and sends the raw
-count byte over UART.
+ISR sets a plain module global — the compiler detects it as ISR-shared and
+auto-promotes it to `GPIOR0` — and the main loop counts presses and sends the
+raw count byte over UART.
 
 A good companion to [`interrupt-counter`](../interrupt-counter) — start here for
 the bare mechanics of pin interrupts.
