@@ -44,6 +44,13 @@ public static class PymcuCompiler
         => Cache.GetOrAdd("fx:" + name,
             _ => new Lazy<string>(() => Compile(Path.Combine(RepoRoot, "tests", "integration", "fixtures", name), name))).Value;
 
+    /// <summary>
+    /// Absolute path of a fixture directory — for tests that inspect build
+    /// artifacts (e.g. <c>dist/debug/firmware.asm</c>) after <see cref="BuildFixture"/>.
+    /// </summary>
+    public static string FixtureDir(string name)
+        => Path.Combine(RepoRoot, "tests", "integration", "fixtures", name);
+
     // ── Internal ─────────────────────────────────────────────────────────────
 
     private static string Compile(string exampleDir, string name)
