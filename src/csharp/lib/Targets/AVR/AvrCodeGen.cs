@@ -3943,6 +3943,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (se.Code is not Constant { Value: 0 })
             LoadIntoReg(se.Code, "R22", DataType.UINT8);
 
+        if (se.CatchLabel != null)
+        {
+            // Local raise: the `raise` is lexically inside a `try` body in this same
+            // function. Deliver the error code straight to the local catch dispatcher.
+            // The dispatcher discriminates on R22 alone, so we neither set T (no caller
+            // is involved) nor RET — we just jump. Leaving T untouched means a locally
+            // caught raise can never leak an error to a later call site or the caller.
+            // JMP (vs RJMP) is range-safe; the linker relaxes it to RJMP under -mrelax.
+            Emit("JMP", se.CatchLabel);
+            return;
+        }
+
         Emit("SET");   // BSET 6 — T = 1 (signal error to caller)
 
         // SignalError is terminal: return immediately with T = 1.
