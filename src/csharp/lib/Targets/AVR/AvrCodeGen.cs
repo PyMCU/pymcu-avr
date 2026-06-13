@@ -873,16 +873,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitComment("ISR prologue -- save context");
         // R0 is clobbered by every MUL; R1 is the zero register assumed by SBC/ADC after MUL.
         // avr-gcc saves both in every ISR to prevent corruption of the interrupted context.
-        Emit("PUSH", "R0");
-        Emit("PUSH", "R1");
-        Emit("PUSH", "R16");
-        Emit("PUSH", "R17");
-        Emit("PUSH", "R18");
-        Emit("PUSH", "R19");
-        Emit("PUSH", "R24");
-        Emit("PUSH", "R25");
-        Emit("PUSH", "R26");
-        Emit("PUSH", "R27");
+        // Save the full caller-clobbered range the ISR body — or any function it calls — may
+        // use as scratch. The earlier fixed set omitted R20/R21 (the 16-bit MUL accumulator),
+        // R22/R23 (32-bit math and the 3rd/4th argument pair), and R30/R31 (the Z pointer for
+        // array/flash access). An ISR using any of those silently corrupted the interrupted
+        // code's value held there (e.g. a uint16 multiply in the ISR clobbered main's R20:R21).
+        // R28/R29 (Y, the frame pointer) is used only as a base, never reassigned, so it is
+        // preserved without saving; R2-R15 are the globally-unique named-var pool (an ISR only
+        // touches its OWN names there, never the interrupted function's).
+        foreach (var r in new[] { "R0", "R1", "R16", "R17", "R18", "R19", "R20", "R21",
+                                  "R22", "R23", "R24", "R25", "R26", "R27", "R30", "R31" })
+            Emit("PUSH", r);
         Emit("IN", "R16", "0x3F");
         Emit("PUSH", "R16");
         // Ensure R1 == 0 inside the ISR body (MUL may have left it non-zero in main).
@@ -894,16 +895,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitComment("ISR epilogue -- restore context");
         Emit("POP", "R16");
         Emit("OUT", "0x3F", "R16");
-        Emit("POP", "R27");
-        Emit("POP", "R26");
-        Emit("POP", "R25");
-        Emit("POP", "R24");
-        Emit("POP", "R19");
-        Emit("POP", "R18");
-        Emit("POP", "R17");
-        Emit("POP", "R16");
-        Emit("POP", "R1");
-        Emit("POP", "R0");
+        foreach (var r in new[] { "R31", "R30", "R27", "R26", "R25", "R24", "R23", "R22",
+                                  "R21", "R20", "R19", "R18", "R17", "R16", "R1", "R0" })
+            Emit("POP", r);
     }
 
     public override void EmitInterruptReturn() => Emit("RETI");

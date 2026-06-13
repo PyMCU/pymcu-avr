@@ -115,6 +115,27 @@ public class AllocatorStressTests
         failures.Should().BeEmpty($"{failures.Count} seed(s) had an ISR perturb main:\n{string.Join("\n", failures)}");
     }
 
+    // 16-bit interrupt safety: main holds a mix of uint8 and uint16 locals live across a loop
+    // while an ISR doing uint16 arithmetic fires. Adds the register-PAIR dimension — the ISR
+    // must preserve any 16-bit pair main holds, and 16-bit slots must not partially alias.
+    [TestCaseSource(nameof(Seeds))]
+    public void IsrU16DoesNotPerturbMain(int seed)
+    {
+        var prog = IsrU16Program.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: a uint16 ISR must not perturb main's 8/16-bit values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
     // An ISR that makes a nested call (to a helper entered in interrupt context) while keeping
     // a local live across that call. Validates that the ISR's whole call-tree gets a stack
     // region disjoint from main, and that the ISR's call-spanning local survives the nested
