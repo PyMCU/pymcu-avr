@@ -94,6 +94,50 @@ public class AllocatorStressTests
         failures.Should().BeEmpty($"{failures.Count} seed(s) miscompiled:\n{string.Join("\n", failures)}");
     }
 
+    // Heavy interrupt-safety sweep (100 seeds). [Explicit] like Sweep.
+    [Test, Explicit("heavy: run on demand to validate an ISR/allocator change")]
+    public void IsrSweep()
+    {
+        var failures = new List<string>();
+        for (int seed = 1; seed <= 100; seed++)
+        {
+            var prog = IsrSafetyProgram.Generate(seed);
+            var hex = PymcuCompiler.BuildSource(prog.Source);
+            var uno = new ArduinoUnoSimulation();
+            uno.WithHex(hex);
+            uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+            uno.Serial.InjectByte(prog.InputByte);
+            uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+            var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+            if (!got.SequenceEqual(prog.Expected))
+                failures.Add($"seed {seed}: expected [{string.Join(",", prog.Expected)}] got [{string.Join(",", got)}]");
+        }
+        failures.Should().BeEmpty($"{failures.Count} seed(s) had an ISR perturb main:\n{string.Join("\n", failures)}");
+    }
+
+    // Two simultaneous interrupt handlers (Timer0 + Timer2 overflow), each with its own
+    // locals, fire while main runs a register-pressure loop. Validates that the allocator
+    // gives each ISR a region disjoint from main AND from the other ISR (the per-ISR isrBase
+    // increment in StackAllocator) — an overlap between the two ISRs, or either with main,
+    // would perturb main's printed values.
+    [TestCaseSource(nameof(Seeds))]
+    public void TwoIsrsDoNotPerturbMain(int seed)
+    {
+        var prog = TwoIsrProgram.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: two ISRs firing mid-computation must not perturb main's values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
     private static int CountNewlines(string s)
     {
         int n = 0;
