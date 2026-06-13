@@ -722,6 +722,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         var isrMap = new SortedDictionary<int, Function>();
         foreach (var func in program.Functions.Where(func => func.IsInterrupt))
         {
+            // The vector is a byte address into the table emitted below (vec*2 for vec in
+            // 1..25, i.e. the even addresses 0x02..0x32). A vector outside that range — or
+            // an odd one — would never match a table slot, so the handler was silently
+            // dropped (it ran as dead code, the vector jumped to __bad_interrupt). Reject it.
+            if (func.InterruptVector < 2 || func.InterruptVector > 50 || (func.InterruptVector & 1) != 0)
+            {
+                throw new Exception(
+                    $"@interrupt vector 0x{func.InterruptVector:X} on '{func.Name}' is out of range; " +
+                    "expected an even vector address in 0x02..0x32 (e.g. 0x04 for INT0, 0x20 for TIMER0_OVF)");
+            }
+
             // Add duplicate ISR check that was missing in the C# port
             if (!isrMap.TryAdd(func.InterruptVector, func))
             {
