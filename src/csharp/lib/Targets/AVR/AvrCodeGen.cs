@@ -1937,7 +1937,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         bool Fusable(Binary x) =>
             x.Op is IrBinOp.Mod or IrBinOp.Div or IrBinOp.FloorDiv
-            && DivModOpType(x).SizeOf() == 2
+            && DivModOpType(x).SizeOf() is 1 or 2   // __div8 and __div16 both yield quot+rem
             && !IsSignedType(GetValType(x.Src1));
         static bool IsMod(IrBinOp op) => op is IrBinOp.Mod;
         static bool IsDiv(IrBinOp op) => op is IrBinOp.Div or IrBinOp.FloorDiv;
@@ -1987,6 +1987,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // or anything unrecognised ends the search (conservative).
     private static bool IsFusionTransparent(Instruction inst) => inst switch
     {
+        // DebugLine is a source-line marker with no register/memory/control effect; it sits
+        // between two statements (e.g. `hi = x // k` and `lo = x % k`) and must be skipped so
+        // the divmod pair is still recognized — otherwise the fusion only fired for same-
+        // statement pairs like the divmod() builtin.
+        DebugLine => true,
         Binary or Unary or Copy or Bitcast or ArrayStore or ArrayLoad or ArrayLoadFlash
             or BytearrayLoad or FlashLoadPtr or BitCheck => true,
         _ => false,
@@ -2028,20 +2033,32 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         };
     }
 
-    // Emits one __div16 for a fused divide/modulo pair and stores both results: the
-    // quotient (R24:R25) and the remainder (R26:R27). The remainder is stashed clear of
-    // StoreRegInto's scratch (R20:R21, free here — the divisor in R18:R19 is dead after
-    // the call) so neither store clobbers the other.
+    // Emits one division for a fused divide/modulo pair and stores both results.
+    // 16-bit (__div16): quotient in R24:R25, remainder in R26:R27 — stash the remainder in
+    // R21:R20 (the divisor R18:R19 is dead) so storing the quotient (which may use X=R26:R27)
+    // cannot clobber it. 8-bit (__div8): quotient in R24, remainder in R25 — stash the
+    // remainder in R19 (divisor hi byte, unused for 8-bit) before storing the quotient.
     private void EmitFusedDivMod(Binary primary, Val quotDst, Val remDst)
     {
-        var opType = DivModOpType(primary);     // unsigned 16-bit (gated in DetectDivModFusions)
+        var opType = DivModOpType(primary);     // unsigned, gated to 8- or 16-bit in DetectDivModFusions
         LoadIntoReg(primary.Src1, "R24", opType);
         LoadIntoReg(primary.Src2, "R18", opType);
-        Emit("CALL", "__div16");                 // R24:R25 = quotient, R26:R27 = remainder
-        Emit("MOVW", "R20", "R26");              // stash remainder in R21:R20
-        StoreRegInto("R24", quotDst, opType);    // store quotient (may use X = R26:R27)
-        Emit("MOVW", "R24", "R20");              // remainder -> R24:R25
-        StoreRegInto("R24", remDst, opType);
+        if (opType.SizeOf() == 2)
+        {
+            Emit("CALL", "__div16");             // R24:R25 = quotient, R26:R27 = remainder
+            Emit("MOVW", "R20", "R26");          // stash remainder in R21:R20
+            StoreRegInto("R24", quotDst, opType);
+            Emit("MOVW", "R24", "R20");          // remainder -> R24:R25
+            StoreRegInto("R24", remDst, opType);
+        }
+        else
+        {
+            Emit("CALL", "__div8");              // R24 = quotient, R25 = remainder
+            Emit("MOV", "R19", "R25");           // stash remainder (R19 = divisor hi, dead at 8-bit)
+            StoreRegInto("R24", quotDst, opType);
+            Emit("MOV", "R24", "R19");           // remainder -> R24
+            StoreRegInto("R24", remDst, opType);
+        }
     }
 
     // Detects the byte-pack idiom -- result = (hi << 8) <op> lo, op in {Add, BitOr} -- in a
