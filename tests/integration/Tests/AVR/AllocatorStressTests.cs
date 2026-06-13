@@ -115,6 +115,28 @@ public class AllocatorStressTests
         failures.Should().BeEmpty($"{failures.Count} seed(s) had an ISR perturb main:\n{string.Join("\n", failures)}");
     }
 
+    // Z-pointer interrupt safety: main does runtime-indexed array reads (address materialized
+    // into Z = R30:R31) while an ISR that also indexes an array fires. The ISR clobbers Z; the
+    // context-save must preserve it or main's in-progress array address is corrupted. Exercises
+    // the R30/R31 part of the caller-clobbered save set.
+    [TestCaseSource(nameof(Seeds))]
+    public void IsrArrayDoesNotPerturbMain(int seed)
+    {
+        var prog = IsrArrayProgram.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: an array-indexing ISR (Z pointer) must not perturb main's values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
     // 16-bit interrupt safety: main holds a mix of uint8 and uint16 locals live across a loop
     // while an ISR doing uint16 arithmetic fires. Adds the register-PAIR dimension — the ISR
     // must preserve any 16-bit pair main holds, and 16-bit slots must not partially alias.
