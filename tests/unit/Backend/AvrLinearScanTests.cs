@@ -6,7 +6,8 @@ namespace PyMCU.UnitTests;
 
 /// <summary>
 /// Unit tests for AvrLinearScan.Allocate() — the greedy linear-scan register
-/// allocator that maps short-lived UINT8 temporaries to R16/R17.
+/// allocator that maps short-lived temporaries to R16/R17: an 8-bit temp takes
+/// one slot, a 16-bit temp takes the R16:R17 pair (low in R16).
 /// </summary>
 public class AvrLinearScanTests
 {
@@ -117,18 +118,36 @@ public class AvrLinearScanTests
             "t1 spans a call and must not be allocated to a scratch register");
     }
 
-    // ─── UINT16 temporary is not eligible ────────────────────────────────────
+    // ─── UINT16 temporary takes the R16:R17 pair ─────────────────────────────
 
     [Fact]
-    public void Uint16Temporary_NotAllocated()
+    public void Uint16Temporary_AssignedToR16Pair()
     {
+        // A non-call-spanning 16-bit temporary occupies the whole R16:R17 pair,
+        // homed at R16 (low byte); the codegen drives R17 via GetHighReg.
         var t1 = new Temporary("t1", DataType.UINT16);
         var result = Allocate(
             new Copy(new Constant(500), t1),
             new Return(t1));
 
+        Assert.True(result.TryGetValue("t1", out var reg),
+            "a non-call-spanning UINT16 temporary is allocated to the R16:R17 pair");
+        Assert.Equal("R16", reg);
+    }
+
+    // ─── UINT16 temporary spanning a call is still spilled ────────────────────
+
+    [Fact]
+    public void Uint16Temporary_SpanningCall_NotAllocated()
+    {
+        var t1 = new Temporary("t1", DataType.UINT16);
+        var result = Allocate(
+            new Copy(new Constant(500), t1),                       // 0 — t1 def
+            new Call("some_func", new List<Val>(), new NoneVal()),  // 1 — call
+            new Return(t1));                                        // 2 — t1 last use
+
         Assert.False(result.ContainsKey("t1"),
-            "UINT16 temporaries must not be placed in R16/R17 (single-byte scratch regs)");
+            "a UINT16 temporary spanning a call must not be placed in caller-saved R16:R17");
     }
 
     // ─── Empty function ───────────────────────────────────────────────────────
