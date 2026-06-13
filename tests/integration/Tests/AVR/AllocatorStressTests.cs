@@ -47,6 +47,29 @@ public class AllocatorStressTests
             $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
     }
 
+    // Interrupt-safety: a Timer2 overflow ISR fires repeatedly while main runs a
+    // register-pressure computation. A correct context save/restore leaves main's printed
+    // values equal to the ISR-free reference. This is the path the callee-save allocator
+    // redesign (A33) must not break — an ISR that fails to preserve a register main has live
+    // would diverge here.
+    [TestCaseSource(nameof(Seeds))]
+    public void IsrDoesNotPerturbMain(int seed)
+    {
+        var prog = IsrSafetyProgram.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: a Timer2 ISR firing mid-computation must not perturb main's values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
     // Heavy sweep for validating the register-allocator redesign: run before and after the
     // change, the results must be identical. [Explicit] so it does not slow the normal CI run
     // (each case compiles + simulates). Invoke with:

@@ -54,19 +54,30 @@ public sealed class AllocStressProgram
         for (int i = 0; i < NumU8; i++) { u8InitOp[i] = initOps[rng.Next(initOps.Length)]; u8InitC[i] = rng.Next(0, 256); u8[i] = ApplyU8(s, u8InitOp[i], u8InitC[i]); }
         for (int i = 0; i < NumU16; i++) { u16InitOp[i] = initOps[rng.Next(initOps.Length)]; u16InitC[i] = rng.Next(0, 65536); u16[i] = ApplyU16(s, u16InitOp[i], u16InitC[i]); }
 
-        // Fixed helper semantics, mirrored exactly below. h_k(x) = ((x + Ak) ^ Bk) & 0xFF.
+        // Three helpers of deliberately varied SHAPE, to exercise the paths a callee-save
+        // register allocator must get right (codegen backlog A33):
+        //   h0 — leaf, single return.
+        //   h1 — MULTIPLE return paths (each exit must restore any callee-saved register).
+        //   h2 — NESTED call (calls h0): h0's frame must preserve h2's live values, and h2's
+        //        live values must survive across the call to h0.
+        // Constants are fixed per seed; the reference Helper() below mirrors each exactly.
         var hA = new int[NumHelpers]; var hB = new int[NumHelpers];
         for (int k = 0; k < NumHelpers; k++) { hA[k] = rng.Next(0, 256); hB[k] = rng.Next(0, 256); }
-        int Helper(int k, int x) => (((x + hA[k]) & 0xFF) ^ hB[k]) & 0xFF;
+        int Helper(int k, int x) => k switch
+        {
+            0 => (((x + hA[0]) & 0xFF) ^ hB[0]) & 0xFF,
+            1 => (x & 0x40) != 0 ? (x + hA[1]) & 0xFF : (x ^ hB[1]) & 0xFF,
+            _ => x > 0x80 ? (Helper(0, x) - hA[2]) & 0xFF : (Helper(0, x) + hB[2]) & 0xFF,
+        };
 
         // ── Source: helpers (non-@inline → real CALL → call-spanning) ──────
         src.Append("from pymcu.types import uint8, uint16\n");
         src.Append("from pymcu.hal.uart import UART\n\n\n");
-        for (int k = 0; k < NumHelpers; k++)
-        {
-            src.Append($"def h{k}(x: uint8) -> uint8:\n");
-            src.Append($"    return ((x + {hA[k]}) ^ {hB[k]})\n\n\n");
-        }
+        src.Append($"def h0(x: uint8) -> uint8:\n    return ((x + {hA[0]}) ^ {hB[0]})\n\n\n");
+        src.Append("def h1(x: uint8) -> uint8:\n");
+        src.Append($"    if (x & 64) > 0:\n        return x + {hA[1]}\n    return x ^ {hB[1]}\n\n\n");
+        src.Append("def h2(x: uint8) -> uint8:\n");
+        src.Append($"    if x > 128:\n        return h0(x) - {hA[2]}\n    return h0(x) + {hB[2]}\n\n\n");
 
         src.Append("def main():\n");
         src.Append("    uart = UART(9600)\n");
