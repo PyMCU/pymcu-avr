@@ -1448,6 +1448,31 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("BRNE", label);
             return;
         }
+        // delay_us(const): same calibrated 6-cycle busy loop as delay_ms, sized in
+        // microseconds. Emitted inline so a constant micro-delay is a tight loop instead
+        // of a CALL to (or per-site inline of) the 12-NOP _delay_us_avr body. The matching
+        // DCE walk skips AddRef for this same const case, so the subroutine is only
+        // compiled when a runtime (non-constant) delay_us call needs it.
+        if ((call.FunctionName == "_delay_us_avr" || call.FunctionName.EndsWith("__delay_us_avr")) && call.Args.Count == 1 && call.Args[0] is Constant usConst)
+        {
+            ulong cycles = (ulong)usConst.Value * (cfg.Frequency / 1000000);
+            ulong loops = cycles / 6;
+            if (loops == 0) return;
+
+            string label = $"_dly_L{_loopCounter++}";
+
+            Emit($"LDI", "R18", $"{(loops & 0xFF)}");
+            Emit($"LDI", "R19", $"{((loops >> 8) & 0xFF)}");
+            Emit($"LDI", "R20", $"{((loops >> 16) & 0xFF)}");
+            Emit($"LDI", "R21", $"{((loops >> 24) & 0xFF)}");
+            EmitLabel(label);
+            Emit($"SUBI", "R18", "1");
+            Emit($"SBCI", "R19", "0");
+            Emit($"SBCI", "R20", "0");
+            Emit($"SBCI", "R21", "0");
+            Emit("BRNE", label);
+            return;
+        }
         // Float arguments use R22:R25 (arg0) and R18:R21 (arg1) per float convention.
         // Integer arguments use R24 (arg0), R22 (arg1), R20 (arg2), R18 (arg3).
         string[] argRegs = ["R24", "R22", "R20", "R18"];
