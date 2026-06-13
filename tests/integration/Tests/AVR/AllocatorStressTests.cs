@@ -115,6 +115,28 @@ public class AllocatorStressTests
         failures.Should().BeEmpty($"{failures.Count} seed(s) had an ISR perturb main:\n{string.Join("\n", failures)}");
     }
 
+    // An ISR that makes a nested call (to a helper entered in interrupt context) while keeping
+    // a local live across that call. Validates that the ISR's whole call-tree gets a stack
+    // region disjoint from main, and that the ISR's call-spanning local survives the nested
+    // call — both independent of main's values, which must equal the ISR-free reference.
+    [TestCaseSource(nameof(Seeds))]
+    public void IsrWithNestedCallDoesNotPerturbMain(int seed)
+    {
+        var prog = IsrNestedCallProgram.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: an ISR making a nested call must not perturb main's values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
     // Two simultaneous interrupt handlers (Timer0 + Timer2 overflow), each with its own
     // locals, fire while main runs a register-pressure loop. Validates that the allocator
     // gives each ISR a region disjoint from main AND from the other ISR (the per-ISR isrBase
