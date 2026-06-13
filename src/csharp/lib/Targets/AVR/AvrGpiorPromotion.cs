@@ -182,8 +182,6 @@ public static class AvrGpiorPromotion
         BytearrayLoad bld => bld with { Index = f(bld.Index), Dst = f(bld.Dst) },
         BytearrayStore bst => bst with { Index = f(bst.Index), Src = f(bst.Src) },
         GcAlloc ga => ga with { Size = f(ga.Size), Dst = f(ga.Dst) },
-        TryBegin tb => tb with { JmpBufVar = f(tb.JmpBufVar), ExnCodeVar = f(tb.ExnCodeVar) },
-        RaiseExn re => re with { Code = f(re.Code) },
         SignalError se => se with { Code = f(se.Code) },
         // InlineAsm / VirtualCall / GcRoot / GcUnroot: operands resolve by name,
         // register convention, or SRAM address — globals used there are excluded

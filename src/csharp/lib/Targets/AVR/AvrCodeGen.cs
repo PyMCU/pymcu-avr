@@ -847,10 +847,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         EmitFlashArrayPool(output);
         if (program.NeedsGc) EmitGcRuntime(output);
-        // Emit the exception runtime when either the SJLJ model (setjmp) is used
-        // OR when the T-flag model calls __pymcu_unhandled_exn for unmatched catches.
-        bool needsExnRuntime = program.ExternSymbols.Contains("setjmp")
-            || program.Functions.Any(f =>
+        // Emit the exception runtime when the T-flag model calls __pymcu_unhandled_exn
+        // for an unmatched catch.
+        bool needsExnRuntime = program.Functions.Any(f =>
                 f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn"));
         if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, cfg.Chip);
         WriteSymbolsIfRequested(optimized, program);
@@ -1180,8 +1179,6 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case GcAlloc ga:  CompileGcAlloc(ga);  break;
             case GcRoot gr:   CompileGcRoot(gr);   break;
             case GcUnroot gu: CompileGcUnroot(gu); break;
-            case TryBegin tb: CompileTryBegin(tb); break;
-            case RaiseExn re: CompileRaiseExn(re); break;
             case SignalError se: CompileSignalError(se); break;
             case SignalSuccess: CompileSignalSuccess(); break;
             case BranchOnError boe: CompileBranchOnError(boe); break;
@@ -3488,7 +3485,6 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 VirtualCall vc      => IsV(varName, vc.Self) || vc.Args.Any(a => IsV(varName, a)),
                 InlineAsm ia        => ia.Operands?.Any(a => IsV(varName, a)) ?? false,
                 SignalError se      => IsV(varName, se.Code),
-                RaiseExn re         => IsV(varName, re.Code),
                 GcAlloc ga          => IsV(varName, ga.Size),
                 _                   => false,
             };
@@ -3862,71 +3858,6 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         File.WriteAllText(EmitVarMapPath,
             JsonSerializer.Serialize(entries, AvrVarMapJsonContext.Default.ListVarMapEntry));
-    }
-
-    private void CompileTryBegin(TryBegin tb)
-    {
-        string jmpBufName = (tb.JmpBufVar as Variable)?.Name ?? "";
-        if (!_stackLayout.TryGetValue(jmpBufName, out int jmpBufOffset))
-            throw new Exception($"jmpbuf variable '{jmpBufName}' not found in stack layout");
-
-        int jmpBufAddr = 0x0100 + jmpBufOffset;
-        Emit("LDI", "R24", $"lo8({jmpBufAddr})");
-        Emit("LDI", "R25", $"hi8({jmpBufAddr})");
-
-        if (_stackLayout.TryGetValue("__pymcu_active_jmpbuf", out int activeOffset))
-        {
-            int activeAddr = 0x0100 + activeOffset;
-            Emit("STS", activeAddr.ToString(), "R24");
-            Emit("STS", (activeAddr + 1).ToString(), "R25");
-        }
-
-        Emit("CALL", "setjmp");
-
-        string exnCodeName = (tb.ExnCodeVar as Variable)?.Name ?? "";
-        if (_stackLayout.TryGetValue(exnCodeName, out int exnOffset))
-        {
-            if (exnOffset < 64)
-                Emit("STD", $"Y+{exnOffset}", "R24");
-            else
-            {
-                int exnAddr = 0x0100 + exnOffset;
-                Emit("STS", exnAddr.ToString(), "R24");
-            }
-        }
-
-        Emit("TST", "R24");
-        EmitBranch("BRNE", tb.CatchLabel);
-    }
-
-    private void CompileRaiseExn(RaiseExn re)
-    {
-        if (re.Code is Constant c) _usedExnCodes.Add(c.Value);
-        LoadIntoReg(re.Code, "R22", DataType.UINT8);
-        Emit("CLR", "R23");
-
-        if (_stackLayout.TryGetValue("__pymcu_active_jmpbuf", out int activeOffset))
-        {
-            int activeAddr = 0x0100 + activeOffset;
-            Emit("LDS", "R24", activeAddr.ToString());
-            Emit("LDS", "R25", (activeAddr + 1).ToString());
-        }
-        else
-        {
-            Emit("LDI", "R24", "0");
-            Emit("LDI", "R25", "0");
-        }
-
-        string noHandlerLabel = $"L_no_handler_{_labelCounter++}";
-        // Test R24:R25 == 0 without R16 (the allocator may hold a value there): R26 is
-        // X-low scratch, never in the allocation pool.
-        Emit("MOV", "R26", "R24");
-        Emit("OR", "R26", "R25");
-        Emit("TST", "R26");
-        Emit("BREQ", noHandlerLabel);
-        Emit("CALL", "longjmp");
-        EmitLabel(noHandlerLabel);
-        Emit("CALL", "__pymcu_unhandled_exn");
     }
 
     // -------------------------------------------------------------------------
