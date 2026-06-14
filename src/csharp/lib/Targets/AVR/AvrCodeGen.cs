@@ -1923,6 +1923,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // it, so an in-place `MOV rd,src1; OP rd,...` tends to merely move the extra MOV
         // rather than remove it. The augmented case is the unambiguous win: the staged path
         // is always MOV/op/MOV, the in-place form collapses it to a single op on rd.
+        // (Measured 2026-06-14: relaxing this to dst != src1 regressed the example suite by
+        // ~100 bytes — the store-back MOV reappears as reload MOVs in chained expressions.)
         if (rs1 != rd) return false;
 
         // src1 already lives in rd, so no load clobbers it; src2 in rd just means `x op x`.
