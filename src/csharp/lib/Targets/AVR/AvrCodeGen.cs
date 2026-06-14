@@ -902,6 +902,74 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
     public override void EmitInterruptReturn() => Emit("RETI");
 
+    // Parse "R12" -> 12; pointer tokens "X"/"Y"/"Z" (and their +/- forms) -> the pair's low reg
+    // (26/28/30); else -1. Used by the ISR-save trimmer to learn which registers a body touches.
+    private static int ParseRegToken(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return -1;
+        char c0 = s[0];
+        if (c0 == 'R' && int.TryParse(s.AsSpan(1), out int n)) return n;
+        if (s.Contains('X')) return 26;
+        if (s.Contains('Z')) return 30;
+        if (s.Contains('Y')) return 28;
+        return -1;
+    }
+
+    private static void AddTouched(string op, HashSet<int> set)
+    {
+        int r = ParseRegToken(op);
+        if (r < 0) return;
+        set.Add(r);
+        // Pointer tokens and (handled at call site) word ops occupy a register pair.
+        if (op.Length > 0 && (op[0] == 'X' || op[0] == 'Y' || op[0] == 'Z')) set.Add(r + 1);
+    }
+
+    // Shrinks the conservative ISR context save (R0,R1,R16-R27,R30,R31,SREG) to the registers
+    // the handler body actually uses. Purely subtractive: it removes a PUSH and the matching
+    // POP(s) only for a register the body provably never touches, so it can never drop a
+    // needed save. R1 and R16 are always kept (R16 backs the SREG save, R1 is the zero
+    // register the prologue clears); if the body makes ANY call, the full set is kept (the
+    // callee may clobber anything caller-saved).
+    private void TrimIsrContextSave(int start, int end)
+    {
+        var used = new HashSet<int>();
+        bool hasCall = false, hasMul = false;
+        for (int i = start; i < end; i++)
+        {
+            var ln = _assembly[i];
+            if (ln.Type != AvrAsmLine.LineType.Instruction) continue;
+            string m = ln.Mnemonic;
+            if (m is "PUSH" or "POP") continue;                                   // context-save itself
+            if ((m == "IN" || m == "OUT") && (ln.Op1 == "0x3F" || ln.Op2 == "0x3F")) continue; // SREG save
+            if (m is "CALL" or "RCALL" or "ICALL" or "EICALL") hasCall = true;
+            if (m.StartsWith("MUL") || m.StartsWith("FMUL")) hasMul = true;
+            AddTouched(ln.Op1, used);
+            AddTouched(ln.Op2, used);
+            // Word ops touch the high half of their register pair implicitly.
+            if (m is "MOVW" or "ADIW" or "SBIW")
+            {
+                int a = ParseRegToken(ln.Op1); if (a >= 0) used.Add(a + 1);
+                if (m == "MOVW") { int b = ParseRegToken(ln.Op2); if (b >= 0) used.Add(b + 1); }
+            }
+        }
+        if (hasMul) { used.Add(0); used.Add(1); }
+        if (hasCall) return;   // a callee may clobber any caller-saved register — keep the full save
+
+        // Trimmable = the caller-saved registers the save covers, minus the always-kept R1/R16.
+        var drop = new HashSet<int>();
+        foreach (var r in new[] { 0, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 30, 31 })
+            if (!used.Contains(r)) drop.Add(r);
+        if (drop.Count == 0) return;
+
+        for (int i = start; i < end; i++)
+        {
+            var ln = _assembly[i];
+            if (ln.Type == AvrAsmLine.LineType.Instruction && ln.Mnemonic is "PUSH" or "POP"
+                && ParseRegToken(ln.Op1) is int rr && drop.Contains(rr))
+                _assembly[i] = AvrAsmLine.MakeEmpty();
+        }
+    }
+
     private void CompileFunction(Function func)
     {
         _currentFunction = func;
@@ -912,6 +980,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         DetectDivModFusions(func);
         DetectBytePackFusions(func);
 
+        int funcAsmStart = _assembly.Count;
         EmitLabel(func.Name);
 
         if (func.IsInterrupt && !func.IsNaked) EmitContextSave();
@@ -1095,6 +1164,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             EmitContextRestore();
             Emit("RETI");
         }
+
+        // Trim the (conservative) ISR context save down to the registers this handler's body
+        // actually clobbers — recovers the size of trivial handlers without losing the
+        // correctness of the full save (it only ever REMOVES a push/pop of an unused register).
+        if (func.IsInterrupt && !func.IsNaked)
+            TrimIsrContextSave(funcAsmStart, _assembly.Count);
 
         // --- Emit pending subroutines after the function body ---
         foreach (var (label, start, end) in pendingSubroutines)
