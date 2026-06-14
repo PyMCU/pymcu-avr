@@ -150,7 +150,12 @@ public static class AvrRegisterAllocator
             .ThenBy(kv => kv.Key, StringComparer.Ordinal).ToList();
 
         var result = new Dictionary<string, string>();
-        var nextReg = 4;
+        // R2-R15 are the callee-saved home pool. R2/R3 are otherwise unused by the codegen
+        // (which stages through R0/R1 and R16-R27) and by the math runtime, and — like R4-R15
+        // — the allocator's unique-per-name guarantee keeps an ISR's homes disjoint from main's,
+        // so they need no context-save. Including them gives two more register homes program-wide,
+        // displacing the lowest-priority spills (each frame access is a 2-word LDD/STD).
+        var nextReg = 2;
 
         foreach (var (name, _) in sorted)
         {

@@ -646,10 +646,11 @@ public static class AvrPeephole
         string m = line.Mnemonic;
         if (m.StartsWith("BR")) return false;                       // conditional/relative branches
         if (WritesNoReg.Contains(m)) return false;
-        // Calls clobber the scratch/arg/return registers; R4-R15, the Y pointer and the
-        // zero register survive (PyMCU never uses R4-R15 as scratch).
+        // Calls clobber the scratch/arg/return registers; R2-R15 (the globally-unique named-var
+        // home pool), the Y pointer and the zero register survive (PyMCU never uses those as
+        // scratch, and the allocator keeps an ISR's homes disjoint from main's).
         if (m is "CALL" or "RCALL" or "ICALL" or "EICALL")
-            return r is not ((>= 4 and <= 15) or 28 or 29 or 1);
+            return r is not ((>= 2 and <= 15) or 28 or 29 or 1);
         if (m is "MUL" or "MULS" or "MULSU" or "FMUL" or "FMULS" or "FMULSU")
             return r is 0 or 1;
         if (m is "MOVW" or "ADIW" or "SBIW")
