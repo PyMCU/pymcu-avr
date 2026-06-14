@@ -559,6 +559,19 @@ public static class AvrPeephole
                 result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         }
 
+        // --- Dead pure-write elimination (any register) ---
+        // Runs last: earlier passes (park/reload removal, immediate fusion) expose writes
+        // whose result is never read before being overwritten — e.g. the redundant high-byte
+        // CLR the 16-bit operand widening parks before reusing the register.
+        var dsChanged = true;
+        while (dsChanged)
+        {
+            dsChanged = false;
+            EliminateDeadStores(result, ref dsChanged);
+            if (dsChanged)
+                result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
+        }
+
         result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         return result;
     }
@@ -681,6 +694,53 @@ public static class AvrPeephole
                 }
 
                 if (WritesReg(lj, d) || WritesReg(lj, s)) break;
+            }
+        }
+    }
+
+    // Dead pure-write elimination on any register. A pure-write (MOV/LDI/LDD/LDS/IN/POP/
+    // CLR/SER/LPM into op1) whose destination is overwritten by another pure-write before any
+    // read is dead. The forward scan stops — keeping the instruction — at the first read of the
+    // register, any control-flow (branch/jump/call/ret/skip), label, or raw line, so flow can
+    // never bypass the overwrite and a call/branch can never observe the value. CLR sets SREG,
+    // so a dead CLR is removed only when the overwriting write is itself a CLR (re-establishing
+    // identical flags); the other pure-writes leave SREG untouched, so dropping them is
+    // flag-neutral. This catches the doubled `CLR Rh` the 16-bit operand widening emits and any
+    // MOV/LDI/LDD reload of a value that is rewritten before use.
+    private static void EliminateDeadStores(List<AvrAsmLine> lines, ref bool changed)
+    {
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var li = lines[i];
+            if (li.Type != AvrAsmLine.LineType.Instruction || !PureWriteOp1.Contains(li.Mnemonic))
+                continue;
+            int r = ParseReg(li.Op1);
+            if (r < 0) continue;
+            if (li.Mnemonic == "MOV" && ParseReg(li.Op2) == r) continue;
+            bool iSetsFlags = li.Mnemonic == "CLR";   // only CLR (= EOR Rd,Rd) touches SREG here
+
+            for (int j = i + 1; j < lines.Count; j++)
+            {
+                var lj = lines[j];
+                if (lj.Type is AvrAsmLine.LineType.Comment or AvrAsmLine.LineType.Empty
+                            or AvrAsmLine.LineType.DebugMarker) continue;
+                if (lj.Type != AvrAsmLine.LineType.Instruction) break;   // label / raw -> stop
+                string m = lj.Mnemonic;
+                if (m.StartsWith("BR") || m is "RJMP" or "JMP" or "IJMP" or "EIJMP"
+                    or "CALL" or "RCALL" or "ICALL" or "EICALL" or "RET" or "RETI"
+                    or "SBRC" or "SBRS" or "SBIC" or "SBIS" or "CPSE") break;
+                if (ReadsReg(lj, r)) break;
+                if (WritesReg(lj, r))
+                {
+                    bool jPureWrite = PureWriteOp1.Contains(m) && ParseReg(lj.Op1) == r
+                                      && !(m == "MOV" && ParseReg(lj.Op2) == r);
+                    if (jPureWrite && (!iSetsFlags || m == "CLR"))
+                    {
+                        lines[i] = AvrAsmLine.MakeEmpty();
+                        changed = true;
+                    }
+                    break;
+                }
             }
         }
     }
