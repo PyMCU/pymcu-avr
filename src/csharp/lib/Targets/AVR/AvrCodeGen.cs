@@ -350,6 +350,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         return false;
     }
 
+    // Picks the division/modulo runtime routine. When `signed` is set, the floor
+    // variant (__divs*/__mods*, Python semantics: quotient floors toward -inf and
+    // the remainder takes the sign of the divisor) is used; otherwise the unsigned
+    // core (__div*/__mod*). `wantMod` selects the modulo entry point.
+    private static string DivModRoutine(bool wantMod, bool is32, bool is16, bool signed)
+    {
+        string sz = is32 ? "32" : is16 ? "16" : "8";
+        return $"__{(wantMod ? "mod" : "div")}{(signed ? "s" : "")}{sz}";
+    }
+
     private void EmitBranch(string cond, string target)
     {
         var inv = new Dictionary<string, string>
@@ -2007,7 +2017,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         bool Fusable(Binary x) =>
             x.Op is IrBinOp.Mod or IrBinOp.Div or IrBinOp.FloorDiv
             && DivModOpType(x).SizeOf() is 1 or 2   // __div8 and __div16 both yield quot+rem
-            && !IsSignedType(GetValType(x.Src1));
+            && !IsSignedComparison(x.Src1, x.Src2); // signed floor div/mod has its own routines
         static bool IsMod(IrBinOp op) => op is IrBinOp.Mod;
         static bool IsDiv(IrBinOp op) => op is IrBinOp.Div or IrBinOp.FloorDiv;
 
@@ -2563,14 +2573,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 break;
             case IrBinOp.Div:
             case IrBinOp.FloorDiv:
-                if (is32) Emit("CALL", "__div32");
-                else if (is16) Emit("CALL", "__div16");
-                else Emit("CALL", "__div8");
+                Emit("CALL", DivModRoutine(false, is32, is16, IsSignedComparison(b.Src1, b.Src2)));
                 break;
             case IrBinOp.Mod:
-                if (is32) Emit("CALL", "__mod32");
-                else if (is16) Emit("CALL", "__mod16");
-                else Emit("CALL", "__mod8");
+                Emit("CALL", DivModRoutine(true, is32, is16, IsSignedComparison(b.Src1, b.Src2)));
                 break;
             case IrBinOp.Equal:
             {
@@ -3011,14 +3017,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     break;
                 case IrBinOp.Div:
                 case IrBinOp.FloorDiv:
-                    if (is32) Emit("CALL", "__div32");
-                    else if (is16) Emit("CALL", "__div16");
-                    else Emit("CALL", "__div8");
+                    Emit("CALL", DivModRoutine(false, is32, is16, IsSignedComparison(aa.Target, aa.Operand)));
                     break;
                 case IrBinOp.Mod:
-                    if (is32) Emit("CALL", "__mod32");
-                    else if (is16) Emit("CALL", "__mod16");
-                    else Emit("CALL", "__mod8");
+                    Emit("CALL", DivModRoutine(true, is32, is16, IsSignedComparison(aa.Target, aa.Operand)));
                     break;
                 case IrBinOp.Equal:
                 case IrBinOp.NotEqual:
