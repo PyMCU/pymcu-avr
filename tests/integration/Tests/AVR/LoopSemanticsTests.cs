@@ -74,4 +74,28 @@ def run(s: uint8):
 """;
         Run(body, 5, 4).Should().Equal(new List<int> { 10, 10, 20, 15 });
     }
+
+    // `continue` in a for-range must advance the loop variable (it jumped to the condition
+    // before the step, so a taken continue spun forever); `break` exits.
+    [Test]
+    public void ContinueAndBreak_InRange()
+    {
+        const string body = """
+def run(s: uint8):
+    uart = UART(9600)
+    c1: uint8 = 0
+    for i in range(0, 10):
+        if (i & 1) == 1:
+            continue
+        c1 = c1 + i
+    print(c1)               # 0+2+4+6+8 = 20
+    b1: uint8 = 0
+    for i in range(0, 100):
+        if i == 5:
+            break
+        b1 = b1 + 1
+    print(b1)               # 5
+""";
+        Run(body, 5, 2).Should().Equal(new List<int> { 20, 5 });
+    }
 }
