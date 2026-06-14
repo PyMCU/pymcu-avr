@@ -2282,14 +2282,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                         int byteShift = val / 8;
                         int bitShift  = val % 8;
                         bool s32 = IsSignedType(type);
+                        // Sign-fill byte for the bytes vacated by a whole-byte shift (0xFF if the
+                        // value is negative, else 0x00). Computed from the MSB R23 before the moves
+                        // overwrite it; R26 is scratch in the constant-operand path. Without this a
+                        // signed >> by 8..31 shifts in zeros (logical) instead of the sign.
+                        if (s32 && byteShift >= 1) { Emit("CLR","R26"); Emit("SBRC","R23","7"); Emit("COM","R26"); }
                         if (byteShift >= 4)
                         {
-                            if (s32) { Emit("MOV","R24","R23"); Emit("LSL","R24"); Emit("SBC","R24","R24"); Emit("MOV","R25","R24"); Emit("MOV","R22","R24"); Emit("MOV","R23","R24"); }
+                            if (s32) { Emit("MOV","R24","R26"); Emit("MOV","R25","R26"); Emit("MOV","R22","R26"); Emit("MOV","R23","R26"); }
                             else { Emit("CLR","R24"); Emit("CLR","R25"); Emit("CLR","R22"); Emit("CLR","R23"); }
                         }
-                        else if (byteShift == 3) { Emit("MOV","R24","R23"); Emit("CLR","R25"); Emit("CLR","R22"); Emit("CLR","R23"); }
-                        else if (byteShift == 2) { Emit("MOV","R24","R22"); Emit("MOV","R25","R23"); Emit("CLR","R22"); Emit("CLR","R23"); }
-                        else if (byteShift == 1) { Emit("MOV","R24","R25"); Emit("MOV","R25","R22"); Emit("MOV","R22","R23"); Emit("CLR","R23"); }
+                        else if (byteShift == 3) { Emit("MOV","R24","R23"); if (s32) { Emit("MOV","R25","R26"); Emit("MOV","R22","R26"); Emit("MOV","R23","R26"); } else { Emit("CLR","R25"); Emit("CLR","R22"); Emit("CLR","R23"); } }
+                        else if (byteShift == 2) { Emit("MOV","R24","R22"); Emit("MOV","R25","R23"); if (s32) { Emit("MOV","R22","R26"); Emit("MOV","R23","R26"); } else { Emit("CLR","R22"); Emit("CLR","R23"); } }
+                        else if (byteShift == 1) { Emit("MOV","R24","R25"); Emit("MOV","R25","R22"); Emit("MOV","R22","R23"); if (s32) Emit("MOV","R23","R26"); else Emit("CLR","R23"); }
                         for (int i = 0; i < bitShift; i++)
                         {
                             if (s32) Emit("ASR","R23"); else Emit("LSR","R23");
@@ -2393,10 +2398,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                         bool s16 = IsSignedType(opType);
                         if (byteShift >= 2)
                         {
-                            if (s16) { Emit("MOV","R24","R25"); Emit("LSL","R24"); Emit("SBC","R24","R24"); Emit("CLR","R25"); }
+                            // Shift >= 16: result is all sign bits. SBC R24,R24 leaves 0xFF/0x00
+                            // from carry; both bytes must take it (a signed -1 is 0xFFFF, not 0x00FF).
+                            if (s16) { Emit("MOV","R24","R25"); Emit("LSL","R24"); Emit("SBC","R24","R24"); Emit("MOV","R25","R24"); }
                             else { Emit("CLR","R24"); Emit("CLR","R25"); }
                         }
-                        else if (byteShift == 1) { Emit("MOV","R24","R25"); Emit("CLR","R25"); }
+                        else if (byteShift == 1)
+                        {
+                            Emit("MOV","R24","R25");          // low byte := old high byte
+                            // Vacated high byte must be the sign extension (0xFF if negative),
+                            // not zero — otherwise a signed >> by 8..15 shifts in zeros (logical).
+                            if (s16) { Emit("CLR","R25"); Emit("SBRC","R24","7"); Emit("COM","R25"); }
+                            else Emit("CLR","R25");
+                        }
                         for (int i = 0; i < bitShift; i++)
                         {
                             if (s16) Emit("ASR","R25"); else Emit("LSR","R25");
