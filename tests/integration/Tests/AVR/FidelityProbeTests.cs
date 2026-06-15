@@ -342,6 +342,54 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void Uint32FullArithmetic()
+    {
+        const string body =
+            "from pymcu.types import uint32\n\n" +
+            "def run(s: uint8):\n" +
+            "    base: uint32 = uint32(s) * 1000000\n" +
+            "    print(base + 12345)\n" +
+            "    print(base - 6999999)\n" +
+            "    print(base // 7)\n" +
+            "    print(base % 999)\n" +
+            "    print(base >> 4)\n" +
+            "    print(base & 0xFFFF)\n";
+        const long b = 7 * 1000000L;
+        RunSeed(body, 7, 6).Should().Equal(
+            b + 12345, b - 6999999, b / 7, b % 999, b >> 4, b & 0xFFFF);
+    }
+
+    [Test]
+    public void BoolOrShortCircuit_AsCondition()
+    {
+        // Regression: `A or B` used directly as an if/ternary condition must short-circuit to
+        // TRUE when A is true, not fall through to evaluate B. CollapseBoolJumps used to fuse B's
+        // comparison into the jump past the OR's end label, dropping the A-true path. All six
+        // forms (with/without parens, either operand order, via a bool var) must be True for s=7.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    print(1 if (s > 5 and s < 10) else 0)\n" +
+            "    print(1 if (s > 5 and s < 10) or s == 0 else 0)\n" +
+            "    print(1 if s == 0 or (s > 5 and s < 10) else 0)\n" +
+            "    print(1 if (s > 5) or s == 0 else 0)\n" +
+            "    b: bool = (s > 5 and s < 10) or s == 0\n" +
+            "    print(1 if b else 0)\n" +
+            "    print(1 if s > 5 and s < 10 or s == 0 else 0)\n";
+        RunSeed(body, 7, 6).Should().Equal(1, 1, 1, 1, 1, 1);
+    }
+
+    [Test]
+    public void OperatorPrecedence()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    print(2 + 3 * 4 - 10 // 2)\n" +              // 9
+            "    print(1 << 3 | 2 & 3)\n" +                  // 8 | (2&3) = 10
+            "    print(1 if (s > 5 and s < 10) or s == 0 else 0)\n"; // 1
+        RunSeed(body, 7, 3).Should().Equal(9, 10, 1);
+    }
+
+    [Test]
     public void NestedTernary()
     {
         // s=5 -> middle branch. classify: <3 ->100, <7 ->200, else 300
