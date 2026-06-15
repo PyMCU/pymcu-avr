@@ -671,6 +671,31 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void MultiFieldZca_WideField()
+    {
+        // A slot (multi-field) ZCA with a uint16 field must store/load all bytes, not just the
+        // low one. Previously total=1500 read back as 220 (1500 & 0xFF). Mixed with a uint8 field
+        // to exercise non-trivial byte offsets, via a method and direct access.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Acc:\n" +
+            "    def __init__(self, base: uint16, tag: uint8):\n" +
+            "        self.total = base\n" +
+            "        self.tag = tag\n\n" +
+            "    def add(self, v: uint16):\n" +
+            "        self.total = self.total + v\n\n" +
+            "    def get(self) -> uint16:\n" +
+            "        return self.total\n\n" +
+            "def run(s: uint8):\n" +
+            "    a = Acc(uint16(s) * 100, s)\n" +
+            "    a.add(500)\n" +
+            "    print(a.get())\n" +   // 1000+500 = 1500
+            "    print(a.total)\n" +   // 1500 (direct)
+            "    print(a.tag)\n";      // 10 (uint8 field after a uint16)
+        RunSeed(body, 10, 3).Should().Equal(1500, 1500, 10);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
