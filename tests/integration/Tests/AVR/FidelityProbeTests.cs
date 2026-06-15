@@ -643,6 +643,34 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void MultiFieldZca_MutateTwoInstances()
+    {
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Point:\n" +
+            "    def __init__(self, x: uint8, y: uint8):\n" +
+            "        self.x = x\n" +
+            "        self.y = y\n\n" +
+            "    def move(self, dx: uint8, dy: uint8):\n" +
+            "        self.x = self.x + dx\n" +
+            "        self.y = self.y + dy\n\n" +
+            "    def total(self) -> uint16:\n" +
+            "        return uint16(self.x) + uint16(self.y)\n\n" +
+            "def run(s: uint8):\n" +
+            "    p = Point(s, s + 1)\n" +
+            "    q = Point(s + 2, s + 3)\n" +
+            "    p.move(10, 20)\n" +
+            "    q.move(s, s)\n" +
+            "    print(p.total())\n" +   // 15+26 = 41
+            "    print(q.total())\n" +   // 12+13 = 25
+            "    print(p.x)\n" +         // 15
+            "    print(q.y)\n";          // 13
+        var got = RunSeed(body, 5, 4);
+        TestContext.WriteLine("GOT: " + string.Join(",", got));
+        got.Should().Equal(41, 25, 15, 13);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
