@@ -276,6 +276,72 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void VariableShiftAmount()
+    {
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    print(uint16(1) << s)\n" +        // 32
+            "    print(s << 1)\n" +                // 10
+            "    print(uint8(128) >> (s - 3))\n";  // 128>>2 = 32
+        RunSeed(body, 5, 3).Should().Equal(32, 10, 32);
+    }
+
+    [Test]
+    public void Uint16RuntimeLoopAccumulation()
+    {
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    tot: uint16 = 0\n" +
+            "    for i in range(s):\n" +
+            "        tot += 100\n" +
+            "    print(tot)\n";   // 5*100 = 500 (overflows 8-bit)
+        RunSeed(body, 5, 1).Should().Equal(500);
+    }
+
+    [Test]
+    public void MixedSignednessComparison()
+    {
+        // int8(-1) < int8(5) is True (Python: -1 < 5). Guards against unsigned reinterpretation.
+        const string body =
+            "from pymcu.types import int8\n\n" +
+            "def run(s: uint8):\n" +
+            "    neg: int8 = int8(0) - 1\n" +
+            "    print(1 if neg < int8(s) else 0)\n";   // 1
+        RunSeed(body, 5, 1).Should().Equal(1);
+    }
+
+    [Test]
+    public void BytesLiteralIndexAndLen()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    data = b\"ABCDE\"\n" +
+            "    print(data[0])\n" +    // 'A' = 65
+            "    print(len(data))\n";   // 5
+        RunSeed(body, 5, 2).Should().Equal(65, 5);
+    }
+
+    [Test]
+    public void GlobalMutationAcrossCalls()
+    {
+        // Regression guard for the PropagateCopies Call-dst fix: a global bumped inside a callee
+        // must read its accumulated value after the call, not the pre-call constant.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "counter: uint16 = 0\n\n" +
+            "def tick(n: uint8):\n" +
+            "    global counter\n" +
+            "    counter = counter + n\n\n" +
+            "def run(s: uint8):\n" +
+            "    tick(s)\n" +
+            "    tick(s)\n" +
+            "    print(counter)\n";   // 10
+        RunSeed(body, 5, 1).Should().Equal(10);
+    }
+
+    [Test]
     public void NestedTernary()
     {
         // s=5 -> middle branch. classify: <3 ->100, <7 ->200, else 300
