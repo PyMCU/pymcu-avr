@@ -470,6 +470,51 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void FloatArithmeticAndConversions()
+    {
+        const string src =
+            "from pymcu.types import uint8, int16\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    f: float = float(s) / 4.0\n" +
+            "    print(f)\n" +              // 2.5
+            "    g: float = f * 2.0\n" +
+            "    print(g)\n" +              // 5.0
+            "    print(int16(f * 100.0))\n" + // 250
+            "    h: float = float(s) + 0.5\n" +
+            "    print(int16(h))\n" +       // 10
+            "    n: int16 = int16(0) - int16(s) * 30\n" +
+            "    print(n)\n" +              // -300
+            "    print(uint8(int16(s) * 30))\n" + // 44
+            "    print(1 if f < g else 0)\n" +    // 1
+            "    while True:\n        pass\n";
+
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(10);
+        uno.RunUntilSerial(uno.Serial, t => NL(t) >= 8, maxMs: 6000);
+
+        var lines = uno.Serial.Text.Replace("\r", "").Split('\n');
+        int start = Array.FindIndex(lines, l => l.Trim() == "GO");
+        var got = new List<string>();
+        for (int i = start + 1; i < lines.Length && got.Count < 7; i++)
+            if (lines[i].Trim().Length > 0) got.Add(lines[i].Trim());
+
+        got[0].Should().StartWith("2.5");
+        got[1].Should().StartWith("5.0");
+        got[2].Should().Be("250");
+        got[3].Should().Be("10");
+        got[4].Should().Be("-300");
+        got[5].Should().Be("44");
+        got[6].Should().Be("1");
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
