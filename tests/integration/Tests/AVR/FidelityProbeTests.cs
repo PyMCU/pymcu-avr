@@ -696,6 +696,92 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void EnumArithmeticAndCompare()
+    {
+        const string body =
+            "from pymcu.types import Enum\n\n" +
+            "class Color(Enum):\n" +
+            "    RED = 1\n" +
+            "    GREEN = 2\n" +
+            "    BLUE = 4\n\n" +
+            "def run(s: uint8):\n" +
+            "    print(Color.RED + Color.BLUE)\n" +           // 5
+            "    print(1 if s == Color.GREEN else 0)\n" +     // 1 (s=2)
+            "    print(Color.RED | Color.GREEN | Color.BLUE)\n" + // 7
+            "    print(s + Color.RED)\n";                     // 3
+        RunSeed(body, 2, 4).Should().Equal(5, 1, 7, 3);
+    }
+
+    [Test]
+    public void ListAppendIndexIterate()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    lst: list[uint8] = []\n" +
+            "    lst.append(s)\n" +
+            "    lst.append(s + 1)\n" +
+            "    lst.append(s + 2)\n" +
+            "    print(len(lst))\n" +   // 3
+            "    print(lst[0])\n" +     // 5
+            "    print(lst[2])\n" +     // 7
+            "    lst[1] = 99\n" +
+            "    print(lst[1])\n" +     // 99
+            "    total: uint8 = 0\n" +
+            "    for v in lst:\n" +
+            "        total += v\n" +
+            "    print(total)\n";       // 5+99+7 = 111
+        var got = RunSeed(body, 5, 5);
+        TestContext.WriteLine("GOT=" + string.Join(",", got));
+        got.Should().Equal(3, 5, 7, 99, 111);
+    }
+
+    [Test]
+    public void NegativeArrayIndex()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    arr: uint8[4] = [10, 20, 30, 40]\n" +
+            "    print(arr[-1])\n" +    // 40
+            "    print(arr[-2])\n";     // 30
+        RunSeed(body, 0, 2).Should().Equal(40, 30);
+    }
+
+    [Test]
+    public void SliceInForLoop()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    arr: uint8[5] = [10, 20, 30, 40, 50]\n" +
+            "    total: uint8 = 0\n" +
+            "    for v in arr[1:4]:\n" +
+            "        total += v\n" +
+            "    print(total)\n";       // 20+30+40 = 90
+        RunSeed(body, 0, 1).Should().Equal(90);
+    }
+
+    [Test]
+    public void ListUint16Elements()
+    {
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    lst: list[uint16] = []\n" +
+            "    lst.append(uint16(s) * 1000)\n" +   // 3000
+            "    lst.append(uint16(s) * 100)\n" +    // 300
+            "    print(lst[0])\n" +                   // 3000
+            "    print(lst[1])\n" +                   // 300
+            "    lst[0] = 50000\n" +
+            "    print(lst[0])\n" +                   // 50000
+            "    tot: uint16 = 0\n" +
+            "    for v in lst:\n" +
+            "        tot += v\n" +
+            "    print(tot)\n";                       // 50000+300 = 50300
+        var got = RunSeed(body, 3, 4);
+        TestContext.WriteLine("GOT=" + string.Join(",", got));
+        got.Should().Equal(3000, 300, 50000, 50300);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
