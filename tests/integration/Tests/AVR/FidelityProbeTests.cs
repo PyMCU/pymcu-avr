@@ -782,6 +782,41 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void AugAssignSlotField_AndBuiltins()
+    {
+        const string body =
+            "from pymcu.types import int8\n\n" +
+            "class Box:\n" +
+            "    def __init__(self, x: uint8, y: uint8):\n" +
+            "        self.x = x\n" +
+            "        self.y = y\n\n" +
+            "def run(s: uint8):\n" +
+            "    b = Box(s, s + 10)\n" +
+            "    b.x += 3\n" +                       // aug-assign on a slot field outside a method
+            "    b.y -= 2\n" +
+            "    print(b.x)\n" +                     // 8
+            "    print(b.y)\n" +                     // 13
+            "    print(max(b.x, b.y))\n" +           // 13
+            "    print(min(b.x, b.y))\n" +           // 8
+            "    print(abs(int8(0) - int8(s)))\n";   // abs(-5) = 5
+        RunSeed(body, 5, 5).Should().Equal(8, 13, 13, 8, 5);
+    }
+
+    [Test]
+    public void SignedCompareAgainstZero()
+    {
+        const string body =
+            "from pymcu.types import int8\n\n" +
+            "def run(s: uint8):\n" +
+            "    n: int8 = int8(0) - int8(s)\n" +   // -5
+            "    print(1 if n < 0 else 0)\n" +       // 1
+            "    print(1 if n < int8(1) else 0)\n" + // 1
+            "    m: int8 = int8(s)\n" +              // 5
+            "    print(1 if m < 0 else 0)\n";        // 0
+        RunSeed(body, 5, 3).Should().Equal(1, 1, 0);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
