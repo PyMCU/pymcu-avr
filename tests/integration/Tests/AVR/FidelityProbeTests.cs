@@ -624,6 +624,25 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void TwoIndirectCallsInExpression()
+    {
+        const string body =
+            "from pymcu.types import Callable\n\n" +
+            "def add_one(x: uint8) -> uint8:\n" +
+            "    return x + 1\n\n" +
+            "def add_two(x: uint8) -> uint8:\n" +
+            "    return x + 2\n\n" +
+            "def run(s: uint8):\n" +
+            "    fn: Callable = add_one\n" +
+            "    fn2: Callable = add_two\n" +
+            "    a: uint8 = fn(s) + fn2(s)\n" +   // 4 + 5 = 9
+            "    print(a)\n";
+        var got = RunSeed(body, 3, 1);
+        TestContext.WriteLine("GOT: " + string.Join(",", got));
+        got.Should().Equal(9);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
