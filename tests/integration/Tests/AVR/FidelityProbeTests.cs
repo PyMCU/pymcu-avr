@@ -415,6 +415,25 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void IfStatement_CompoundConditions()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    r: uint8 = 9\n" +
+            "    if (s > 5) or (s == 0):\n        r = 1\n    else:\n        r = 2\n" +
+            "    print(r)\n" +     // 1
+            "    if (s > 10) or (s == 0):\n        r = 3\n    else:\n        r = 4\n" +
+            "    print(r)\n" +     // 4
+            "    if (s > 5) and (s < 10):\n        r = 5\n    else:\n        r = 6\n" +
+            "    print(r)\n" +     // 5
+            "    if (s > 10) and (s < 20):\n        r = 7\n    else:\n        r = 8\n" +
+            "    print(r)\n" +     // 8
+            "    if s < 3:\n        r = 10\n    elif s > 5 or s == 4:\n        r = 11\n    else:\n        r = 12\n" +
+            "    print(r)\n";      // 11
+        RunSeed(body, 7, 5).Should().Equal(1, 4, 5, 8, 11);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
