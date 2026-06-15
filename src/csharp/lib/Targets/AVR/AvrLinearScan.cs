@@ -127,6 +127,31 @@ public static class AvrLinearScan
                     VisitVal(si.DstPtr, i);
                     VisitVal(si.Src, i);
                     break;
+                // Array/bytearray ops were absent here, so a temp DEFINED by an ArrayLoad (or used
+                // as an index/source) had no interval at that point -- its live range was seen as
+                // starting only at a later consumer. Two temps that truly overlap (an earlier load
+                // result still live while a second load's index is computed) then shared R16 and
+                // clobbered each other (`arr[idx] + arr[s - 5]` returned just the second element).
+                case ArrayLoad al2:
+                    VisitVal(al2.Index, i);
+                    VisitVal(al2.Dst, i);
+                    break;
+                case ArrayLoadFlash alf2:
+                    VisitVal(alf2.Index, i);
+                    VisitVal(alf2.Dst, i);
+                    break;
+                case ArrayStore ast2:
+                    VisitVal(ast2.Index, i);
+                    VisitVal(ast2.Src, i);
+                    break;
+                case BytearrayLoad bld2:
+                    VisitVal(bld2.Index, i);
+                    VisitVal(bld2.Dst, i);
+                    break;
+                case BytearrayStore bst2:
+                    VisitVal(bst2.Index, i);
+                    VisitVal(bst2.Src, i);
+                    break;
             }
         }
 
