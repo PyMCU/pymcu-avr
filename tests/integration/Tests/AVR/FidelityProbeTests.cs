@@ -856,6 +856,52 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void Int32SignedArithmetic()
+    {
+        const string body =
+            "from pymcu.types import int32\n\n" +
+            "def run(s: uint8):\n" +
+            "    a: int32 = int32(0) - int32(s) * 1000000\n" +   // -7000000
+            "    print(a)\n" +
+            "    print(a // 3)\n" +          // floor(-7000000/3) = -2333334
+            "    print(a % 3)\n" +           // Python floor mod = 2
+            "    print(1 if a < 0 else 0)\n" + // 1
+            "    b: int32 = a + 7000005\n" +
+            "    print(b)\n";                 // 5
+        var got = RunSeed(body, 7, 5);
+        TestContext.WriteLine("GOT=" + string.Join(",", got));
+        got.Should().Equal(-7000000, -2333334, 2, 1, 5);
+    }
+
+    [Test]
+    public void InstanceArrayMethodAndField()
+    {
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Pt:\n" +
+            "    def __init__(self, x: uint8, y: uint8):\n" +
+            "        self.x = x\n" +
+            "        self.y = y\n\n" +
+            "    def sum(self) -> uint16:\n" +
+            "        return uint16(self.x) + uint16(self.y)\n\n" +
+            "def run(s: uint8):\n" +
+            "    pts: Pt[3] = [Pt(0, 0), Pt(0, 0), Pt(0, 0)]\n" +
+            "    pts[0] = Pt(s, s + 1)\n" +
+            "    pts[1] = Pt(s + 2, s + 3)\n" +
+            "    pts[2] = Pt(s + 4, s + 5)\n" +
+            "    print(pts[0].sum())\n" +   // 11
+            "    print(pts[2].sum())\n" +   // 19
+            "    i: uint8 = s - 4\n" +
+            "    print(pts[i].sum())\n" +   // pts[1] = 15
+            "    print(pts[1].x)\n" +       // 7
+            "    pts[1].x = 99\n" +         // direct field write on an element
+            "    pts[i].y += 1\n" +         // aug-assign field via runtime index (i=1)
+            "    print(pts[1].x)\n" +       // 99
+            "    print(pts[1].y)\n";        // 8+1 = 9
+        RunSeed(body, 5, 6).Should().Equal(11, 19, 15, 7, 99, 9);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
