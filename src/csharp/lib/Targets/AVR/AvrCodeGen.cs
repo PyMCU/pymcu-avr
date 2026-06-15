@@ -2545,7 +2545,13 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
                 break;
             case IrBinOp.Mul:
-                if (is16)
+                if (is32)
+                {
+                    // 32-bit product (low 32 bits) via the runtime routine; the inline 8-bit
+                    // fallthrough below would otherwise multiply only the low bytes.
+                    Emit("CALL", "__mul32");
+                }
+                else if (is16)
                 {
                     // 16x16 -> 16-bit product (low 16 bits only).
                     // a = R25:R24 (hi:lo), b = R19:R18 (hi:lo).
@@ -2992,7 +2998,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     break;
                 }
                 case IrBinOp.Mul:
-                    if (is16)
+                    if (is32)
+                    {
+                        Emit("CALL", "__mul32");
+                    }
+                    else if (is16)
                     {
                         // a = R25:R24 (hi:lo), b = R19:R18 (hi:lo).
                         if (IsSignedType(type))
