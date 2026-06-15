@@ -375,6 +375,29 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitLabel(skip);
     }
 
+    // Integer-argument register assignment. Each argument takes a 2-register slot (1- or 2-byte
+    // values) or a 4-register block (32-bit), allocated from R25 downward so a wide argument no
+    // longer collides with a previous one (the old fixed [R24,R22,R20,R18] spacing assumed every
+    // arg was <= 2 bytes, so `f(u8, u32)` loaded the u32 into R22:R23:R24:R25 and clobbered arg0).
+    // A 32-bit FIRST arg keeps the R24-anchored PyMCU layout (byte0=R24, byte2=R22); a lower 32-bit
+    // arg is contiguous from its base. Returns the base register (as passed to LoadIntoReg) per arg.
+    // Caller and callee must use this identically. Floats keep their own special-casing.
+    private static List<string> ArgBaseRegs(IReadOnlyList<int> sizes)
+    {
+        var bases = new List<string>(sizes.Count);
+        int top = 25;
+        foreach (int sz in sizes)
+        {
+            int slots = sz >= 4 ? 4 : 2;
+            int low = top - slots + 1;
+            int baseNum = slots == 4 && top == 25 ? 24 : low;
+            bases.Add("R" + baseNum);
+            top = low - 1;
+        }
+
+        return bases;
+    }
+
     private void LoadIntoReg(Val val, string reg, DataType type = DataType.UINT8)
     {
         int size = type.SizeOf();
@@ -1027,7 +1050,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         if (!func.IsInterrupt && func.Name != "main" && func.Params.Count > 0)
         {
-            string[] argRegs = ["R24", "R22", "R20", "R18"];
+            var paramSizes = func.Params
+                .Select(p => _varSizes.TryGetValue(p, out var psz0) ? psz0 : 1).ToList();
+            var argRegs = ArgBaseRegs(paramSizes);
             for (var k = 0; k < func.Params.Count && k < 4; k++)
             {
                 var pname = func.Params[k];
@@ -1564,8 +1589,13 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             return;
         }
         // Float arguments use R22:R25 (arg0) and R18:R21 (arg1) per float convention.
-        // Integer arguments use R24 (arg0), R22 (arg1), R20 (arg2), R18 (arg3).
-        string[] argRegs = ["R24", "R22", "R20", "R18"];
+        // Integer arguments are assigned by size (ArgBaseRegs) so a 32-bit arg gets a 4-register
+        // block and does not collide with the previous argument.
+        _functionParamSizes.TryGetValue(call.FunctionName, out var ps);
+        var argSizes = new List<int>(call.Args.Count);
+        for (var k = 0; k < call.Args.Count; k++)
+            argSizes.Add(ps != null && k < ps.Count ? ps[k] : GetValType(call.Args[k]).SizeOf());
+        var argRegs = ArgBaseRegs(argSizes);
         for (var k = 0; k < call.Args.Count && k < 4; k++)
         {
             var argType = GetValType(call.Args[k]);
@@ -1610,8 +1640,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // The function address is loaded into Z (R30:R31) and ICALL is emitted.
     private void CompileIndirectCall(IndirectCall call)
     {
-        // Set up arguments into standard registers (same ABI as direct Call).
-        string[] argRegs = ["R24", "R22", "R20", "R18"];
+        // Set up arguments into standard registers (same ABI as direct Call): size-based base
+        // assignment so a 32-bit argument occupies a 4-register block without colliding.
+        var argRegs = ArgBaseRegs(call.Args.Select(a => GetValType(a).SizeOf()).ToList());
         for (var k = 0; k < call.Args.Count && k < 4; k++)
         {
             var argType = GetValType(call.Args[k]);
@@ -1649,8 +1680,6 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     /// </summary>
     private void CompileVirtualCall(VirtualCall vc)
     {
-        string[] argRegs = ["R24", "R22", "R20", "R18"];
-
         // Load self pointer into Z (vptr is the first 2 bytes of the object in SRAM).
         string selfName = vc.Self.Name.Replace('.', '_');
         if (_stackLayout.TryGetValue(selfName, out int selfOffset))
@@ -1683,10 +1712,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Emit("LPM", "R31", "Z");
         Emit("MOV", "R30", "R0");
 
-        // Load self as arg 0, then the remaining arguments.
+        // Load self as arg 0, then the remaining arguments (size-based base assignment).
         var allArgs = new List<Val> { vc.Self };
         allArgs.AddRange(vc.Args);
-        for (int k = 0; k < allArgs.Count && k < argRegs.Length; k++)
+        var argRegs = ArgBaseRegs(allArgs.Select(a => GetValType(a).SizeOf()).ToList());
+        for (int k = 0; k < allArgs.Count && k < argRegs.Count; k++)
         {
             var argType = GetValType(allArgs[k]);
             LoadIntoReg(allArgs[k], argRegs[k], argType);
