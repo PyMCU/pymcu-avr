@@ -593,6 +593,22 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void BytearrayAndUint16_TwoLoadsInExpression()
+    {
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def sum2(buf: bytearray, i: uint8) -> uint8:\n" +
+            "    return buf[i] + buf[i + 1]\n\n" +
+            "def run(s: uint8):\n" +
+            "    data: uint8[4] = [10, 20, 30, 40]\n" +
+            "    print(sum2(data, s))\n" +        // buf[1]+buf[2] = 50
+            "    w: uint16[3] = [100, 200, 300]\n" +
+            "    k: uint16 = w[s] + w[s - 1]\n" +
+            "    print(k)\n";                      // w[1]+w[0] = 300
+        RunSeed(body, 1, 2).Should().Equal(50, 300);
+    }
+
+    [Test]
     public void TwoRuntimeArrayLoads_StoredIndices()
     {
         // Two SRAM array loads with pre-stored runtime indices combine correctly.
