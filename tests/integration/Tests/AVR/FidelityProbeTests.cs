@@ -515,6 +515,51 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void Int8SramArray_SignExtendsOnLoad()
+    {
+        // Regression: a runtime index forces an int8 array into SRAM. Loading an element for a
+        // wider use (print -> i16) must sign-extend. CoalesceInstructions used to retarget the
+        // ArrayLoad's int8 dst onto the int16 temp, leaving the high byte unset (-5 read as 251).
+        const string body =
+            "from pymcu.types import int8\n\n" +
+            "def run(s: uint8):\n" +
+            "    arr: int8[4] = [0, 0, 0, 0]\n" +
+            "    arr[0] = int8(0) - int8(s)\n" +
+            "    arr[1] = int8(s)\n" +
+            "    idx: uint8 = s - 4\n" +
+            "    print(arr[idx])\n" +   // arr[1] = 5
+            "    print(arr[0])\n" +     // -5
+            "    j: uint8 = s - 5\n" +
+            "    print(arr[j])\n";      // arr[0] = -5
+        RunSeed(body, 5, 3).Should().Equal(5, -5, -5);
+    }
+
+    [Test]
+    public void SignedThroughArraysAndFunctions()
+    {
+        const string body =
+            "from pymcu.types import int8, int16\n\n" +
+            "def neg_of(x: int8) -> int8:\n" +
+            "    return int8(0) - x\n\n" +
+            "def run(s: uint8):\n" +
+            "    a: int8 = int8(0) - int8(s)\n" +   // -5
+            "    print(neg_of(a))\n" +              // 5
+            "    print(neg_of(int8(s)))\n" +        // -5
+            "    arr: int8[4] = [0, 0, 0, 0]\n" +
+            "    arr[0] = int8(0) - int8(s)\n" +    // -5
+            "    arr[1] = int8(s)\n" +              // 5
+            "    idx: uint8 = s - 4\n" +            // 1
+            "    arr[2] = arr[idx]\n" +             // 5
+            "    print(arr[0])\n" +                 // -5
+            "    print(arr[2])\n" +                 // 5
+            "    total: int16 = 0\n" +
+            "    for i in range(4):\n" +
+            "        total += int16(arr[i])\n" +
+            "    print(total)\n";                   // -5+5+5+0 = 5
+        RunSeed(body, 5, 5).Should().Equal(5, -5, -5, 5, 5);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
