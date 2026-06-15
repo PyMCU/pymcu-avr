@@ -129,6 +129,19 @@ public static class AvrRegisterAllocator
                     CountVal(ast.Index);
                     CountVal(ast.Src);
                     break;
+                // IndirectCall/GcAlloc were absent, so a VARIABLE that is an indirect call's
+                // result/args/target or a GC allocation's result/size was never counted and so
+                // never won an R2-R15 home (it fell to a stack slot). Counting them lets such
+                // variables be register-homed; R2-R15 are callee-saved, so they survive the call.
+                case IndirectCall ic:
+                    CountVal(ic.FuncAddr);
+                    foreach (var a in ic.Args) CountVal(a);
+                    CountVal(ic.Dst);
+                    break;
+                case GcAlloc ga:
+                    CountVal(ga.Size);
+                    CountVal(ga.Dst);
+                    break;
             }
         }
 
