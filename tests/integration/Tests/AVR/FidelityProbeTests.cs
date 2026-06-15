@@ -434,6 +434,42 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void PrintSignedCastDirect()
+    {
+        // Regression: print(int8(x)) must format signed. CoalesceInstructions used to retarget
+        // `copy u8 -> i8; copy i8 -> i16` into `copy u8 -> i16`, zero-extending the value so a
+        // direct print of a signed cast showed the unsigned byte (200 instead of -56).
+        const string body =
+            "from pymcu.types import int8\n\n" +
+            "def run(s: uint8):\n" +
+            "    print(int8(s))\n" +     // -56  (direct cast in print)
+            "    x: int8 = int8(s)\n" +
+            "    print(x)\n" +           // -56  (via typed var)
+            "    y: int8 = int8(s)\n" +
+            "    print(y + 0)\n" +       // -56  (arithmetic)
+            "    print(int8(200))\n";    // -56  (constant cast)
+        RunSeed(body, 200, 4).Should().Equal(-56, -56, -56, -56);
+    }
+
+    [Test]
+    public void WidthCasts_TruncateSignZeroExtend()
+    {
+        const string body =
+            "from pymcu.types import int8, uint16, int16, uint32\n\n" +
+            "def run(s: uint8):\n" +
+            "    big: uint16 = uint16(s) + 300\n" +
+            "    print(uint8(big))\n" +        // 500 -> 244 (truncate)
+            "    print(int8(s))\n" +           // 200 -> -56 (reinterpret)
+            "    neg: int8 = int8(0) - 1\n" +
+            "    print(uint16(neg))\n" +       // -1 -> 65535 (sign-extend)
+            "    n2: int8 = int8(s)\n" +
+            "    print(int16(n2))\n" +         // -56 -> -56 (sign-extend)
+            "    print(int16(s))\n" +          // 200 -> 200 (zero-extend)
+            "    print(uint32(s) * 100000)\n"; // 200*100000 = 20_000_000
+        RunSeed(body, 200, 6).Should().Equal(244, -56, 65535, -56, 200, 20000000);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
