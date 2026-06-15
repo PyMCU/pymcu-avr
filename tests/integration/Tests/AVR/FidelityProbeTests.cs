@@ -379,6 +379,26 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void BoolCompound_AndOrNot()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    print(1 if s < 3 and s < 10 else 0)\n" +                       // 0
+            "    print(1 if not (s < 3 or s > 5) else 0)\n" +                   // 0
+            "    print(1 if (s > 5 or s < 1) and (s < 10 or s == 0) else 0)\n" + // 1
+            "    print(1 if s > 100 or s > 50 or s > 5 else 0)\n" +             // 1
+            "    print(1 if s < 1 or s < 2 or s < 3 else 0)\n" +                // 0
+            "    print(1 if (s > 10 and s < 20) or s == 7 else 0)\n" +          // 1
+            "    print(1 if s > 10 or s < 5 and s > 0 else 0)\n" +              // 0
+            "    print(1 if not s == 7 else 0)\n" +                            // 0
+            "    i: uint8 = 0\n" +
+            "    while i < s and i < 3:\n" +
+            "        i += 1\n" +
+            "    print(i)\n";                                                   // 3
+        RunSeed(body, 7, 9).Should().Equal(0, 0, 1, 1, 0, 1, 0, 0, 3);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
