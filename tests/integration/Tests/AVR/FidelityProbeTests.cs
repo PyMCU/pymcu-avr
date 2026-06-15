@@ -576,6 +576,23 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void InlineComputedArrayIndex_InExpression()
+    {
+        // Regression (AvrLinearScan): the live interval of a temp defined by an ArrayLoad was
+        // invisible (the array ops were missing from the liveness walk), so an earlier load's
+        // result shared R16 with a later load's inline index and got clobbered.
+        // `arr[idx] + arr[s - 5]` returned just the second element.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    arr: uint8[5] = [10, 20, 30, 40, 50]\n" +
+            "    idx: uint8 = s - 4\n" +
+            "    print(arr[idx] + arr[s - 5])\n" +  // 20+10 = 30
+            "    print(arr[s - 5] + arr[idx])\n" +  // 10+20 = 30
+            "    print(arr[s - 4])\n";              // 20
+        RunSeed(body, 5, 3).Should().Equal(30, 30, 20);
+    }
+
+    [Test]
     public void TwoRuntimeArrayLoads_StoredIndices()
     {
         // Two SRAM array loads with pre-stored runtime indices combine correctly.
