@@ -46,7 +46,10 @@ public static class AvrLinearScan
         for (int i = 0; i < func.Body.Count; ++i)
         {
             var instr = func.Body[i];
-            if (instr is Call) callIndices.Add(i);
+            // IndirectCall and GcAlloc transfer control to a callee/allocator and clobber the
+            // caller-saved scratch the same way a direct Call does, so a temp whose live range
+            // spans them must be spilled rather than kept in R16/R17.
+            if (instr is Call or IndirectCall or GcAlloc) callIndices.Add(i);
 
             switch (instr)
             {
@@ -151,6 +154,21 @@ public static class AvrLinearScan
                 case BytearrayStore bst2:
                     VisitVal(bst2.Index, i);
                     VisitVal(bst2.Src, i);
+                    break;
+                // Same omission as the array ops: an indirect call's result and a GC allocation's
+                // pointer are temps that must be tracked, or they share a slot with an overlapping
+                // temp and get clobbered (`fps[0](s) + fps[1](s)` lost the first call's result).
+                case IndirectCall ic:
+                    VisitVal(ic.FuncAddr, i);
+                    foreach (var a in ic.Args) VisitVal(a, i);
+                    VisitVal(ic.Dst, i);
+                    break;
+                case GcAlloc ga:
+                    VisitVal(ga.Size, i);
+                    VisitVal(ga.Dst, i);
+                    break;
+                case SignalError se:
+                    VisitVal(se.Code, i);
                     break;
             }
         }
