@@ -902,6 +902,76 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void Uint32GlobalAndBytearrayParam()
+    {
+        const string body =
+            "from pymcu.types import uint32\n\n" +
+            "counter: uint32 = 0\n\n" +
+            "def add(n: uint32):\n" +
+            "    global counter\n" +
+            "    counter = counter + n\n\n" +
+            "def fill(b: bytearray, base: uint8) -> uint8:\n" +
+            "    i: uint8 = 0\n" +
+            "    while i < 4:\n" +
+            "        b[i] = base + i\n" +
+            "        i += 1\n" +
+            "    return i\n\n" +
+            "def run(s: uint8):\n" +
+            "    add(uint32(s) * 1000000)\n" +   // 7000000
+            "    add(2345678)\n" +                // 9345678
+            "    print(counter)\n" +
+            "    buf: uint8[4] = [0, 0, 0, 0]\n" +
+            "    n: uint8 = fill(buf, s)\n" +
+            "    print(n)\n" +                     // 4
+            "    print(buf[0])\n" +                // 7
+            "    print(buf[3])\n";                 // 10
+        var got = RunSeed(body, 7, 4);
+        TestContext.WriteLine("GOT=" + string.Join(",", got));
+        got.Should().Equal(9345678, 4, 7, 10);
+    }
+
+    [Test]
+    public void BytesIterTruthinessNegStep()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    total: uint8 = 0\n" +
+            "    for b in b\"\\x01\\x02\\x03\\x04\":\n" +
+            "        total += b\n" +
+            "    print(total)\n" +              // 10
+            "    x: uint8 = s\n" +
+            "    print(1 if x else 0)\n" +      // 1 (truthy)
+            "    y: uint8 = 0\n" +
+            "    print(1 if not y else 0)\n" +  // 1
+            "    acc: uint8 = 0\n" +
+            "    for i in range(s, 0, -1):\n" + // 3,2,1
+            "        acc += i\n" +
+            "    print(acc)\n";                 // 6
+        var got = RunSeed(body, 3, 4);
+        TestContext.WriteLine("GOT=" + string.Join(",", got));
+        got.Should().Equal(10, 1, 1, 6);
+    }
+
+    [Test]
+    public void Uint16DivModRuntimeAndChainedCompare()
+    {
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    a: uint16 = uint16(s) * 1000\n" +   // 7000
+            "    d: uint16 = uint16(s)\n" +          // 7
+            "    print(a // d)\n" +                   // 1000
+            "    print(a % d)\n" +                    // 0
+            "    print(a // 13)\n" +                  // 538
+            "    print(a % 13)\n" +                   // 6
+            "    print(1 if 0 < a < 10000 else 0)\n" + // 1
+            "    print(1 if 7000 <= a < 7001 else 0)\n"; // 1
+        var got = RunSeed(body, 7, 6);
+        TestContext.WriteLine("GOT=" + string.Join(",", got));
+        got.Should().Equal(1000, 0, 538, 6, 1, 1);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
