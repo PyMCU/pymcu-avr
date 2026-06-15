@@ -972,6 +972,36 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void NoMethodStruct_WideField()
+    {
+        // A multi-field struct with no methods uses the flattened-field path, which hard-coded
+        // uint8 and truncated a uint16 field (500 read back as 244). Standalone and as a Class[N]
+        // element (the array needs the contiguous slot layout even without methods).
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Acc:\n" +
+            "    def __init__(self, total: uint16, tag: uint8):\n" +
+            "        self.total = total\n" +
+            "        self.tag = tag\n\n" +
+            "def run(s: uint8):\n" +
+            "    b = Acc(uint16(s) * 100, s + 1)\n" +
+            "    print(b.total)\n" +   // 500
+            "    b.total += 7\n" +
+            "    print(b.total)\n" +   // 507
+            "    accs: Acc[2] = [Acc(0, 0), Acc(0, 0)]\n" +
+            "    accs[0] = Acc(uint16(s) * 100, s)\n" +       // 500, 5
+            "    accs[1] = Acc(uint16(s) * 200, s + 1)\n" +   // 1000, 6
+            "    i: uint8 = s - 5\n" +
+            "    accs[i].total += 1234\n" +                   // accs[0] = 1734
+            "    print(accs[0].total)\n" +   // 1734
+            "    print(accs[1].total)\n" +   // 1000
+            "    print(accs[1].tag)\n";      // 6
+        var got = RunSeed(body, 5, 5);
+        TestContext.WriteLine("GOT=" + string.Join(",", got));
+        got.Should().Equal(500, 507, 1734, 1000, 6);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
