@@ -817,6 +817,45 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void Uint32AsSecondArg()
+    {
+        // A 32-bit value passed as a non-first argument must get its own 4-register block and not
+        // clobber arg0 (the old fixed [R24,R22,R20,R18] layout put it in R22:R23:R24:R25).
+        const string body =
+            "from pymcu.types import uint32\n\n" +
+            "def combine(a: uint8, b: uint32) -> uint32:\n" +
+            "    return b + uint32(a)\n\n" +
+            "def run(s: uint8):\n" +
+            "    r: uint32 = combine(s, uint32(s) * 1000000)\n" +  // 10_000_000 + 10
+            "    print(r)\n";
+        RunSeed(body, 10, 1).Should().Equal(10000010);
+    }
+
+    [Test]
+    public void MultiFieldZca_Uint32Field()
+    {
+        // The mutator bump(self, d: uint32) passes d as a 32-bit second argument; with the ABI
+        // fix the slot field accumulates correctly.
+        const string body =
+            "from pymcu.types import uint32\n\n" +
+            "class Ctr:\n" +
+            "    def __init__(self, n: uint32, k: uint8):\n" +
+            "        self.n = n\n" +
+            "        self.k = k\n\n" +
+            "    def bump(self, d: uint32):\n" +
+            "        self.n = self.n + d\n\n" +
+            "    def get(self) -> uint32:\n" +
+            "        return self.n\n\n" +
+            "def run(s: uint8):\n" +
+            "    c = Ctr(uint32(s) * 1000000, s)\n" +   // 10_000_000
+            "    c.bump(2345678)\n" +                    // 12_345_678
+            "    print(c.get())\n" +
+            "    print(c.n)\n" +
+            "    print(c.k)\n";                          // 10
+        RunSeed(body, 10, 3).Should().Equal(12345678, 12345678, 10);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
