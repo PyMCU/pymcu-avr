@@ -399,6 +399,22 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void AndOr_ReturnOperand_PythonSemantics()
+    {
+        // Python: `a or b`/`a and b` evaluate to an OPERAND, not a coerced bool.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    print(s or 100)\n" +      // s truthy -> 7
+            "    print(0 or s)\n" +        // 0 falsy  -> 7
+            "    print(s and 100)\n" +     // s truthy -> 100
+            "    print(0 and s)\n" +       // 0 falsy  -> 0
+            "    a: uint8 = 0\n" +
+            "    print(a or s or 200)\n" + // 0 or 7 -> 7
+            "    print(a and 5 or s)\n";   // (0 and 5)=0, 0 or 7 -> 7
+        RunSeed(body, 7, 6).Should().Equal(7, 7, 100, 0, 7, 7);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
