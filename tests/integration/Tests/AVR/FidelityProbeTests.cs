@@ -560,6 +560,37 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void AnnotatedDeclRuntimeArrayIndex()
+    {
+        // Regression: `v: T = arr[idx]` (a typed declaration whose initializer reads a
+        // runtime-indexed array) used to error "subscript must be compile-time constant",
+        // while `v: T = 0; v = arr[idx]` worked. ScanForVariableIndexedArrays now scans
+        // VarDecl initializers (and for-loop bodies), so arr is marked SRAM-indexed.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    arr: uint8[4] = [10, 20, 30, 40]\n" +
+            "    idx: uint8 = s - 4\n" +    // 1
+            "    v: uint8 = arr[idx]\n" +
+            "    print(v)\n";              // arr[1] = 20
+        RunSeed(body, 5, 1).Should().Equal(20);
+    }
+
+    [Test]
+    public void TwoRuntimeArrayLoads_StoredIndices()
+    {
+        // Two SRAM array loads with pre-stored runtime indices combine correctly.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    arr: uint8[5] = [10, 20, 30, 40, 50]\n" +
+            "    i: uint8 = s - 4\n" +    // 1
+            "    j: uint8 = s - 5\n" +    // 0
+            "    print(arr[i] + arr[j])\n" + // 20+10 = 30
+            "    k: uint8 = s - 3\n" +    // 2
+            "    print(arr[i] + arr[k])\n"; // 20+30 = 50
+        RunSeed(body, 5, 2).Should().Equal(30, 50);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
