@@ -1102,6 +1102,21 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void SumOfWideElements()
+    {
+        // s=5: a=500, b=300 (both uint16). sum([a,b]) = 800. A uint8 accumulator temp
+        // truncates the already-wide operands to 800 & 0xFF = 32.
+        // (All-uint8 operands wrapping is consistent fixed-width behavior and not probed here.)
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    a: uint16 = s * 100\n" +
+            "    b: uint16 = 300\n" +
+            "    print(sum([a, b]))\n";   // 800
+        RunSeed(body, 5, 1).Should().Equal(800);
+    }
+
+    [Test]
     public void TernaryMixedWidthBranches()
     {
         // s=5: cond false -> picks the uint16 branch (500). If the result temp is typed
