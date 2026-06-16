@@ -85,15 +85,43 @@ class AvrBackendPlugin(BackendPlugin):
     @classmethod
     def _ensure_signed(cls, binary: Path) -> None:
         """Ad-hoc sign the binary on macOS (no-op on other platforms or if already signed).
-        Native AOT .NET binaries are unsigned by default; macOS kills unsigned executables."""
+        Native AOT .NET binaries are unsigned by default; macOS kills unsigned executables.
+
+        This runs on every backend resolution, including under parallel builds (the
+        test suite spawns many ``pymcu build`` processes at once). A bare
+        ``codesign --force`` rewrites the Mach-O in place, so two processes signing the
+        same binary concurrently race and corrupt its header (a flipped magic byte ->
+        ``Exec format error`` on the next exec). To stay safe we (1) verify first and
+        skip when already validly signed, and (2) serialize the rare signing step with
+        an exclusive lock so only one process ever writes the binary at a time."""
         if sys.platform != "darwin" or not binary.exists():
             return
         import subprocess
+
+        def _is_signed() -> bool:
+            try:
+                return subprocess.run(
+                    ["codesign", "--verify", "--strict", str(binary)],
+                    check=False, capture_output=True,
+                ).returncode == 0
+            except FileNotFoundError:
+                return True  # no codesign tool -> nothing we can (or need to) do
+
+        if _is_signed():
+            return
+
+        import fcntl
+        lock_path = Path(str(binary) + ".signlock")
         try:
-            subprocess.run(
-                ["codesign", "-s", "-", "--force", str(binary)],
-                check=False, capture_output=True
-            )
+            with open(lock_path, "w") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                # Re-check under the lock: another process may have signed it while we waited.
+                if _is_signed():
+                    return
+                subprocess.run(
+                    ["codesign", "-s", "-", "--force", str(binary)],
+                    check=False, capture_output=True,
+                )
         except FileNotFoundError:
             pass
 
