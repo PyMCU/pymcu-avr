@@ -1393,10 +1393,6 @@ public class FidelityProbeTests
     }
 
     [Test]
-    [Ignore("Known limitation: inside an OUTLINED method, self.method() to an INHERITED method " +
-            "(C.bump() calling self.kind() where kind is defined up the chain in B) fails to " +
-            "resolve as a sibling outlined call and falls through to an undefined 'self_kind'. " +
-            "Same outlined-self-dispatch family as the virtual-dispatch limitation.")]
     public void Inherit_MultiLevelResolution()
     {
         // A -> B -> C. C inherits __init__ from A and kind() from B (overriding A.kind()).
