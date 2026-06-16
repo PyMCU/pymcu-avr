@@ -1058,6 +1058,31 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void PropertyGetterSetter()
+    {
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Temp:\n" +
+            "    def __init__(self, raw: uint8):\n" +
+            "        self._raw = raw\n\n" +
+            "    @property\n" +
+            "    def celsius(self) -> uint16:\n" +
+            "        return uint16(self._raw) * 2\n\n" +
+            "    @celsius.setter\n" +
+            "    def celsius(self, v: uint8):\n" +
+            "        self._raw = v // 2\n\n" +
+            "def run(s: uint8):\n" +
+            "    t = Temp(s)\n" +          // _raw=10
+            "    print(t.celsius)\n" +     // 20 (getter)
+            "    t.celsius = 40\n" +       // setter -> _raw=20
+            "    print(t.celsius)\n" +     // 40
+            "    print(t._raw)\n";         // 20
+        var got = RunSeed(body, 10, 3);
+        TestContext.WriteLine("GOT=" + string.Join(",", got));
+        got.Should().Equal(20, 40, 20);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
