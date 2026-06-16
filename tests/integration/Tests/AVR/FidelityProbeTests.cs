@@ -1102,6 +1102,39 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void TernaryMixedWidthBranches()
+    {
+        // s=5: cond false -> picks the uint16 branch (500). If the result temp is typed
+        // only from the true branch (uint8 const 7), the false branch 500 truncates -> 244.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    a: uint16 = 500\n" +
+            "    print(7 if s > 100 else a)\n" +   // 500
+            "    print(a if s > 100 else 7)\n";     // 7
+        RunSeed(body, 5, 2).Should().Equal(500, 7);
+    }
+
+    [Test]
+    public void AugAssignChain_Uint16()
+    {
+        // s=5: x=5; *=100 ->500; -=50 ->450; //=7 ->64; %=10 ->4
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    x: uint16 = s\n" +
+            "    x *= 100\n" +
+            "    print(x)\n" +     // 500
+            "    x -= 50\n" +
+            "    print(x)\n" +     // 450
+            "    x //= 7\n" +
+            "    print(x)\n" +     // 64
+            "    x %= 10\n" +
+            "    print(x)\n";      // 4
+        RunSeed(body, 5, 4).Should().Equal(500, 450, 64, 4);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
