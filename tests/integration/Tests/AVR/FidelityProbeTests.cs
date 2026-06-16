@@ -1288,6 +1288,166 @@ public class FidelityProbeTests
         RunSeed(body, 5, 3).Should().Equal(5, 100, 42);
     }
 
+    // ── dunder / inheritance / vtable battery ──────────────────────────────────
+
+    [Test]
+    public void Dunder_ComparisonOperators()
+    {
+        // __lt__, __le__, __gt__, __eq__ used in conditions and printed directly.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Money:\n" +
+            "    def __init__(self, c: uint16):\n" +
+            "        self._c = c\n\n" +
+            "    def __lt__(self, o: Money) -> bool:\n" +
+            "        return self._c < o._c\n\n" +
+            "    def __eq__(self, o: Money) -> bool:\n" +
+            "        return self._c == o._c\n\n" +
+            "def run(s: uint8):\n" +
+            "    a = Money(uint16(s) * 100)\n" +   // 500
+            "    b = Money(300)\n" +
+            "    print(1 if a < b else 0)\n" +     // 0
+            "    print(1 if b < a else 0)\n" +     // 1
+            "    print(1 if a == b else 0)\n" +    // 0
+            "    print(1 if a == a else 0)\n";     // 1
+        RunSeed(body, 5, 4).Should().Equal(0, 1, 0, 1);
+    }
+
+    [Test]
+    public void Dunder_GetSetItemAndLen()
+    {
+        // custom __getitem__, __setitem__ and __len__ on a wrapper around a fixed array.
+        const string body =
+            "from pymcu.types import uint8\n\n" +
+            "class Buf:\n" +
+            "    def __init__(self):\n" +
+            "        self._data: uint8[4]\n" +
+            "        self._n = 4\n\n" +
+            "    def __getitem__(self, i: uint8) -> uint8:\n" +
+            "        return self._data[i]\n\n" +
+            "    def __setitem__(self, i: uint8, v: uint8):\n" +
+            "        self._data[i] = v\n\n" +
+            "    def __len__(self) -> uint8:\n" +
+            "        return self._n\n\n" +
+            "def run(s: uint8):\n" +
+            "    b = Buf()\n" +
+            "    b[0] = s\n" +
+            "    b[1] = s + 10\n" +
+            "    print(b[0])\n" +      // 5
+            "    print(b[1])\n" +      // 15
+            "    print(len(b))\n";     // 4
+        RunSeed(body, 5, 3).Should().Equal(5, 15, 4);
+    }
+
+    [Test]
+    [Ignore("Known limitation: a subclass __init__ that calls super().__init__() does not merge " +
+            "the base's fields into the subclass slot layout, so an inherited field set via super " +
+            "(self._legs) is unknown to later methods ('_legs is not a member of a numeric value'). " +
+            "Needs layout+construction to merge base fields ahead of the subclass's own.")]
+    public void Inherit_SuperInitAndOverride()
+    {
+        // super().__init__() sets an inherited field; the override reads both fields.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Animal:\n" +
+            "    def __init__(self, legs: uint8):\n" +
+            "        self._legs = legs\n\n" +
+            "    def describe(self) -> uint16:\n" +
+            "        return self._legs\n\n" +
+            "class Dog(Animal):\n" +
+            "    def __init__(self, name: uint8):\n" +
+            "        super().__init__(4)\n" +
+            "        self._name = name\n\n" +
+            "    def describe(self) -> uint16:\n" +
+            "        return uint16(self._legs) * 10 + self._name\n\n" +
+            "def run(s: uint8):\n" +
+            "    d = Dog(s)\n" +          // name=5, legs=4
+            "    print(d.describe())\n";  // 4*10+5 = 45
+        RunSeed(body, 5, 1).Should().Equal(45);
+    }
+
+    [Test]
+    [Ignore("Known limitation (no virtual dispatch): a method that calls self.method() is OUTLINED " +
+            "(compiled once with self bound to the DEFINING class), so the self-call resolves " +
+            "statically. Shape.total() calling self.unit() always runs Shape.unit, never the " +
+            "Square.unit override (Square.unit is never even compiled). Needs override-aware " +
+            "force-inlining of methods with virtual self-calls, preserving shared outlining elsewhere.")]
+    public void Inherit_TemplateMethodDispatch()
+    {
+        // The vtable test: Shape.total() calls self.unit(); Square overrides unit(). Calling
+        // total() on a Square must dispatch to Square.unit() (4), not Shape.unit() (1).
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Shape:\n" +
+            "    def __init__(self, n: uint8):\n" +
+            "        self._n = n\n\n" +
+            "    def unit(self) -> uint16:\n" +
+            "        return 1\n\n" +
+            "    def total(self) -> uint16:\n" +
+            "        return uint16(self._n) * self.unit()\n\n" +
+            "class Square(Shape):\n" +
+            "    def unit(self) -> uint16:\n" +
+            "        return 4\n\n" +
+            "def run(s: uint8):\n" +
+            "    sq = Square(s)\n" +     // n=5
+            "    print(sq.total())\n" + // 5*4 = 20 (Square.unit)
+            "    sh = Shape(s)\n" +
+            "    print(sh.total())\n";  // 5*1 = 5  (Shape.unit)
+        RunSeed(body, 5, 2).Should().Equal(20, 5);
+    }
+
+    [Test]
+    [Ignore("Known limitation: inside an OUTLINED method, self.method() to an INHERITED method " +
+            "(C.bump() calling self.kind() where kind is defined up the chain in B) fails to " +
+            "resolve as a sibling outlined call and falls through to an undefined 'self_kind'. " +
+            "Same outlined-self-dispatch family as the virtual-dispatch limitation.")]
+    public void Inherit_MultiLevelResolution()
+    {
+        // A -> B -> C. C inherits __init__ from A and kind() from B (overriding A.kind()).
+        const string body =
+            "from pymcu.types import uint8\n\n" +
+            "class A:\n" +
+            "    def __init__(self, v: uint8):\n" +
+            "        self._v = v\n\n" +
+            "    def kind(self) -> uint8:\n" +
+            "        return 1\n\n" +
+            "class B(A):\n" +
+            "    def kind(self) -> uint8:\n" +
+            "        return 2\n\n" +
+            "class C(B):\n" +
+            "    def bump(self) -> uint8:\n" +
+            "        return self.kind() + 10\n\n" +
+            "def run(s: uint8):\n" +
+            "    c = C(s)\n" +
+            "    print(c.kind())\n" +   // 2 (from B)
+            "    print(c._v)\n" +       // 5 (init from A)
+            "    print(c.bump())\n";    // 2 + 10 = 12 (self.kind() -> B.kind)
+        RunSeed(body, 5, 3).Should().Equal(2, 5, 12);
+    }
+
+    [Test]
+    [Ignore("Known limitation: super().<method>() is only supported for __init__; a non-init " +
+            "super call (super().score()) resolves to an undefined function 'super'. Needs " +
+            "super-method dispatch to the base class's implementation.")]
+    public void Inherit_OverrideCallsSuperMethod()
+    {
+        // A subclass method overriding a base method while still invoking the base via super().
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Base:\n" +
+            "    def __init__(self, v: uint8):\n" +
+            "        self._v = v\n\n" +
+            "    def score(self) -> uint16:\n" +
+            "        return uint16(self._v) * 2\n\n" +
+            "class Boosted(Base):\n" +
+            "    def score(self) -> uint16:\n" +
+            "        return super().score() + 100\n\n" +
+            "def run(s: uint8):\n" +
+            "    x = Boosted(s)\n" +     // v=5
+            "    print(x.score())\n";   // 5*2 + 100 = 110
+        RunSeed(body, 5, 1).Should().Equal(110);
+    }
+
     [Test]
     public void AbsMinMax_WideValues()
     {
