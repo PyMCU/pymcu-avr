@@ -1002,6 +1002,36 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void OperatorOverloadResultMethod()
+    {
+        // A65: an operator dunder returning a new slot-class instance, then a method call on the
+        // result. The result must be materialized into a slot so the method gets a self pointer
+        // (it used to pass the flattened fields, returning garbage: mag() gave 3 instead of 18).
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Vec:\n" +
+            "    def __init__(self, x: uint8, y: uint8):\n" +
+            "        self.x = x\n" +
+            "        self.y = y\n\n" +
+            "    def __add__(self, other: Vec) -> Vec:\n" +
+            "        return Vec(self.x + other.x, self.y + other.y)\n\n" +
+            "    def mag(self) -> uint16:\n" +
+            "        return uint16(self.x) + uint16(self.y)\n\n" +
+            "def run(s: uint8):\n" +
+            "    a = Vec(s, s + 1)\n" +       // (3,4)
+            "    b = Vec(s + 2, s + 3)\n" +   // (5,6)
+            "    c = a + b\n" +               // (8,10)
+            "    print(c.x)\n" +              // 8
+            "    print(c.y)\n" +              // 10
+            "    print(c.mag())\n" +          // 18
+            "    print(a.mag())\n" +          // 7
+            "    print(b.mag())\n";           // 11
+        var got = RunSeed(body, 3, 5);
+        TestContext.WriteLine("GOT=" + string.Join(",", got));
+        got.Should().Equal(8, 10, 18, 7, 11);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
