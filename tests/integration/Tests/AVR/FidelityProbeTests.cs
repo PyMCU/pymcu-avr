@@ -1032,6 +1032,32 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void InheritedFieldsInOverriddenMethod()
+    {
+        // A66: a subclass with no __init__ of its own inherits the base's fields; an overridden
+        // method must still resolve them. The subclass's field layout was empty, so `self.a`
+        // errored "not a member of a numeric value". Only inherited when the base is a slot class.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Base:\n" +
+            "    def __init__(self, a: uint8, b: uint8):\n" +
+            "        self.a = a\n" +
+            "        self.b = b\n\n" +
+            "    def combine(self) -> uint16:\n" +
+            "        return uint16(self.a) + uint16(self.b)\n\n" +
+            "class Derived(Base):\n" +
+            "    def combine(self) -> uint16:\n" +
+            "        return uint16(self.a) * uint16(self.b)\n\n" +
+            "def run(s: uint8):\n" +
+            "    base = Base(s, s + 1)\n" +
+            "    der = Derived(s, s + 1)\n" +
+            "    print(base.combine())\n" +   // 13
+            "    print(der.combine())\n" +    // 42 (overridden)
+            "    print(der.a)\n";             // 6 (inherited field)
+        RunSeed(body, 6, 3).Should().Equal(13, 42, 6);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
