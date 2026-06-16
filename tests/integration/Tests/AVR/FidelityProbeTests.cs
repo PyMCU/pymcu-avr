@@ -1102,6 +1102,21 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void IndirectCallWideReturn()
+    {
+        // s=5: big(5)=500 (uint16) called through a Callable. A uint8 result temp at the
+        // indirect call site would read only the low byte -> 244.
+        const string body =
+            "from pymcu.types import uint16, Callable\n\n" +
+            "def big(x: uint8) -> uint16:\n" +
+            "    return uint16(x) * 100\n\n" +
+            "def run(s: uint8):\n" +
+            "    f: Callable = big\n" +
+            "    print(f(s))\n";   // 500
+        RunSeed(body, 5, 1).Should().Equal(500);
+    }
+
+    [Test]
     public void SumOfWideElements()
     {
         // s=5: a=500, b=300 (both uint16). sum([a,b]) = 800. A uint8 accumulator temp
