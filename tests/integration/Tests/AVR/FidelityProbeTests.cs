@@ -1363,11 +1363,6 @@ public class FidelityProbeTests
     }
 
     [Test]
-    [Ignore("Known limitation (no virtual dispatch): a method that calls self.method() is OUTLINED " +
-            "(compiled once with self bound to the DEFINING class), so the self-call resolves " +
-            "statically. Shape.total() calling self.unit() always runs Shape.unit, never the " +
-            "Square.unit override (Square.unit is never even compiled). Needs override-aware " +
-            "force-inlining of methods with virtual self-calls, preserving shared outlining elsewhere.")]
     public void Inherit_TemplateMethodDispatch()
     {
         // The vtable test: Shape.total() calls self.unit(); Square overrides unit(). Calling
