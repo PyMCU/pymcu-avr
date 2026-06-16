@@ -1083,6 +1083,42 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void TernaryWideCallBranch()
+    {
+        // A ternary branch that is a uint16-returning call: the result must stay 16-bit.
+        // s=5: big() if s>3 -> 500; 7 if s>3 -> 7 (the wide call is on the not-taken side).
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def big() -> uint16:\n" +
+            "    return 500\n\n" +
+            "def run(s: uint8):\n" +
+            "    print(big() if s > 3 else 7)\n" +   // 500
+            "    print(7 if s > 3 else big())\n";     // 7
+        RunSeed(body, 5, 2).Should().Equal(500, 7);
+    }
+
+    [Test]
+    public void ArgEvalOrder_LeftToRight()
+    {
+        // tick() returns 1,2,3,... on successive calls. Python evaluates arguments and
+        // binary operands left-to-right, so diff(tick(), tick()) = diff(1,2) = -1 and
+        // tick()*10 + tick() = 3*10 + 4 = 34. Right-to-left eval would give +1 and 43.
+        const string body =
+            "from pymcu.types import int16\n\n" +
+            "_n: uint8 = 0\n\n" +
+            "def tick() -> uint8:\n" +
+            "    global _n\n" +
+            "    _n += 1\n" +
+            "    return _n\n\n" +
+            "def diff(a: uint8, b: uint8) -> int16:\n" +
+            "    return int16(a) - int16(b)\n\n" +
+            "def run(s: uint8):\n" +
+            "    print(diff(tick(), tick()))\n" +   // diff(1,2) = -1
+            "    print(tick() * 10 + tick())\n";     // 3*10 + 4 = 34
+        RunSeed(body, 5, 2).Should().Equal(-1, 34);
+    }
+
+    [Test]
     public void AbsMinMax_WideValues()
     {
         // s=5: y=500, x=-500 -> abs=500; max(y,50)=500, min(y,50)=50.
