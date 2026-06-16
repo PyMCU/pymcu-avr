@@ -1118,6 +1118,176 @@ public class FidelityProbeTests
         RunSeed(body, 5, 2).Should().Equal(-1, 34);
     }
 
+    // ── @property stress battery ───────────────────────────────────────────────
+
+    [Test]
+    public void Property_InExpressionConditionAndLoop()
+    {
+        // getter recomputed each access; used in arithmetic, a loop accumulator, and a condition.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Temp:\n" +
+            "    def __init__(self, raw: uint8):\n" +
+            "        self._raw = raw\n\n" +
+            "    @property\n" +
+            "    def celsius(self) -> uint16:\n" +
+            "        return uint16(self._raw) * 2\n\n" +
+            "def run(s: uint8):\n" +
+            "    t = Temp(s)\n" +                       // raw=5 -> celsius=10
+            "    print(t.celsius)\n" +                  // 10
+            "    total: uint16 = 0\n" +
+            "    i: uint8 = 0\n" +
+            "    while i < 3:\n" +
+            "        total += t.celsius\n" +            // 10*3
+            "        i += 1\n" +
+            "    print(total)\n" +                      // 30
+            "    print(t.celsius + 100)\n" +            // 110
+            "    print(1 if t.celsius > 5 else 0)\n";   // 1
+        RunSeed(body, 5, 4).Should().Equal(10, 30, 110, 1);
+    }
+
+    [Test]
+    public void Property_AugAssignThroughGetterSetter()
+    {
+        // b.val += 5 must read via the getter and write via the setter.
+        const string body =
+            "class Box:\n" +
+            "    def __init__(self, v: uint8):\n" +
+            "        self._v = v\n\n" +
+            "    @property\n" +
+            "    def val(self) -> uint8:\n" +
+            "        return self._v\n\n" +
+            "    @val.setter\n" +
+            "    def val(self, x: uint8):\n" +
+            "        self._v = x\n\n" +
+            "def run(s: uint8):\n" +
+            "    b = Box(s)\n" +
+            "    b.val = 20\n" +
+            "    print(b.val)\n" +    // 20
+            "    b.val += 5\n" +
+            "    print(b.val)\n";     // 25
+        RunSeed(body, 5, 2).Should().Equal(20, 25);
+    }
+
+    [Test]
+    public void Property_MultiFieldComputedWide()
+    {
+        // getter over TWO fields, producing a 16-bit product.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Rect:\n" +
+            "    def __init__(self, w: uint8, h: uint8):\n" +
+            "        self._w = w\n" +
+            "        self._h = h\n\n" +
+            "    @property\n" +
+            "    def area(self) -> uint16:\n" +
+            "        return uint16(self._w) * uint16(self._h)\n\n" +
+            "def run(s: uint8):\n" +
+            "    r = Rect(s, 30)\n" +    // 5*30
+            "    print(r.area)\n";       // 150
+        RunSeed(body, 5, 1).Should().Equal(150);
+    }
+
+    [Test]
+    public void Property_GetterCallsMethod()
+    {
+        // getter body invokes another method on self.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Calc:\n" +
+            "    def __init__(self, base: uint8):\n" +
+            "        self._base = base\n\n" +
+            "    def doubled(self) -> uint16:\n" +
+            "        return uint16(self._base) * 2\n\n" +
+            "    @property\n" +
+            "    def result(self) -> uint16:\n" +
+            "        return self.doubled() + 1\n\n" +
+            "def run(s: uint8):\n" +
+            "    c = Calc(s)\n" +      // base=5
+            "    print(c.result)\n";  // 5*2+1 = 11
+        RunSeed(body, 5, 1).Should().Equal(11);
+    }
+
+    [Test]
+    public void Property_MultipleAndMutatingFields()
+    {
+        // no-arg __init__, two fields, a branching getter, methods that mutate fields.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Acc:\n" +
+            "    def __init__(self):\n" +
+            "        self._sum = 0\n" +
+            "        self._count = 0\n\n" +
+            "    def add(self, v: uint8):\n" +
+            "        self._sum += v\n" +
+            "        self._count += 1\n\n" +
+            "    @property\n" +
+            "    def average(self) -> uint16:\n" +
+            "        if self._count == 0:\n" +
+            "            return 0\n" +
+            "        return self._sum // self._count\n\n" +
+            "def run(s: uint8):\n" +
+            "    a = Acc()\n" +
+            "    print(a.average)\n" +   // 0 (count==0)
+            "    a.add(s)\n" +           // sum=5,count=1
+            "    a.add(10)\n" +          // sum=15,count=2
+            "    a.add(30)\n" +          // sum=45,count=3
+            "    print(a.average)\n";    // 15
+        RunSeed(body, 5, 2).Should().Equal(0, 15);
+    }
+
+    [Test]
+    public void Property_AsArgAndIndex()
+    {
+        // property result used as a function argument and as an array index.
+        const string body =
+            "from pymcu.types import uint8\n\n" +
+            "class P:\n" +
+            "    def __init__(self, k: uint8):\n" +
+            "        self._k = k\n\n" +
+            "    @property\n" +
+            "    def idx(self) -> uint8:\n" +
+            "        return self._k + 1\n\n" +
+            "def twice(x: uint8) -> uint8:\n" +
+            "    return x * 2\n\n" +
+            "def run(s: uint8):\n" +
+            "    p = P(s)\n" +                  // k=2 -> idx=3
+            "    arr: uint8[5]\n" +
+            "    arr[0] = 11\n" +
+            "    arr[1] = 22\n" +
+            "    arr[2] = 33\n" +
+            "    arr[3] = 44\n" +
+            "    print(twice(p.idx))\n" +       // twice(3)=6
+            "    print(arr[p.idx])\n";          // arr[3]=44
+        RunSeed(body, 2, 2).Should().Equal(6, 44);
+    }
+
+    [Test]
+    public void Property_SetterClampsAndChains()
+    {
+        // setter runs logic (clamp); multiple set/get cycles.
+        const string body =
+            "from pymcu.types import uint8\n\n" +
+            "class Dimmer:\n" +
+            "    def __init__(self):\n" +
+            "        self._level = 0\n\n" +
+            "    @property\n" +
+            "    def level(self) -> uint8:\n" +
+            "        return self._level\n\n" +
+            "    @level.setter\n" +
+            "    def level(self, v: uint8):\n" +
+            "        self._level = v if v < 100 else 100\n\n" +
+            "def run(s: uint8):\n" +
+            "    d = Dimmer()\n" +
+            "    d.level = s\n" +
+            "    print(d.level)\n" +     // 5
+            "    d.level = 200\n" +      // clamped to 100
+            "    print(d.level)\n" +     // 100
+            "    d.level = 42\n" +
+            "    print(d.level)\n";      // 42
+        RunSeed(body, 5, 3).Should().Equal(5, 100, 42);
+    }
+
     [Test]
     public void AbsMinMax_WideValues()
     {
