@@ -1340,10 +1340,6 @@ public class FidelityProbeTests
     }
 
     [Test]
-    [Ignore("Known limitation: a subclass __init__ that calls super().__init__() does not merge " +
-            "the base's fields into the subclass slot layout, so an inherited field set via super " +
-            "(self._legs) is unknown to later methods ('_legs is not a member of a numeric value'). " +
-            "Needs layout+construction to merge base fields ahead of the subclass's own.")]
     public void Inherit_SuperInitAndOverride()
     {
         // super().__init__() sets an inherited field; the override reads both fields.
@@ -1426,26 +1422,27 @@ public class FidelityProbeTests
     }
 
     [Test]
-    [Ignore("Known limitation: super().<method>() is only supported for __init__; a non-init " +
-            "super call (super().score()) resolves to an undefined function 'super'. Needs " +
-            "super-method dispatch to the base class's implementation.")]
     public void Inherit_OverrideCallsSuperMethod()
     {
         // A subclass method overriding a base method while still invoking the base via super().
+        // The base is a 2-field slot class so construction goes through the (working) slot path.
         const string body =
             "from pymcu.types import uint16\n\n" +
             "class Base:\n" +
-            "    def __init__(self, v: uint8):\n" +
-            "        self._v = v\n\n" +
+            "    def __init__(self, v: uint8, w: uint8):\n" +
+            "        self._v = v\n" +
+            "        self._w = w\n\n" +
             "    def score(self) -> uint16:\n" +
-            "        return uint16(self._v) * 2\n\n" +
+            "        return uint16(self._v) * 2 + self._w\n\n" +
             "class Boosted(Base):\n" +
+            "    def __init__(self, v: uint8):\n" +
+            "        super().__init__(v, 3)\n\n" +
             "    def score(self) -> uint16:\n" +
             "        return super().score() + 100\n\n" +
             "def run(s: uint8):\n" +
-            "    x = Boosted(s)\n" +     // v=5
-            "    print(x.score())\n";   // 5*2 + 100 = 110
-        RunSeed(body, 5, 1).Should().Equal(110);
+            "    x = Boosted(s)\n" +     // v=5, w=3
+            "    print(x.score())\n";   // (5*2 + 3) + 100 = 113
+        RunSeed(body, 5, 1).Should().Equal(113);
     }
 
     [Test]
