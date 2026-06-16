@@ -1083,6 +1083,25 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void AbsMinMax_WideValues()
+    {
+        // s=5: y=500, x=-500 -> abs=500; max(y,50)=500, min(y,50)=50.
+        // abs/min/max used a bare uint8 result temp that truncated wide values (500 -> 244).
+        // (y is materialized first so the multiply widens to its int16 target -- the fixed-width
+        // intermediate `0 - s*100` is a separate, intentional wrap and not what this probes.)
+        const string body =
+            "from pymcu.types import int16\n\n" +
+            "def run(s: uint8):\n" +
+            "    y: int16 = s * 100\n" +
+            "    x: int16 = 0 - y\n" +
+            "    print(x)\n" +               // -500
+            "    print(abs(x))\n" +          // 500
+            "    print(max(y, 50))\n" +      // 500
+            "    print(min(y, 50))\n";       // 50
+        RunSeed(body, 5, 4).Should().Equal(-500, 500, 500, 50);
+    }
+
+    [Test]
     public void OperatorPrecedence()
     {
         const string body =
