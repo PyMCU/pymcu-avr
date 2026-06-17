@@ -2041,6 +2041,65 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void TryElseRunsWhenNoException()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        y: uint8 = 100 // s\n" +   // s=5 -> ok, no exception
+            "    except ZeroDivisionError:\n" +
+            "        print(1)\n" +
+            "    else:\n" +
+            "        print(99)\n";              // runs only if no exception
+        RunSeed(body, 5, 1).Should().Equal(99);
+    }
+
+    [Test]
+    public void TryElseSkippedOnException()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(100 // s)\n" +   // s=0 -> exception
+            "    except ZeroDivisionError:\n" +
+            "        print(5)\n" +
+            "    else:\n" +
+            "        print(99)\n";          // must NOT run when an exception occurred
+        RunSeed(body, 0, 1).Should().Equal(5);
+    }
+
+    [Test]
+    public void ReraiseInExceptPropagates()
+    {
+        const string body =
+            "def inner(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        return 100 // s\n" +
+            "    except ZeroDivisionError:\n" +
+            "        raise ValueError\n" +       // re-raise as a different type
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(inner(s))\n" +
+            "    except ValueError:\n" +
+            "        print(42)\n";
+        RunSeed(body, 0, 1).Should().Equal(42);
+    }
+
+    [Test]
+    public void SecondExceptClauseMatches()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(100 // s)\n" +
+            "    except IndexError:\n" +     // no match
+            "        print(1)\n" +
+            "    except ZeroDivisionError:\n" +   // matches
+            "        print(2)\n";
+        RunSeed(body, 0, 1).Should().Equal(2);
+    }
+
+    [Test]
     public void UncaughtExceptionHalts()
     {
         // An UNCAUGHT runtime divide-by-zero must now halt (loud failure, Python-like) rather than
