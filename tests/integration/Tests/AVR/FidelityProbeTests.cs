@@ -1963,6 +1963,33 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void RuntimeDivByZeroRaises()
+    {
+        // Runtime divide-by-zero now raises ZeroDivisionError (Python fidelity), catchable here.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    a: uint8 = 100\n" +
+            "    try:\n" +
+            "        print(a // s)\n" +   // s=0 -> ZeroDivisionError
+            "    except ZeroDivisionError:\n" +
+            "        print(77)\n";
+        RunSeed(body, 0, 1).Should().Equal(77);
+    }
+
+    [Test]
+    public void RuntimeDivByNonZeroWorks()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    a: uint8 = 100\n" +
+            "    try:\n" +
+            "        print(a // s)\n" +   // s=5 -> 20, no raise
+            "    except ZeroDivisionError:\n" +
+            "        print(77)\n";
+        RunSeed(body, 5, 1).Should().Equal(20);
+    }
+
+    [Test]
     public void AugAssignInstanceField()
     {
         const string body =
