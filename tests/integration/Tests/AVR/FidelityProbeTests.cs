@@ -2326,6 +2326,29 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void BareReraisePreservesCodeAfterClobber()
+    {
+        // The handler runs a 2-arg call (its 2nd arg lands in R22, the error-code register) before
+        // a bare raise. The re-raised exception must still be ZeroDivisionError, not garbage.
+        const string body =
+            "def add2(a: uint8, b: uint8) -> uint8:\n    return a + b\n" +
+            "def inner(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        return 100 // s\n" +     // ZeroDivisionError (code 6)
+            "    except ZeroDivisionError:\n" +
+            "        print(add2(1, 2))\n" +   // clobbers R22 with arg b
+            "        raise\n" +               // bare re-raise -> must still be ZeroDivisionError
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(inner(s))\n" +
+            "    except ValueError:\n" +
+            "        print(1)\n" +            // wrong (if R22 clobbered to some other code)
+            "    except ZeroDivisionError:\n" +
+            "        print(7)\n";             // correct
+        RunSeed(body, 0, 2).Should().Equal(3, 7);
+    }
+
+    [Test]
     public void BareReraise()
     {
         // `raise` with no argument re-raises the current exception (Python).
