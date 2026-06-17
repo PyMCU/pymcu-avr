@@ -1694,6 +1694,21 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void SliceToInferredArray()
+    {
+        // `b = a[lo:hi]` without an array annotation infers b as a fixed-size array and copies
+        // the slice's elements; b[i] must read the sliced values (regression: it read 0).
+        const string body =
+            "def run(s: uint8):\n" +
+            "    a: uint8[4] = [10, 20, 30, 40]\n" +
+            "    a[0] = s\n" +
+            "    b = a[1:3]\n" +
+            "    print(b[0])\n" +   // 20
+            "    print(b[1])\n";   // 30
+        RunSeed(body, 5, 2).Should().Equal(20, 30);
+    }
+
+    [Test]
     public void FloorDivMod_NegativeDividend()
     {
         // Python `//` floors toward -inf and `%` follows the divisor's sign (NOT C truncation).
