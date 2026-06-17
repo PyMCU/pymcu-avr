@@ -43,6 +43,30 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void FiveLevelInheritanceChain()
+    {
+        // Five levels (L0..L4), each level's __init__ chaining via super().__init__(), fields
+        // inherited across all five, a leaf override of kind(), a mutating method (go) invoked
+        // twice, and template-method virtual dispatch (go calls self.kind()).
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class L0:\n    def __init__(self, a: uint8):\n        self._a = a\n        self._n = 0\n" +
+            "    def kind(self) -> uint16:\n        return 0\n" +
+            "    def go(self) -> uint16:\n        self._n = self._n + 1\n        return self.kind() + self._n\n\n" +
+            "class L1(L0):\n    def __init__(self, a: uint8):\n        super().__init__(a)\n        self._b = 2\n\n" +
+            "class L2(L1):\n    def __init__(self, a: uint8):\n        super().__init__(a)\n        self._c = 3\n\n" +
+            "class L3(L2):\n    def __init__(self, a: uint8):\n        super().__init__(a)\n        self._d = 4\n\n" +
+            "class L4(L3):\n    def __init__(self, a: uint8):\n        super().__init__(a)\n" +
+            "    def kind(self) -> uint16:\n        return uint16(self._a) * 100 + self._b + self._c + self._d\n\n" +
+            "def run(s: uint8):\n    x = L4(s)\n" +
+            "    print(x.go())\n" +   // n=1: 5*100+2+3+4 + 1 = 510
+            "    print(x.go())\n" +   // n=2: 509 + 2 = 511
+            "    print(x._a)\n" +     // 5
+            "    print(x._d)\n";      // 4
+        RunSeed(body, 5, 4).Should().Equal(510, 511, 5, 4);
+    }
+
+    [Test]
     public void DhtStyleThreeLevelInheritance()
     {
         // Real-world 3-level chain (SensorBase -> GenericDht -> Dht11): super().__init__ chains,
