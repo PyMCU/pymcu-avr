@@ -2272,6 +2272,97 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void NestedFinallyOnReturn()
+    {
+        // return through two nested try-with-finally levels runs both, innermost first.
+        const string body =
+            "def f(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        try:\n" +
+            "            return s\n" +
+            "        finally:\n" +
+            "            print(1)\n" +    // inner finally first
+            "    finally:\n" +
+            "        print(2)\n" +        // then outer
+            "def run(s: uint8):\n" +
+            "    print(f(s))\n";
+        RunSeed(body, 5, 3).Should().Equal(1, 2, 5);
+    }
+
+    [Test]
+    public void NestedFinallyOnBreak()
+    {
+        // break through two nested finally levels runs both.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    t: uint8 = 0\n" +
+            "    for i in range(s):\n" +
+            "        try:\n" +
+            "            try:\n" +
+            "                if i == 1:\n                    break\n" +
+            "                t = t + i\n" +
+            "            finally:\n" +
+            "                t = t + 10\n" +     // inner
+            "        finally:\n" +
+            "            t = t + 100\n" +        // outer
+            "    print(t)\n";
+        // i=0: +0,+10,+100=110 ; i=1: break -> +10,+100 -> 220
+        RunSeed(body, 5, 1).Should().Equal(220);
+    }
+
+    [Test]
+    public void RaiseInConstructorCaught()
+    {
+        const string body =
+            "class Thing:\n" +
+            "    def __init__(self, s: uint8):\n        self._v = 100 // s\n" +   // s=0 raises
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        t = Thing(s)\n" +
+            "        print(t._v)\n" +
+            "    except ZeroDivisionError:\n" +
+            "        print(6)\n";
+        RunSeed(body, 0, 1).Should().Equal(6);
+    }
+
+    [Test]
+    public void BareReraise()
+    {
+        // `raise` with no argument re-raises the current exception (Python).
+        const string body =
+            "def inner(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        return 100 // s\n" +
+            "    except ZeroDivisionError:\n" +
+            "        raise\n" +              // bare re-raise
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(inner(s))\n" +
+            "    except ZeroDivisionError:\n" +
+            "        print(7)\n";
+        RunSeed(body, 0, 1).Should().Equal(7);
+    }
+
+    [Test]
+    public void FinallyExceptionOverridesPending()
+    {
+        const string body =
+            "def f(s: uint8):\n" +
+            "    try:\n" +
+            "        raise ValueError\n" +     // body raises ValueError
+            "    finally:\n" +
+            "        x: uint8 = 100 // s\n" +  // s=0 -> finally raises ZeroDivisionError (overrides)
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        f(s)\n" +
+            "    except ValueError:\n" +
+            "        print(1)\n" +             // must NOT catch
+            "    except ZeroDivisionError:\n" +
+            "        print(2)\n";              // overriding exception
+        RunSeed(body, 0, 1).Should().Equal(2);
+    }
+
+    [Test]
     public void FinallyRunsBeforePropagation()
     {
         const string body =
