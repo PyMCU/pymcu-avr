@@ -25,7 +25,7 @@ def main():
     # Test 1 / Test 2: 100000 / 1000, 100000 % 1000
     a: uint32 = 100000
     b: uint32 = 1000
-    q1: uint32 = a / b
+    q1: uint32 = a // b
     r1: uint32 = a % b
     GPIOR0.value = uint8(q1 & 0xFF)          # 100
     GPIOR1.value = uint8((q1 >> 8) & 0xFF)   # 0
@@ -34,7 +34,7 @@ def main():
     # Test 3 / Test 4: 1000000 / 300, 1000000 % 300
     c: uint32 = 1000000
     d: uint32 = 300
-    q2: uint32 = c / d
+    q2: uint32 = c // d
     r2: uint32 = c % d
     OCR0A.value  = uint8(q2 & 0xFF)          # 3333 & 0xFF = 5
     OCR0B.value  = uint8((q2 >> 8) & 0xFF)   # (3333 >> 8) & 0xFF = 13
