@@ -1864,20 +1864,42 @@ public class FidelityProbeTests
     }
 
     [Test]
-    public void TooManyRegisterArgsRejected()
+    public void SixArgsViaSpill()
     {
-        const string src =
-            "from pymcu.types import uint8\n" +
-            "from pymcu.hal.uart import UART\n\n\n" +
+        // Six uint8 args: the first five use R24,R22,R20,R18,R16; the sixth overflows to the SRAM
+        // spill region. Each must arrive intact. Position-encode so a dropped/corrupted arg shows.
+        const string body =
             "def f6(a: uint8, b: uint8, c: uint8, d: uint8, e: uint8, g: uint8) -> uint8:\n" +
-            "    return a + b + c + d + e + g\n" +
-            "def main():\n" +
-            "    uart = UART(9600)\n" +
-            "    s: uint8 = uart.read_blocking()\n" +
-            "    uart.write(f6(s, 1, 1, 1, 1, 1))\n" +
-            "    while True:\n        pass\n";
-        Action act = () => PymcuCompiler.BuildSource(src);
-        act.Should().Throw<Exception>().WithMessage("*R16*R25*");
+            "    return a + b * 2 + c * 4 + d * 8 + e * 16 + g * 32\n" +
+            "def run(s: uint8):\n" +
+            "    print(f6(1, 1, 1, 1, 1, 1))\n" +   // 1+2+4+8+16+32 = 63
+            "    print(f6(s, 0, 0, 0, 0, 1))\n";    // s + 32 ; s=5 -> 37
+        RunSeed(body, 5, 2).Should().Equal(63, 37);
+    }
+
+    [Test]
+    public void EightArgsViaSpill()
+    {
+        // Eight uint8 args: three overflow to SRAM (16-bit spill offsets exercised too).
+        const string body =
+            "def f8(a: uint8, b: uint8, c: uint8, d: uint8, e: uint8, f: uint8, g: uint8, h: uint8) -> uint16:\n" +
+            "    return uint16(a) + b * 2 + c * 4 + d * 8 + e * 16 + f * 32 + g * 64 + h * 128\n" +
+            "def run(s: uint8):\n" +
+            "    print(f8(1, 1, 1, 1, 1, 1, 1, 1))\n";   // sum of powers 1..128 = 255
+        RunSeed(body, 5, 1).Should().Equal(255);
+    }
+
+    [Test]
+    public void SpilledArgsWith16BitMix()
+    {
+        // A uint16 arg in the spill region (2-byte spill offset) must round-trip.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def f(a: uint8, b: uint8, c: uint8, d: uint8, e: uint8, w: uint16) -> uint16:\n" +
+            "    return uint16(a + b + c + d + e) + w\n" +
+            "def run(s: uint8):\n" +
+            "    print(f(1, 2, 3, 4, 5, 1000))\n";   // 15 + 1000 = 1015
+        RunSeed(body, 5, 1).Should().Equal(1015);
     }
 
     [Test]
