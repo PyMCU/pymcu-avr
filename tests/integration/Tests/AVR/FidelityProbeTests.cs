@@ -1881,6 +1881,32 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void InlineRuntimeIndexedLocalArray()
+    {
+        // A runtime-indexed local array inside an @inline function must be allocated as SRAM when
+        // the function is expanded (regression: it hit "subscript must be a compile-time constant"
+        // because the per-function prescan never saw the inlined callee's locals).
+        const string body =
+            "from pymcu.types import inline\n\n" +
+            "@inline\n" +
+            "def rev_sum(n: uint8) -> uint8:\n" +
+            "    buf: uint8[8] = [0, 0, 0, 0, 0, 0, 0, 0]\n" +
+            "    i: uint8 = 0\n" +
+            "    while i < n:\n" +
+            "        buf[i] = i * 2\n" +       // runtime index store
+            "        i = i + 1\n" +
+            "    acc: uint8 = 0\n" +
+            "    j: uint8 = 0\n" +
+            "    while j < n:\n" +
+            "        acc = acc + buf[j]\n" +   // runtime index load
+            "        j = j + 1\n" +
+            "    return acc\n" +
+            "def run(s: uint8):\n" +
+            "    print(rev_sum(s))\n";          // s=5: 0+2+4+6+8 = 20
+        RunSeed(body, 5, 1).Should().Equal(20);
+    }
+
+    [Test]
     public void LcdPrintStrFStringCompilesAndRuns()
     {
         // lcd.print_str(f"...") lowers to print_str("literal") + print_fmt(value,...) on the same
