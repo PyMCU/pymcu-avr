@@ -2100,6 +2100,40 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void FinallyRunsBeforeBreak()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    total: uint8 = 0\n" +
+            "    for i in range(s):\n" +
+            "        try:\n" +
+            "            if i == 2:\n                break\n" +
+            "            total = total + i\n" +
+            "        finally:\n" +
+            "            total = total + 10\n" +
+            "    print(total)\n";
+        // i=0: +0,+10=10 ; i=1: +1,+10=21 ; i=2: break but finally +10 -> 31
+        RunSeed(body, 5, 1).Should().Equal(31);
+    }
+
+    [Test]
+    public void FinallyRunsBeforeContinue()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    total: uint8 = 0\n" +
+            "    for i in range(s):\n" +
+            "        try:\n" +
+            "            if i == 2:\n                continue\n" +
+            "            total = total + i\n" +
+            "        finally:\n" +
+            "            total = total + 10\n" +
+            "    print(total)\n";
+        // each iter finally +10 (5x=50); body adds 0+1+3+4=8 (i=2 skipped) -> 58
+        RunSeed(body, 5, 1).Should().Equal(58);
+    }
+
+    [Test]
     public void FinallyRunsBeforePropagation()
     {
         const string body =
