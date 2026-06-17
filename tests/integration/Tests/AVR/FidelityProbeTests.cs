@@ -1725,6 +1725,26 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void InlineClosureNestedCapture()
+    {
+        // Two-level closure: inner() captures `base` from the plain function run AND `bonus` from
+        // the enclosing @inline outer. Both captures must resolve (regression: bonus read 0 -> 15).
+        const string body =
+            "from pymcu.types import inline\n\n" +
+            "def run(s: uint8):\n" +
+            "    base: uint8 = s\n" +       // 5
+            "    @inline\n" +
+            "    def outer(x: uint8) -> uint8:\n" +
+            "        bonus: uint8 = 100\n" +
+            "        @inline\n" +
+            "        def inner(y: uint8) -> uint8:\n" +
+            "            return y + base + bonus\n" +   // capture base (run) + bonus (outer)
+            "        return inner(x)\n" +
+            "    print(outer(10))\n";       // 10 + 5 + 100 = 115
+        RunSeed(body, 5, 1).Should().Equal(115);
+    }
+
+    [Test]
     public void FloorDivMod_NegativeDividend()
     {
         // Python `//` floors toward -inf and `%` follows the divisor's sign (NOT C truncation).
