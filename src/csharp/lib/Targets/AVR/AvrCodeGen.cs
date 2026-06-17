@@ -1732,9 +1732,31 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         for (var k = 0; k < call.Args.Count; k++)
             argSizes.Add(ps != null && k < ps.Count ? ps[k] : GetValType(call.Args[k]).SizeOf());
         var argLocs = AssignArgLocations(argSizes, out _);
+
+        // Widen a constant/narrow arg to its declared parameter width (e.g. Constant(-1) for an
+        // int16 param) instead of the size inferred from the value's magnitude.
+        DataType ArgType(int k)
+        {
+            var t = GetValType(call.Args[k]);
+            if (t != DataType.FLOAT
+                && _functionParamSizes.TryGetValue(call.FunctionName, out var pSizes) && k < pSizes.Count
+                && pSizes[k] >= 2 && t.SizeOf() < pSizes[k])
+                t = pSizes[k] == 4 ? DataType.UINT32 : DataType.UINT16;
+            return t;
+        }
+
+        // Pass 1: spilled args FIRST. Their source values (often temps in R16..R25) must be read
+        // before the register-arg loads below overwrite those registers — otherwise a spilled
+        // argument computed by a nested call read garbage (it came through as 0).
+        for (var k = 0; k < call.Args.Count; k++)
+            if (!argLocs[k].IsReg)
+                StoreArgToSpill(call.Args[k], argLocs[k].SpillOffset, ArgType(k));
+
+        // Pass 2: register args.
         for (var k = 0; k < call.Args.Count; k++)
         {
-            var argType = GetValType(call.Args[k]);
+            if (!argLocs[k].IsReg) continue;
+            var argType = ArgType(k);
             if (argType == DataType.FLOAT)
             {
                 // Float arg0 → R22:R25; float arg1 → R18:R21
@@ -1750,20 +1772,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 }
                 continue;
             }
-            // Use the declared parameter size when available so that constants
-            // (e.g. Constant(-1) for an int16 param) are loaded with the correct
-            // width instead of the size inferred from the constant's magnitude.
-            if (_functionParamSizes.TryGetValue(call.FunctionName, out var paramSizes) &&
-                k < paramSizes.Count)
-            {
-                int paramSize = paramSizes[k];
-                if (paramSize >= 2 && argType.SizeOf() < paramSize)
-                    argType = paramSize == 4 ? DataType.UINT32 : DataType.UINT16;
-            }
-            if (argLocs[k].IsReg)
-                LoadIntoReg(call.Args[k], argLocs[k].Reg, argType);
-            else
-                StoreArgToSpill(call.Args[k], argLocs[k].SpillOffset, argType);
+            LoadIntoReg(call.Args[k], argLocs[k].Reg, argType);
         }
 
         Emit("CALL", call.FunctionName);
