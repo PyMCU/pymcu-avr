@@ -1864,6 +1864,30 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void UartWriteStrAndPrintlnFString()
+    {
+        const string src =
+            "from pymcu.types import uint8, uint16\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    n: uint16 = uint16(s) * 100\n" +
+            "    uart.write_str(f\"a={s} b={n};\")\n" +
+            "    uart.println(f\"line={s}\")\n" +
+            "    while True:\n        pass\n";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(5);
+        uno.RunUntilSerial(uno.Serial, t => NL(t) >= 2, maxMs: 6000);
+        uno.Serial.Text.Should().Contain("a=5 b=500;");
+        uno.Serial.Text.Should().Contain("line=5\n");
+    }
+
+    [Test]
     public void FloorDivMod_NegativeDividend()
     {
         // Python `//` floors toward -inf and `%` follows the divisor's sign (NOT C truncation).
