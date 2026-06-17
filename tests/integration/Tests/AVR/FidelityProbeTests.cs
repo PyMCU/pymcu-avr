@@ -1590,4 +1590,59 @@ public class FidelityProbeTests
             "    print(r)\n";        // 200
         RunSeed(body, 5, 1).Should().Equal(200);
     }
+
+    [Test]
+    public void Promote_Uint8AddWidensToUint16()
+    {
+        // Python fidelity: uint8 + uint8 promotes to uint16, so 255 + 45 = 300 (NOT 44).
+        // s comes over UART so the add is a real runtime op, not constant-folded.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    r = s + 45\n" +   // 255 + 45 = 300 (promoted, no wrap)
+            "    print(r)\n";
+        RunSeed(body, 255, 1).Should().Equal(300);
+    }
+
+    [Test]
+    public void Promote_ExplicitCastOptsOutToFixedWidth()
+    {
+        // The uint8(...) escape hatch forces a fixed-width 8-bit op: 255 + 45 = 300 wraps to 44.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    r: uint8 = uint8(s + 45)\n" +   // computed at 8-bit -> 0x12C & 0xFF = 44
+            "    print(r)\n";
+        RunSeed(body, 255, 1).Should().Equal(44);
+    }
+
+    [Test]
+    public void Promote_Uint16WrapsOnExplicitStore()
+    {
+        // Promotion widens the temp, but the declared type is the STORAGE width: assigning the
+        // promoted result back into a uint16 truncates. 65535 + 1 = 65536 -> stored uint16 = 0,
+        // and the optimizer must mask its tracked constant so `e == 0` is true at runtime.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    e: uint16 = 65535\n" +
+            "    e = e + s\n" +                       // s=1 -> 65536 wraps to 0 on store
+            "    print(e)\n" +                        // 0
+            "    print(1 if e == 0 else 9)\n";        // 1 (not folded to 9)
+        RunSeed(body, 1, 2).Should().Equal(0, 1);
+    }
+
+    [Test]
+    public void Promote_Uint16MulWidensToUint32()
+    {
+        // uint16 * int promotes to uint32, so a result that overflows 16 bits is kept intact.
+        // This is the LoadIntoReg widening path: a uint16 source must zero-extend its real high
+        // byte into the uint32 destination (the bug gave 88 instead of the wide value).
+        const string body =
+            "from pymcu.types import uint16, uint32\n\n" +
+            "def run(s: uint8):\n" +
+            "    a: uint16 = 60000\n" +
+            "    a = a + s\n" +                        // 60005 (fits uint16)
+            "    big: uint32 = a * 2\n" +              // 120010 -> needs uint32
+            "    print(big)\n";
+        RunSeed(body, 5, 1).Should().Equal(120010);
+    }
 }
