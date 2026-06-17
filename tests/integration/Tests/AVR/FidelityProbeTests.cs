@@ -1963,6 +1963,24 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void TryAroundValueContextDivision()
+    {
+        // Regression: a value-context division inside a try (no Call in the body, so VisitTry adds
+        // no BranchOnError) reached its catch dispatcher only via the div-zero guard's SignalError.
+        // The optimizer did not count SignalError.CatchLabel as a CFG edge, deleted the catch block
+        // and left a dangling jump -> link failure (undefined label). Must build and catch (88).
+        const string body =
+            "def run(s: uint8):\n" +
+            "    r: uint8 = 1\n" +
+            "    try:\n" +
+            "        r = 100 // s\n" +   // s=0 -> ZeroDivisionError; value-context, no Call in try
+            "    except ZeroDivisionError:\n" +
+            "        r = 88\n" +
+            "    print(r)\n";
+        RunSeed(body, 0, 1).Should().Equal(88);
+    }
+
+    [Test]
     public void RuntimeDivByZeroRaises()
     {
         // Runtime divide-by-zero now raises ZeroDivisionError (Python fidelity), catchable here.
