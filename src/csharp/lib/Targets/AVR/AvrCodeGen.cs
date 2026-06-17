@@ -492,7 +492,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
             if (needZeroExt)
             {
-                if (size >= 2) Emit("CLR", regH);
+                // Zero-extend: load the source's REAL bytes first, then clear the rest. A 2-byte
+                // source widened to 4 must keep byte1 (it was being cleared -> uint16 read as
+                // uint8, dropping the high byte: 300 became 44 in a promoted uint32 op).
+                if (size >= 2) { if (sourceType.SizeOf() >= 2) Emit("MOV", regH, GetHighReg(srcReg)); else Emit("CLR", regH); }
                 if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
             }
             else
@@ -519,7 +522,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             if (tmpReg != reg) Emit("MOV", reg, tmpReg);
             if (needZeroExt)
             {
-                if (size >= 2) Emit("CLR", regH);
+                if (size >= 2) { if (sourceType.SizeOf() >= 2) Emit("MOV", regH, GetHighReg(tmpReg)); else Emit("CLR", regH); }
                 if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
             }
             else
@@ -549,7 +552,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 Emit("LDD", reg, $"Y+{offset}");
                 if (needZeroExt)
                 {
-                    if (size >= 2) Emit("CLR", regH);
+                    if (size >= 2) { if (sourceType.SizeOf() >= 2) Emit("LDD", regH, $"Y+{offset + 1}"); else Emit("CLR", regH); }
                     if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
                 }
                 else
@@ -564,7 +567,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 Emit("LDS", reg, $"0x{abs:X4}");
                 if (needZeroExt)
                 {
-                    if (size >= 2) Emit("CLR", regH);
+                    if (size >= 2) { if (sourceType.SizeOf() >= 2) Emit("LDS", regH, $"0x{abs + 1:X4}"); else Emit("CLR", regH); }
                     if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
                 }
                 else
