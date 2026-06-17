@@ -1864,6 +1864,21 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void SpilledArgFromNestedCall()
+    {
+        // A spilled argument whose value comes from a nested call: the call result must survive
+        // into the spill region. Regression: register-arg loads ran first and clobbered the temp
+        // holding the call result, so the spilled arg read 0 (fixed by storing spilled args first).
+        const string body =
+            "def add1(x: uint8) -> uint8:\n    return x + 1\n" +
+            "def f6(a: uint8, b: uint8, c: uint8, d: uint8, e: uint8, g: uint8) -> uint8:\n" +
+            "    return a + b + c + d + e + g * 10\n" +
+            "def run(s: uint8):\n" +
+            "    print(f6(1, 1, 1, 1, 1, add1(s)))\n";   // g=add1(5)=6 -> 60; +5 = 65
+        RunSeed(body, 5, 1).Should().Equal(65);
+    }
+
+    [Test]
     public void SixArgsViaSpill()
     {
         // Six uint8 args: the first five use R24,R22,R20,R18,R16; the sixth overflows to the SRAM
