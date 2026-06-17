@@ -1745,6 +1745,58 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void InlineClosureNonlocalRebind()
+    {
+        // `nonlocal` rebinds the enclosing variable: Python prints 42.
+        const string body =
+            "from pymcu.types import inline\n\n" +
+            "def run(s: uint8):\n" +
+            "    base: uint8 = s\n" +
+            "    @inline\n" +
+            "    def setit():\n" +
+            "        nonlocal base\n" +
+            "        base = 42\n" +
+            "    setit()\n" +
+            "    print(base)\n";   // 42
+        RunSeed(body, 5, 1).Should().Equal(42);
+    }
+
+    [Test]
+    public void InlineClosureWriteMakesLocal()
+    {
+        // An inline that declares its OWN local shadowing a captured name must not clobber the
+        // enclosing variable (Python: assignment without nonlocal makes a local).
+        const string body =
+            "from pymcu.types import inline\n\n" +
+            "def run(s: uint8):\n" +
+            "    base: uint8 = s\n" +          // 5
+            "    @inline\n" +
+            "    def f(x: uint8) -> uint8:\n" +
+            "        base: uint8 = x + 1\n" +  // NEW local
+            "        return base\n" +
+            "    print(f(10))\n" +             // 11
+            "    print(base)\n";              // 5 (unchanged)
+        RunSeed(body, 5, 2).Should().Equal(11, 5);
+    }
+
+    [Test]
+    public void InlineClosureCaptureByReference()
+    {
+        // Closures capture by reference: reassigning the enclosing var before the call must be
+        // visible inside (Python prints 99, not 5).
+        const string body =
+            "from pymcu.types import inline\n\n" +
+            "def run(s: uint8):\n" +
+            "    base: uint8 = s\n" +    // 5
+            "    @inline\n" +
+            "    def f() -> uint8:\n" +
+            "        return base\n" +
+            "    base = 99\n" +
+            "    print(f())\n";          // 99
+        RunSeed(body, 5, 1).Should().Equal(99);
+    }
+
+    [Test]
     public void FloorDivMod_NegativeDividend()
     {
         // Python `//` floors toward -inf and `%` follows the divisor's sign (NOT C truncation).
