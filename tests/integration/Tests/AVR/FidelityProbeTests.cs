@@ -1864,6 +1864,21 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void MixedSignedUnsignedComparison()
+    {
+        // The real C gotcha: comparing a signed and an unsigned value. Python compares by value
+        // (-5 < 200 is True); a C-style promotion to unsigned would give 65531 < 200 = False.
+        const string body =
+            "from pymcu.types import int16, uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    neg: int16 = 0 - int16(s)\n" +   // -5
+            "    pos: uint16 = 200\n" +
+            "    print(1 if neg < pos else 0)\n" +     // -5 < 200 -> 1
+            "    print(1 if pos > neg else 0)\n";      // 200 > -5 -> 1
+        RunSeed(body, 5, 2).Should().Equal(1, 1);
+    }
+
+    [Test]
     public void UartWriteStrAndPrintlnFString()
     {
         const string src =
