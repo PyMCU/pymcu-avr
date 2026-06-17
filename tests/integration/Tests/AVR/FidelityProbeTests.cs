@@ -1592,6 +1592,78 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void OrAndValueSemantics()
+    {
+        // Python `or`/`and` return an OPERAND, not a 0/1 bool.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    print(s or 99)\n" +          // 5 truthy -> 5
+            "    print((s - s) or 99)\n" +    // 0 -> 99
+            "    print(s and 7)\n" +          // 5 truthy -> 7
+            "    print((s - s) and 7)\n";     // 0 -> 0
+        RunSeed(body, 5, 4).Should().Equal(5, 99, 7, 0);
+    }
+
+    [Test]
+    public void BitNotUint8()
+    {
+        // Python ~5 == -6 (infinite precision). On a fixed-width uint8 the faithful-ish
+        // result is the 8-bit complement 250; check what PyMCU actually emits.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    print(~s)\n";
+        RunSeed(body, 5, 1).Should().Equal(250);
+    }
+
+    [Test]
+    public void AugAssignWrapOnStore()
+    {
+        // x is uint8 storage: 200 + 100 = 300 promotes, then truncates back to uint8 = 44.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    x: uint8 = 200\n" +
+            "    x = x + s\n" +               // s=100 -> 300 -> store uint8 -> 44
+            "    print(x)\n";
+        RunSeed(body, 100, 1).Should().Equal(44);
+    }
+
+    [Test]
+    public void RShiftSignedIsArithmetic()
+    {
+        // Python >> on a negative int is an arithmetic shift (floors): -8 >> 1 == -4.
+        const string body =
+            "from pymcu.types import int16\n\n" +
+            "def run(s: uint8):\n" +
+            "    n: int16 = 0 - s\n" +     // -8
+            "    print(n >> 1)\n";         // -4 (arithmetic, not 32764 logical)
+        RunSeed(body, 8, 1).Should().Equal(-4);
+    }
+
+    [Test]
+    public void RangeNegativeStep()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    acc: uint8 = 0\n" +
+            "    for i in range(s, 0, -1):\n" +   // 5,4,3,2,1
+            "        acc = acc + i\n" +
+            "    print(acc)\n";                   // 15
+        RunSeed(body, 5, 1).Should().Equal(15);
+    }
+
+    [Test]
+    public void RangeStepTwo()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    acc: uint8 = 0\n" +
+            "    for i in range(0, s, 2):\n" +    // 0,2,4,6,8
+            "        acc = acc + i\n" +
+            "    print(acc)\n";                   // 20
+        RunSeed(body, 10, 1).Should().Equal(20);
+    }
+
+    [Test]
     public void FloorDivMod_NegativeDividend()
     {
         // Python `//` floors toward -inf and `%` follows the divisor's sign (NOT C truncation).
