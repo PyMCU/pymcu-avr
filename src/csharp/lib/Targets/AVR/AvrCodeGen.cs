@@ -1164,12 +1164,39 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             return false;
         }
 
+        // The outliner emits ONE occurrence as the subroutine and RCALLs all of them, so every
+        // occurrence must be byte-identical -- otherwise an occurrence that differs (e.g. a force-
+        // inlined method whose result temp lands in a different stack slot per call site) reads its
+        // result from a location the shared body never writes (deep-inheritance go() called twice
+        // returned the right value once, then 0). Only share occurrences that compare equal.
+        bool RangesIdentical(List<(int start, int end)> ranges)
+        {
+            if (ranges.Count <= 1) return true;
+            List<Instruction> Body(int s, int e)
+            {
+                var b = new List<Instruction>();
+                for (int k = s + 1; k < e; k++)
+                    if (func.Body[k] is not DebugLine) b.Add(func.Body[k]);
+                return b;
+            }
+            var first = Body(ranges[0].start, ranges[0].end);
+            for (int r = 1; r < ranges.Count; r++)
+            {
+                var other = Body(ranges[r].start, ranges[r].end);
+                if (other.Count != first.Count) return false;
+                for (int j = 0; j < first.Count; j++)
+                    if (!Equals(first[j], other[j])) return false;
+            }
+            return true;
+        }
+
         // Map funcName → subroutine label; collect subroutine body ranges.
         var outlinedLabels = new Dictionary<string, string>();
         var pendingSubroutines = new List<(string label, int start, int end)>();
         foreach (var (fname, ranges) in inlineGroups)
         {
             if (ranges.Any(r => RegionIsCallPassthrough(r.start, r.end))) continue;  // keep inline
+            if (!RangesIdentical(ranges)) continue;                                  // keep inline
             var label = MakeLabel("_pymcu_outline");
             outlinedLabels[fname] = label;
             // Body range: [ranges[0].start + 1, ranges[0].end) (exclusive of markers)
