@@ -1864,6 +1864,37 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void TooManyRegisterArgsRejected()
+    {
+        const string src =
+            "from pymcu.types import uint8\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "def f6(a: uint8, b: uint8, c: uint8, d: uint8, e: uint8, g: uint8) -> uint8:\n" +
+            "    return a + b + c + d + e + g\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    uart.write(f6(s, 1, 1, 1, 1, 1))\n" +
+            "    while True:\n        pass\n";
+        Action act = () => PymcuCompiler.BuildSource(src);
+        act.Should().Throw<Exception>().WithMessage("*R16*R25*");
+    }
+
+    [Test]
+    public void FiveArgsAllArrive()
+    {
+        // Five uint8 args fit R24,R22,R20,R18,R16 (all >= R16). Each must arrive — the call/callee
+        // loops used to cap at 4 and silently dropped args 5+. Position-encode to expose a drop.
+        const string body =
+            "def f5(a: uint8, b: uint8, c: uint8, d: uint8, e: uint8) -> uint8:\n" +
+            "    return a + b * 2 + c * 4 + d * 8 + e * 16\n" +
+            "def run(s: uint8):\n" +
+            "    print(f5(1, 1, 1, 1, 1))\n" +   // 1+2+4+8+16 = 31
+            "    print(f5(s, 0, 0, 0, 1))\n";    // s + 16 ; s=5 -> 21
+        RunSeed(body, 5, 2).Should().Equal(31, 21);
+    }
+
+    [Test]
     public void FStringFormatSpecs()
     {
         const string src =
