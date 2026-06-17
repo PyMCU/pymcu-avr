@@ -43,6 +43,33 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void DhtStyleThreeLevelInheritance()
+    {
+        // Real-world 3-level chain (SensorBase -> GenericDht -> Dht11): super().__init__ chains,
+        // fields inherited across 3 levels, a 3-field slot, a mutating method, and a template-
+        // method virtual dispatch (sample() calls self.read_raw(), overridden at the leaf).
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class SensorBase:\n" +
+            "    def __init__(self, pin: uint8):\n        self._pin = pin\n        self._reads = 0\n\n" +
+            "    def read_raw(self) -> uint16:\n        return 0\n\n" +
+            "    def sample(self) -> uint16:\n        self._reads = self._reads + 1\n        return self.read_raw()\n\n" +
+            "class GenericDht(SensorBase):\n" +
+            "    def __init__(self, pin: uint8, kind: uint8):\n        super().__init__(pin)\n        self._kind = kind\n\n" +
+            "    def read_raw(self) -> uint16:\n        return uint16(self._pin) * 10 + self._kind\n\n" +
+            "class Dht11(GenericDht):\n" +
+            "    def __init__(self, pin: uint8):\n        super().__init__(pin, 1)\n\n" +
+            "    def read_raw(self) -> uint16:\n        return uint16(self._pin) * 100 + self._kind + self._reads\n\n" +
+            "def run(s: uint8):\n" +
+            "    d = Dht11(s)\n" +
+            "    print(d.sample())\n" +   // reads=1: 5*100 + 1 + 1 = 502
+            "    print(d.sample())\n" +   // reads=2: 5*100 + 1 + 2 = 503
+            "    print(d._pin)\n" +       // 5
+            "    print(d._kind)\n";       // 1
+        RunSeed(body, 5, 4).Should().Equal(502, 503, 5, 1);
+    }
+
+    [Test]
     public void ChainedComparison()
     {
         // 1 < s < 10 ; 1 < s < 4 ; 0 < s <= 5   with s=5  ->  1, 0, 1
