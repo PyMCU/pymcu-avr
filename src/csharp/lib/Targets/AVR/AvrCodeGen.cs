@@ -1147,11 +1147,29 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
         }
 
+        // A region whose result is produced DIRECTLY by a trailing Call (a "passthrough", e.g.
+        // `def run_it(self): return self.hook()`) must NOT be outlined: the callee leaves its
+        // result in the return registers (R24:R25), the region's result temp coalesces with them,
+        // and the outliner emits no move -- but the outlined call site reads the result from the
+        // temp's own register (R16:R17), which the subroutine never writes => garbage. Keeping such
+        // a region inline lets the call result be consumed in the caller's own allocation context.
+        bool RegionIsCallPassthrough(int start, int end)
+        {
+            for (int k = end - 1; k > start; k--)   // last real instruction before the end marker
+            {
+                var si = func.Body[k];
+                if (si is DebugLine or InlineExpansionMarker) continue;
+                return si is Call { Dst: not NoneVal };
+            }
+            return false;
+        }
+
         // Map funcName → subroutine label; collect subroutine body ranges.
         var outlinedLabels = new Dictionary<string, string>();
         var pendingSubroutines = new List<(string label, int start, int end)>();
         foreach (var (fname, ranges) in inlineGroups)
         {
+            if (ranges.Any(r => RegionIsCallPassthrough(r.start, r.end))) continue;  // keep inline
             var label = MakeLabel("_pymcu_outline");
             outlinedLabels[fname] = label;
             // Body range: [ranges[0].start + 1, ranges[0].end) (exclusive of markers)
@@ -1159,13 +1177,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
 
         // --- Main compilation loop with outlining ---
+        // A marked region is either OUTLINED (replaced by an RCALL here, body emitted once as a
+        // subroutine) or kept INLINE (body emitted here). The skip stack tracks, per open marker,
+        // whether its body is being skipped (because it was outlined) or emitted inline. A region
+        // NOT in outlinedLabels must be emitted inline -- the old code unconditionally skipped
+        // every marked region, silently DROPPING any region we chose not to outline.
         bool emittedEpilogue = false;
-        int skipDepth = 0;
+        var skipStack = new Stack<bool>();
+        bool Skipping() => skipStack.Count > 0 && skipStack.Peek();
         foreach (var instr in func.Body)
         {
             if (func.IsInterrupt && !func.IsNaked && instr is Return)
             {
-                if (skipDepth == 0)
+                if (!Skipping())
                 {
                     EmitContextRestore();
                     Emit("RETI");
@@ -1178,18 +1202,24 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             {
                 if (!iem.IsEnd)
                 {
-                    if (skipDepth == 0 && outlinedLabels.TryGetValue(iem.FuncName, out var rcallLabel))
+                    if (!Skipping() && outlinedLabels.TryGetValue(iem.FuncName, out var rcallLabel))
+                    {
                         Emit("RCALL", rcallLabel);
-                    skipDepth++;
+                        skipStack.Push(true);   // outlined: skip the inline body
+                    }
+                    else
+                    {
+                        skipStack.Push(Skipping());  // inline (false) or stay inside a skipped region
+                    }
                 }
                 else
                 {
-                    if (skipDepth > 0) skipDepth--;
+                    if (skipStack.Count > 0) skipStack.Pop();
                 }
                 continue;
             }
 
-            if (skipDepth > 0) continue;
+            if (Skipping()) continue;
 
             CompileInstruction(instr);
         }
@@ -1210,7 +1240,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var (label, start, end) in pendingSubroutines)
         {
             EmitLabel(label);
-            int subSkip = 0;
+            var subSkip = new Stack<bool>();
+            bool SubSkipping() => subSkip.Count > 0 && subSkip.Peek();
             for (int i = start; i < end; i++)
             {
                 var si = func.Body[i];
@@ -1218,17 +1249,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 {
                     if (!sim.IsEnd)
                     {
-                        if (subSkip == 0 && outlinedLabels.TryGetValue(sim.FuncName, out var sl))
+                        if (!SubSkipping() && outlinedLabels.TryGetValue(sim.FuncName, out var sl))
+                        {
                             Emit("RCALL", sl);
-                        subSkip++;
+                            subSkip.Push(true);
+                        }
+                        else subSkip.Push(SubSkipping());
                     }
-                    else if (subSkip > 0)
-                    {
-                        subSkip--;
-                    }
+                    else if (subSkip.Count > 0) subSkip.Pop();
                     continue;
                 }
-                if (subSkip > 0) continue;
+                if (SubSkipping()) continue;
                 CompileInstruction(si);
             }
             Emit("RET");
