@@ -1592,6 +1592,83 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void FloorDivMod_NegativeDividend()
+    {
+        // Python `//` floors toward -inf and `%` follows the divisor's sign (NOT C truncation).
+        const string body =
+            "from pymcu.types import int16\n\n" +
+            "def run(s: uint8):\n" +
+            "    n: int16 = 0 - s\n" +     // -7
+            "    print(n // 2)\n" +        // Python floors: -4 (C trunc: -3)
+            "    print(n % 2)\n";          // Python: 1 (C: -1)
+        RunSeed(body, 7, 2).Should().Equal(-4, 1);
+    }
+
+    [Test]
+    public void FloorDivMod_NegativeDivisor()
+    {
+        const string body =
+            "from pymcu.types import int16\n\n" +
+            "def run(s: uint8):\n" +
+            "    n: int16 = s\n" +         // 7
+            "    print(n // -2)\n" +       // Python: -4 (floor of -3.5)
+            "    print(n % -2)\n";         // Python: -1 (sign follows divisor)
+        RunSeed(body, 7, 2).Should().Equal(-4, -1);
+    }
+
+    [Test]
+    public void Power_RuntimeBaseConstantExponent()
+    {
+        // s ** 2 lowers to repeated multiplication with promotion: 5*5 = 25, and a base that
+        // overflows its width keeps the wide value (10 ** 3 = 1000, promoted past uint8).
+        const string body =
+            "def run(s: uint8):\n" +
+            "    print(s ** 2)\n" +        // 5 -> 25
+            "    print(s ** 3)\n" +        // 5 -> 125
+            "    print(s ** 0)\n" +        // 1
+            "    print(s ** 1)\n";         // 5
+        RunSeed(body, 5, 4).Should().Equal(25, 125, 1, 5);
+    }
+
+    [Test]
+    public void Power_WideResult()
+    {
+        // 10 ** 3 = 1000 must not truncate to uint8 (the promotion chain widens to uint16+).
+        const string body =
+            "def run(s: uint8):\n" +
+            "    print(s ** 3)\n";         // 10 -> 1000
+        RunSeed(body, 10, 1).Should().Equal(1000);
+    }
+
+    [Test]
+    public void SwapUnpack()
+    {
+        // Tuple swap `a, b = b, a` evaluates the RHS tuple before binding (no clobber).
+        const string body =
+            "def run(s: uint8):\n" +
+            "    a: uint8 = s\n" +
+            "    b: uint8 = 100\n" +
+            "    a, b = b, a\n" +
+            "    print(a)\n" +             // 100
+            "    print(b)\n";             // 5
+        RunSeed(body, 5, 2).Should().Equal(100, 5);
+    }
+
+    [Test]
+    public void ChainAssign()
+    {
+        // Chained assignment `a = b = s` binds both names to the same value.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    a: uint8 = 0\n" +
+            "    b: uint8 = 0\n" +
+            "    a = b = s\n" +
+            "    print(a)\n" +             // 5
+            "    print(b)\n";             // 5
+        RunSeed(body, 5, 2).Should().Equal(5, 5);
+    }
+
+    [Test]
     public void Promote_Uint8AddWidensToUint16()
     {
         // Python fidelity: uint8 + uint8 promotes to uint16, so 255 + 45 = 300 (NOT 44).
