@@ -1864,6 +1864,65 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void FStringFormatSpecs()
+    {
+        const string src =
+            "from pymcu.types import uint8, uint16\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    n: uint16 = uint16(s) * 50\n" +    // 250 * 50 = ... s=10 -> 500
+            "    print(f\"hex={s:02x} HEX={n:04X} bin={s:08b} pad={s:4d}!\")\n" +
+            "    while True:\n        pass\n";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(10);
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("!"), maxMs: 6000);
+        // s=10: hex=0a, n=500=0x1F4 -> 01F4, bin(10)=00001010, pad "  10"
+        uno.Serial.Text.Should().Contain("hex=0a HEX=01F4 bin=00001010 pad=  10!");
+    }
+
+    [Test]
+    public void SignedWidenToInt32()
+    {
+        const string body =
+            "from pymcu.types import int16, int32\n\n" +
+            "def run(s: uint8):\n" +
+            "    neg: int16 = 0 - int16(s)\n" +   // -8
+            "    w: int32 = int32(neg)\n" +
+            "    print(neg)\n" +    // -8
+            "    print(w)\n";      // -8
+        RunSeed(body, 8, 2).Should().Equal(-8, -8);
+    }
+
+    [Test]
+    public void FStringFormatSignedAndOctal()
+    {
+        const string src =
+            "from pymcu.types import uint8, int16\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    neg: int16 = 0 - int16(s)\n" +    // -5
+            "    print(f\"[{neg:d}][{neg:5d}][{s:o}]!\")\n" +
+            "    while True:\n        pass\n";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(8);
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("!"), maxMs: 6000);
+        // neg=-8: "-8"; ":5d" -> "   -8" (width 5); s=8 octal -> "10"
+        uno.Serial.Text.Should().Contain("[-8][   -8][10]!");
+    }
+
+    [Test]
     public void MixedSignedUnsignedComparison()
     {
         // The real C gotcha: comparing a signed and an unsigned value. Python compares by value
