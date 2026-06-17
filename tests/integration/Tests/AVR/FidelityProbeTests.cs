@@ -2386,6 +2386,79 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void ModuloByZeroRaises()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(100 % s)\n" +   // s=0 -> ZeroDivisionError from modulo
+            "    except ZeroDivisionError:\n" +
+            "        print(5)\n";
+        RunSeed(body, 0, 1).Should().Equal(5);
+    }
+
+    [Test]
+    public void NestedBareReraise()
+    {
+        const string body =
+            "def level2(s: uint8) -> uint8:\n" +
+            "    try:\n        return 100 // s\n" +
+            "    except ZeroDivisionError:\n        raise\n" +    // re-raise
+            "def level1(s: uint8) -> uint8:\n" +
+            "    try:\n        return level2(s)\n" +
+            "    except ZeroDivisionError:\n        raise\n" +    // re-raise again
+            "def run(s: uint8):\n" +
+            "    try:\n        print(level1(s))\n" +
+            "    except ZeroDivisionError:\n        print(8)\n";
+        RunSeed(body, 0, 1).Should().Equal(8);
+    }
+
+    [Test]
+    public void BreakInFinallySwallowsException()
+    {
+        // Python: a break in a finally discards the in-flight exception and exits the loop.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    for i in range(s):\n" +   // s=3
+            "        try:\n" +
+            "            raise ValueError\n" +
+            "        finally:\n" +
+            "            break\n" +        // swallows the ValueError, exits loop
+            "    print(9)\n";
+        RunSeed(body, 3, 1).Should().Equal(9);
+    }
+
+    [Test]
+    public void ReturnInFinallySwallowsException()
+    {
+        // Python: a return in a finally discards the in-flight exception and returns normally.
+        const string body =
+            "def f(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        raise ValueError\n" +
+            "    finally:\n" +
+            "        return 5\n" +        // swallows the ValueError, returns 5
+            "def run(s: uint8):\n" +
+            "    print(f(s))\n";
+        RunSeed(body, 0, 1).Should().Equal(5);
+    }
+
+    [Test]
+    public void HandlerRaisesNewExceptionCaughtByOuter()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        try:\n" +
+            "            raise ValueError\n" +
+            "        except ValueError:\n" +
+            "            raise IndexError\n" +   // handler raises a different exception
+            "    except IndexError:\n" +
+            "        print(3)\n";
+        RunSeed(body, 0, 1).Should().Equal(3);
+    }
+
+    [Test]
     public void FinallyRunsBeforePropagation()
     {
         const string body =
