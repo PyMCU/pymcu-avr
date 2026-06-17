@@ -2100,6 +2100,55 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void FinallyRunsBeforePropagation()
+    {
+        const string body =
+            "def f(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        return 100 // s\n" +   // s=0 -> exception
+            "    finally:\n" +
+            "        print(8)\n" +          // must run before the error propagates
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(f(s))\n" +
+            "    except ZeroDivisionError:\n" +
+            "        print(3)\n";
+        RunSeed(body, 0, 2).Should().Equal(8, 3);
+    }
+
+    [Test]
+    public void FinallyRunsBeforeReturn()
+    {
+        const string body =
+            "def f(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        return s * 2\n" +   // returns, but finally runs first
+            "    finally:\n" +
+            "        print(7)\n" +
+            "def run(s: uint8):\n" +
+            "    r: uint8 = f(s)\n" +
+            "    print(r)\n";
+        RunSeed(body, 5, 2).Should().Equal(7, 10);
+    }
+
+    [Test]
+    public void InlineRaisePropagatesToCaller()
+    {
+        const string body =
+            "from pymcu.types import inline\n\n" +
+            "@inline\n" +
+            "def checked(s: uint8) -> uint8:\n" +
+            "    if s == 0:\n        raise ValueError\n" +
+            "    return 100 // s\n" +
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(checked(s))\n" +
+            "    except ValueError:\n" +
+            "        print(4)\n";
+        RunSeed(body, 0, 1).Should().Equal(4);
+    }
+
+    [Test]
     public void UncaughtExceptionHalts()
     {
         // An UNCAUGHT runtime divide-by-zero must now halt (loud failure, Python-like) rather than
