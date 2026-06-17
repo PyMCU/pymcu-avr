@@ -1923,6 +1923,46 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void BitNotUint16Width()
+    {
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "def run(s: uint8):\n" +
+            "    a: uint16 = s\n" +    // 5
+            "    print(~a)\n";         // 16-bit complement: 0xFFFA = 65530
+        RunSeed(body, 5, 1).Should().Equal(65530);
+    }
+
+    [Test]
+    public void Uint32RuntimeDivMod()
+    {
+        const string body =
+            "from pymcu.types import uint32\n\n" +
+            "def run(s: uint8):\n" +
+            "    a: uint32 = 1000000\n" +
+            "    d: uint32 = uint32(s)\n" +    // runtime divisor = 7
+            "    print(a % d)\n" +             // 1000000 % 7 = 1
+            "    print(a // d)\n";             // 142857
+        RunSeed(body, 7, 2).Should().Equal(1, 142857);
+    }
+
+    [Test]
+    public void GlobalArrayMutationPersists()
+    {
+        const string body =
+            "counts: uint8[4] = [0, 0, 0, 0]\n\n" +
+            "def bump(i: uint8):\n" +
+            "    counts[i] = counts[i] + 1\n" +
+            "def run(s: uint8):\n" +
+            "    bump(1)\n" +
+            "    bump(1)\n" +
+            "    bump(s)\n" +          // s=2
+            "    print(counts[1])\n" + // 2
+            "    print(counts[2])\n";  // 1
+        RunSeed(body, 2, 2).Should().Equal(2, 1);
+    }
+
+    [Test]
     public void SixArgsViaSpill()
     {
         // Six uint8 args: the first five use R24,R22,R20,R18,R16; the sixth overflows to the SRAM
