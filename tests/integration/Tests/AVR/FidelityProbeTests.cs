@@ -2134,6 +2134,110 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void ErrorCodePreservedThroughFinally()
+    {
+        // The error code lives in R22 while propagating. A finally that runs work (a print, which
+        // calls a uart routine) between the raise and the propagation must not clobber it, or the
+        // wrong handler is selected.
+        const string body =
+            "def f(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        return 100 // s\n" +    // s=0 -> ZeroDivisionError (code 6)
+            "    finally:\n" +
+            "        print(8)\n" +            // runs a uart routine: must preserve R22
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(f(s))\n" +
+            "    except ValueError:\n" +      // wrong type
+            "        print(1)\n" +
+            "    except ZeroDivisionError:\n" +  // correct
+            "        print(2)\n";
+        RunSeed(body, 0, 2).Should().Equal(8, 2);
+    }
+
+    [Test]
+    public void RaiseInElsePropagates()
+    {
+        // A raise in the else block is NOT caught by this try (Python); an outer try catches it.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        try:\n" +
+            "            y: uint8 = 100 // s\n" +   // s=5 -> ok, else runs
+            "        except ZeroDivisionError:\n" +
+            "            print(1)\n" +
+            "        else:\n" +
+            "            raise ValueError\n" +       // not caught by inner; propagates
+            "    except ValueError:\n" +
+            "        print(9)\n";
+        RunSeed(body, 5, 1).Should().Equal(9);
+    }
+
+    [Test]
+    public void RaiseInFinallyOverrides()
+    {
+        const string body =
+            "def f(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        return s\n" +              // no exception in body
+            "    finally:\n" +
+            "        if s == 0:\n            raise ValueError\n" +   // finally raises
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(f(s))\n" +
+            "    except ValueError:\n" +
+            "        print(7)\n";
+        RunSeed(body, 0, 1).Should().Equal(7);
+    }
+
+    [Test]
+    public void RecoverAndContinueAfterTry()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(100 // s)\n" +   // s=0 -> caught
+            "    except ZeroDivisionError:\n" +
+            "        print(1)\n" +
+            "    print(99)\n";              // runs after the try regardless
+        RunSeed(body, 0, 2).Should().Equal(1, 99);
+    }
+
+    [Test]
+    public void TryInLoopRecoversEachIteration()
+    {
+        // try/except inside a loop: the T-flag must be clean each iteration so a caught error in
+        // one iteration does not leak into the next.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    total: uint8 = 0\n" +
+            "    for i in range(s):\n" +
+            "        try:\n" +
+            "            total = total + 100 // i\n" +   // i=0 raises; i=1,2,3 -> 100,50,33
+            "        except ZeroDivisionError:\n" +
+            "            total = total + 1\n" +          // i=0 -> +1
+            "    print(total)\n";
+        RunSeed(body, 4, 1).Should().Equal(184);   // 1 + 100 + 50 + 33
+    }
+
+    [Test]
+    public void SequentialTryBlocks()
+    {
+        // Two sequential try blocks: T must be reset after the first so the second works.
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(100 // s)\n" +
+            "    except ZeroDivisionError:\n" +
+            "        print(1)\n" +
+            "    try:\n" +
+            "        print(50 // s)\n" +
+            "    except ZeroDivisionError:\n" +
+            "        print(2)\n";
+        RunSeed(body, 0, 2).Should().Equal(1, 2);
+    }
+
+    [Test]
     public void FinallyRunsBeforePropagation()
     {
         const string body =
