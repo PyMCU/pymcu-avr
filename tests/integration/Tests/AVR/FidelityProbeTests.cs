@@ -1881,6 +1881,35 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void LcdPrintStrFStringCompilesAndRuns()
+    {
+        // lcd.print_str(f"...") lowers to print_str("literal") + print_fmt(value,...) on the same
+        // LCD instance. Verify it builds and the program reaches its UART banner (the LCD format
+        // code is valid and executes), consistent with the existing LCD test rigor.
+        const string src =
+            "from pymcu.types import uint8, uint16\n" +
+            "from pymcu.hal.uart import UART\n" +
+            "from pymcu.drivers.lcd import LCD\n\n\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    lcd = LCD(rs=\"PD4\", en=\"PD5\", d4=\"PD6\", d5=\"PD7\", d6=\"PB0\", d7=\"PB1\")\n" +
+            "    lcd.init()\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    n: uint16 = uint16(s) * 100\n" +
+            "    lcd.print_str(f\"T={s} 0x{n:04x}\")\n" +
+            "    uart.println(\"DONE\")\n" +
+            "    while True:\n        pass\n";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 1000);
+        uno.Serial.InjectByte(7);
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("DONE"), maxMs: 1000);
+        uno.Serial.Text.Should().Contain("DONE");
+    }
+
+    [Test]
     public void FiveArgsAllArrive()
     {
         // Five uint8 args fit R24,R22,R20,R18,R16 (all >= R16). Each must arrive — the call/callee
