@@ -1797,6 +1797,73 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void FStringToStreamFloatAndNegative()
+    {
+        const string src =
+            "from pymcu.types import uint8, int16\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    neg: int16 = 0 - int16(s)\n" +
+            "    f: float = float(s) / 2.0\n" +
+            "    print(f\"neg={neg} f={f}!\")\n" +
+            "    while True:\n        pass\n";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(5);
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("!"), maxMs: 6000);
+        uno.Serial.Text.Should().Contain("neg=-5 f=2.5!");
+    }
+
+    [Test]
+    public void FStringConstantInterpolation()
+    {
+        const string src =
+            "from pymcu.types import uint8\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "NAME: const[str] = \"PB5\"\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    print(f\"pin {NAME} = {s}\")\n" +
+            "    while True:\n        pass\n";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(7);
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("= 7"), maxMs: 6000);
+        uno.Serial.Text.Should().Contain("pin PB5 = 7");
+    }
+
+    [Test]
+    public void FStringToStream()
+    {
+        const string src =
+            "from pymcu.types import uint8, uint16\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    n: uint16 = uint16(s) * 100\n" +
+            "    print(f\"v={s} n={n}!\")\n" +
+            "    while True:\n        pass\n";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(5);
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("!"), maxMs: 6000);
+        uno.Serial.Text.Should().Contain("v=5 n=500!");
+    }
+
+    [Test]
     public void FloorDivMod_NegativeDividend()
     {
         // Python `//` floors toward -inf and `%` follows the divisor's sign (NOT C truncation).
