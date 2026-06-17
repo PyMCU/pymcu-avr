@@ -945,7 +945,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // Emit the exception runtime when the T-flag model calls __pymcu_unhandled_exn
         // for an unmatched catch.
         bool needsExnRuntime = program.Functions.Any(f =>
-                f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn"));
+                f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn")
+                || f.Body.OfType<BranchOnError>().Any(b => b.ErrorLabel == "__pymcu_unhandled_exn"));
         if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, cfg.Chip);
         WriteSymbolsIfRequested(optimized, program);
         WriteLineMapIfRequested(optimized);

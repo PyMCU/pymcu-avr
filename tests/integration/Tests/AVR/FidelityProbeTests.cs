@@ -1981,6 +1981,35 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void UncaughtExceptionHalts()
+    {
+        // An UNCAUGHT runtime divide-by-zero must now halt (loud failure, Python-like) rather than
+        // silently continue with garbage: the code after the faulting division must not run.
+        const string src =
+            "from pymcu.types import uint8\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "def divide(a: uint8, b: uint8) -> uint8:\n" +
+            "    return a // b\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    r: uint8 = divide(100, s)\n" +   // s=0 -> uncaught ZeroDivisionError -> halt
+            "    uart.println(\"AFTER\")\n" +      // must NOT print (device halted)
+            "    while True:\n        pass\n";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(0);
+        // The device halts at the unhandled-exception handler, so "AFTER" never arrives — the
+        // wait is expected to time out. That timeout IS the pass condition (no silent continue).
+        try { uno.RunUntilSerial(uno.Serial, t => t.Contains("AFTER"), maxMs: 300); }
+        catch (TimeoutException) { }
+        uno.Serial.Text.Should().NotContain("AFTER");
+    }
+
+    [Test]
     public void RuntimeDivByZeroRaises()
     {
         // Runtime divide-by-zero now raises ZeroDivisionError (Python fidelity), catchable here.
