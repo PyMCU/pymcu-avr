@@ -1963,6 +1963,36 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void AugAssignInstanceField()
+    {
+        const string body =
+            "class Counter:\n" +
+            "    def __init__(self):\n        self._n = 0\n" +
+            "    def add(self, v: uint8):\n        self._n += v\n" +
+            "    def get(self) -> uint8:\n        return self._n\n" +
+            "def run(s: uint8):\n" +
+            "    c = Counter()\n" +
+            "    c.add(s)\n" +
+            "    c.add(10)\n" +
+            "    print(c.get())\n";   // s=5: 5+10 = 15
+        RunSeed(body, 5, 1).Should().Equal(15);
+    }
+
+    [Test]
+    public void SliceWithStep()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    a: uint8[6] = [10, 20, 30, 40, 50, 60]\n" +
+            "    a[0] = s\n" +
+            "    b = a[0:6:2]\n" +    // indices 0,2,4 -> [s,30,50]
+            "    print(b[0])\n" +    // s=5
+            "    print(b[1])\n" +    // 30
+            "    print(b[2])\n";    // 50
+        RunSeed(body, 5, 3).Should().Equal(5, 30, 50);
+    }
+
+    [Test]
     public void SixArgsViaSpill()
     {
         // Six uint8 args: the first five use R24,R22,R20,R18,R16; the sixth overflows to the SRAM
