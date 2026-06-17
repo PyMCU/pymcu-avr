@@ -1879,6 +1879,50 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void DefaultArgViaSpill()
+    {
+        // A default value that fills a spilled parameter must be stored to the spill region.
+        const string body =
+            "def f6(a: uint8, b: uint8, c: uint8, d: uint8, e: uint8, g: uint8 = 7) -> uint8:\n" +
+            "    return a + b + c + d + e + g * 10\n" +
+            "def run(s: uint8):\n" +
+            "    print(f6(1, 1, 1, 1, 1))\n" +      // g default 7 -> 70+5 = 75
+            "    print(f6(s, 0, 0, 0, 0, 3))\n";    // g=3 -> 30+5 = 35
+        RunSeed(body, 5, 2).Should().Equal(75, 35);
+    }
+
+    [Test]
+    public void MethodSelfPlusFiveArgsViaSpill()
+    {
+        // A method passes self as arg0; self + 5 user args = 6 → the 6th spills.
+        const string body =
+            "from pymcu.types import uint16\n\n" +
+            "class Calc:\n" +
+            "    def __init__(self, base: uint8):\n        self._base = base\n" +
+            "    def combine(self, a: uint8, b: uint8, c: uint8, d: uint8, e: uint8) -> uint16:\n" +
+            "        return uint16(self._base) + a + b * 2 + c * 4 + d * 8 + e * 16\n" +
+            "def run(s: uint8):\n" +
+            "    c = Calc(s)\n" +
+            "    print(c.combine(1, 1, 1, 1, 1))\n";   // 5 + 1+2+4+8+16 = 36
+        RunSeed(body, 5, 1).Should().Equal(36);
+    }
+
+    [Test]
+    public void ConsecutiveSpillCalls()
+    {
+        // Two consecutive calls reuse the shared spill region; each must be independent.
+        const string body =
+            "def f6(a: uint8, b: uint8, c: uint8, d: uint8, e: uint8, g: uint8) -> uint16:\n" +
+            "    return uint16(a) + b + c + d + e + g * 10\n" +
+            "def run(s: uint8):\n" +
+            "    x: uint16 = f6(1, 1, 1, 1, 1, s)\n" +   // 5 + s*10
+            "    y: uint16 = f6(2, 2, 2, 2, 2, s)\n" +   // 10 + s*10
+            "    print(x)\n" +    // s=3: 35
+            "    print(y)\n";     // 40
+        RunSeed(body, 3, 2).Should().Equal(35, 40);
+    }
+
+    [Test]
     public void SixArgsViaSpill()
     {
         // Six uint8 args: the first five use R24,R22,R20,R18,R16; the sixth overflows to the SRAM
