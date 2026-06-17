@@ -566,6 +566,36 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void TrueDivisionReturnsFloat()
+    {
+        // Python 3: `/` always returns float, even for two ints. 5 / 2 == 2.5, 5 / 5 == 1.0.
+        // PyMCU promotes integer operands to float (and warns that float routines are linked).
+        const string src =
+            "from pymcu.types import uint8\n" +
+            "from pymcu.hal.uart import UART\n\n\n" +
+            "def main():\n" +
+            "    uart = UART(9600)\n" +
+            "    uart.println(\"GO\")\n" +
+            "    s: uint8 = uart.read_blocking()\n" +
+            "    print(s / 2)\n" +       // 5 -> 2.5
+            "    print(s / 5)\n" +       // 5 -> 1.0
+            "    while True:\n        pass\n";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(5);
+        uno.RunUntilSerial(uno.Serial, t => NL(t) >= 3, maxMs: 6000);
+        var lines = uno.Serial.Text.Replace("\r", "").Split('\n');
+        int start = Array.FindIndex(lines, l => l.Trim() == "GO");
+        var got = new List<string>();
+        for (int i = start + 1; i < lines.Length && got.Count < 2; i++)
+            if (lines[i].Trim().Length > 0) got.Add(lines[i].Trim());
+        got[0].Should().StartWith("2.5");
+        got[1].Should().StartWith("1.0");
+    }
+
+    [Test]
     public void Int8SramArray_SignExtendsOnLoad()
     {
         // Regression: a runtime index forces an int8 array into SRAM. Loading an element for a
