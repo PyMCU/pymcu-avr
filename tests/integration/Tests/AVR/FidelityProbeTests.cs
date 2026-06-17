@@ -1694,6 +1694,22 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void InlineClosureCapturesEnclosingVar()
+    {
+        // A nested @inline function reads a variable from the enclosing scope; the capture must
+        // resolve to the caller's value (regression: it silently read 0, so add(10) gave 10).
+        const string body =
+            "from pymcu.types import inline\n\n" +
+            "def run(s: uint8):\n" +
+            "    base: uint8 = s\n" +
+            "    @inline\n" +
+            "    def add(x: uint8) -> uint8:\n" +
+            "        return x + base\n" +
+            "    print(add(10))\n";   // 5 + 10 = 15
+        RunSeed(body, 5, 1).Should().Equal(15);
+    }
+
+    [Test]
     public void SliceToInferredArray()
     {
         // `b = a[lo:hi]` without an array annotation infers b as a fixed-size array and copies
