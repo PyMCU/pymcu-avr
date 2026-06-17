@@ -2238,6 +2238,40 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void ReturnInExceptHandlerRunsFinally()
+    {
+        // return inside an except handler must still run the finally (the flagged limitation).
+        const string body =
+            "def f(s: uint8) -> uint8:\n" +
+            "    try:\n" +
+            "        x: uint8 = 100 // s\n" +   // s=0 -> ZeroDivisionError
+            "        return x\n" +
+            "    except ZeroDivisionError:\n" +
+            "        return 5\n" +              // return in handler -> finally must run first
+            "    finally:\n" +
+            "        print(8)\n" +
+            "def run(s: uint8):\n" +
+            "    print(f(s))\n";
+        RunSeed(body, 0, 2).Should().Equal(8, 5);
+    }
+
+    [Test]
+    public void RaiseFromMethodCaught()
+    {
+        const string body =
+            "class Sensor:\n" +
+            "    def __init__(self):\n        self._x = 0\n" +
+            "    def read(self, s: uint8) -> uint8:\n        return 100 // s\n" +   // s=0 raises
+            "def run(s: uint8):\n" +
+            "    sensor = Sensor()\n" +
+            "    try:\n" +
+            "        print(sensor.read(s))\n" +
+            "    except ZeroDivisionError:\n" +
+            "        print(4)\n";
+        RunSeed(body, 0, 1).Should().Equal(4);
+    }
+
+    [Test]
     public void FinallyRunsBeforePropagation()
     {
         const string body =
