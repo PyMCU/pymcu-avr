@@ -391,6 +391,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             int slots = sz >= 4 ? 4 : 2;
             int low = top - slots + 1;
             int baseNum = slots == 4 && top == 25 ? 24 : low;
+            // Argument registers must be R16..R25: loading an immediate (LDI/SUBI/...) requires a
+            // high register, and arg values include constants. Assigning a base below R16 (which
+            // avr-gcc reaches for many args) makes the assembler reject "register above 15 required".
+            // Reject rather than silently miscompile (the old code capped at 4 and dropped the rest).
+            if (baseNum < 16)
+                throw new Exception(
+                    "too many/wide arguments to pass in registers (they must fit R16..R25); " +
+                    "use fewer parameters, pack them into a struct/array, or mark the function @inline");
             bases.Add("R" + baseNum);
             top = low - 1;
         }
@@ -1021,7 +1029,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             var paramSizes = func.Params
                 .Select(p => _varSizes.TryGetValue(p, out var psz0) ? psz0 : 1).ToList();
             var argRegs = ArgBaseRegs(paramSizes);
-            for (var k = 0; k < func.Params.Count && k < 4; k++)
+            for (var k = 0; k < func.Params.Count && k < argRegs.Count; k++)
             {
                 var pname = func.Params[k];
                 bool p16 = _varSizes.TryGetValue(pname, out int psz) && psz == 2;
@@ -1622,7 +1630,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         for (var k = 0; k < call.Args.Count; k++)
             argSizes.Add(ps != null && k < ps.Count ? ps[k] : GetValType(call.Args[k]).SizeOf());
         var argRegs = ArgBaseRegs(argSizes);
-        for (var k = 0; k < call.Args.Count && k < 4; k++)
+        for (var k = 0; k < call.Args.Count && k < argRegs.Count; k++)
         {
             var argType = GetValType(call.Args[k]);
             if (argType == DataType.FLOAT)
@@ -1669,7 +1677,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // Set up arguments into standard registers (same ABI as direct Call): size-based base
         // assignment so a 32-bit argument occupies a 4-register block without colliding.
         var argRegs = ArgBaseRegs(call.Args.Select(a => GetValType(a).SizeOf()).ToList());
-        for (var k = 0; k < call.Args.Count && k < 4; k++)
+        for (var k = 0; k < call.Args.Count && k < argRegs.Count; k++)
         {
             var argType = GetValType(call.Args[k]);
             LoadIntoReg(call.Args[k], argRegs[k], argType);
