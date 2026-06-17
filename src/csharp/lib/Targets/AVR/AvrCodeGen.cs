@@ -398,6 +398,39 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         return bases;
     }
 
+    // Fill the high bytes [srcSize..size-1] of a widened value once its real low bytes are loaded.
+    // zeroExt clears them; signExt replicates the sign of the source's highest real byte (the SBC
+    // idiom yields 0xFF when negative, 0x00 otherwise). Covers all widths: int8->int16/int32 and
+    // int16->int32 (the latter two were previously left as garbage — only size==2 was handled).
+    private void EmitWidenFill(bool signExt, bool zeroExt, int srcSize, int size,
+                               string reg, string regH, string regB2, string regB3)
+    {
+        if (zeroExt)
+        {
+            if (size >= 2 && srcSize < 2) Emit("CLR", regH);
+            if (size == 4 && srcSize < 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
+            return;
+        }
+        if (!signExt) return;
+
+        if (srcSize >= 2)
+        {
+            // srcSize==2 -> size==4: sign-fill bytes 2,3 from the real high byte (regH).
+            Emit("MOV", regB2, regH);
+            Emit("LSL", regB2);
+            Emit("SBC", regB2, regB2);
+            Emit("MOV", regB3, regB2);
+        }
+        else
+        {
+            // srcSize==1: sign-fill byte1 (and bytes 2,3 when widening to 32-bit) from reg.
+            Emit("MOV", regH, reg);
+            Emit("LSL", regH);
+            Emit("SBC", regH, regH);
+            if (size == 4) { Emit("MOV", regB2, regH); Emit("MOV", regB3, regH); }
+        }
+    }
+
     private void LoadIntoReg(Val val, string reg, DataType type = DataType.UINT8)
     {
         int size = type.SizeOf();
@@ -478,65 +511,31 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (!string.IsNullOrEmpty(name) && _regLayout.TryGetValue(name, out var srcReg))
         {
             DataType sourceType = GetValType(val);
-            bool needSignExt = size == 2 && sourceType.SizeOf() == 1 && IsSignedType(sourceType);
-            bool needZeroExt = size > sourceType.SizeOf() && !IsSignedType(sourceType) && !needSignExt;
+            int srcSize = sourceType.SizeOf();
+            bool signExt = size > srcSize && IsSignedType(sourceType);
+            bool zeroExt = size > srcSize && !IsSignedType(sourceType);
+            int srcN = int.Parse(srcReg[1..]);
 
             if (srcReg != reg) Emit("MOV", reg, srcReg);
-            else if (!needSignExt && !needZeroExt && srcReg == reg)
-            {
-                // Source already in target reg; still need to populate high bytes if multi-byte
-                if (size >= 2) Emit("MOV", regH, GetHighReg(srcReg));
-                if (size == 4) { Emit("MOV", regB2, $"R{int.Parse(srcReg[1..]) + 2}"); Emit("MOV", regB3, $"R{int.Parse(srcReg[1..]) + 3}"); }
-                return;
-            }
-
-            if (needZeroExt)
-            {
-                // Zero-extend: load the source's REAL bytes first, then clear the rest. A 2-byte
-                // source widened to 4 must keep byte1 (it was being cleared -> uint16 read as
-                // uint8, dropping the high byte: 300 became 44 in a promoted uint32 op).
-                if (size >= 2) { if (sourceType.SizeOf() >= 2) Emit("MOV", regH, GetHighReg(srcReg)); else Emit("CLR", regH); }
-                if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-            }
-            else
-            {
-                if (size >= 2 && !needSignExt) Emit("MOV", regH, GetHighReg(srcReg));
-                if (size == 4) { Emit("MOV", regB2, $"R{int.Parse(srcReg[1..]) + 2}"); Emit("MOV", regB3, $"R{int.Parse(srcReg[1..]) + 3}"); }
-            }
-
-            if (needSignExt)
-            {
-                Emit("MOV", regH, reg);
-                Emit("LSL", regH);
-                Emit("SBC", regH, regH);
-            }
+            // Load the source's real bytes that the target needs (the rest are filled below).
+            if (size >= 2 && srcSize >= 2) Emit("MOV", regH, GetHighReg(srcReg));
+            if (size == 4 && srcSize >= 4) { Emit("MOV", regB2, $"R{srcN + 2}"); Emit("MOV", regB3, $"R{srcN + 3}"); }
+            EmitWidenFill(signExt, zeroExt, srcSize, size, reg, regH, regB2, regB3);
             return;
         }
 
         if (!string.IsNullOrEmpty(name) && _tmpRegLayout.TryGetValue(name, out var tmpReg))
         {
             DataType sourceType = GetValType(val);
-            bool needSignExt = size == 2 && sourceType.SizeOf() == 1 && IsSignedType(sourceType);
-            bool needZeroExt = size > sourceType.SizeOf() && !IsSignedType(sourceType) && !needSignExt;
+            int srcSize = sourceType.SizeOf();
+            bool signExt = size > srcSize && IsSignedType(sourceType);
+            bool zeroExt = size > srcSize && !IsSignedType(sourceType);
+            int tmpN = int.Parse(tmpReg[1..]);
 
             if (tmpReg != reg) Emit("MOV", reg, tmpReg);
-            if (needZeroExt)
-            {
-                if (size >= 2) { if (sourceType.SizeOf() >= 2) Emit("MOV", regH, GetHighReg(tmpReg)); else Emit("CLR", regH); }
-                if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-            }
-            else
-            {
-                if (size >= 2 && !needSignExt) Emit("MOV", regH, GetHighReg(tmpReg));
-                if (size == 4) { Emit("MOV", regB2, $"R{int.Parse(tmpReg[1..]) + 2}"); Emit("MOV", regB3, $"R{int.Parse(tmpReg[1..]) + 3}"); }
-            }
-
-            if (needSignExt)
-            {
-                Emit("MOV", regH, reg);
-                Emit("LSL", regH);
-                Emit("SBC", regH, regH);
-            }
+            if (size >= 2 && srcSize >= 2) Emit("MOV", regH, GetHighReg(tmpReg));
+            if (size == 4 && srcSize >= 4) { Emit("MOV", regB2, $"R{tmpN + 2}"); Emit("MOV", regB3, $"R{tmpN + 3}"); }
+            EmitWidenFill(signExt, zeroExt, srcSize, size, reg, regH, regB2, regB3);
             return;
         }
 
@@ -544,72 +543,38 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             bool nearY = offset + (size - 1) < 64;
             DataType sourceType = GetValType(val);
-            bool needSignExt = size == 2 && sourceType.SizeOf() == 1 && IsSignedType(sourceType);
-            bool needZeroExt = size > sourceType.SizeOf() && !IsSignedType(sourceType) && !needSignExt;
+            int srcSize = sourceType.SizeOf();
+            bool signExt = size > srcSize && IsSignedType(sourceType);
+            bool zeroExt = size > srcSize && !IsSignedType(sourceType);
 
             if (nearY)
             {
                 Emit("LDD", reg, $"Y+{offset}");
-                if (needZeroExt)
-                {
-                    if (size >= 2) { if (sourceType.SizeOf() >= 2) Emit("LDD", regH, $"Y+{offset + 1}"); else Emit("CLR", regH); }
-                    if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-                }
-                else
-                {
-                    if (size >= 2 && !needSignExt) Emit("LDD", regH,  $"Y+{offset + 1}");
-                    if (size == 4) { Emit("LDD", regB2, $"Y+{offset + 2}"); Emit("LDD", regB3, $"Y+{offset + 3}"); }
-                }
+                if (size >= 2 && srcSize >= 2) Emit("LDD", regH, $"Y+{offset + 1}");
+                if (size == 4 && srcSize >= 4) { Emit("LDD", regB2, $"Y+{offset + 2}"); Emit("LDD", regB3, $"Y+{offset + 3}"); }
             }
             else
             {
                 var abs = 0x0100 + offset;
                 Emit("LDS", reg, $"0x{abs:X4}");
-                if (needZeroExt)
-                {
-                    if (size >= 2) { if (sourceType.SizeOf() >= 2) Emit("LDS", regH, $"0x{abs + 1:X4}"); else Emit("CLR", regH); }
-                    if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-                }
-                else
-                {
-                    if (size >= 2 && !needSignExt) Emit("LDS", regH,  $"0x{abs + 1:X4}");
-                    if (size == 4) { Emit("LDS", regB2, $"0x{abs + 2:X4}"); Emit("LDS", regB3, $"0x{abs + 3:X4}"); }
-                }
+                if (size >= 2 && srcSize >= 2) Emit("LDS", regH, $"0x{abs + 1:X4}");
+                if (size == 4 && srcSize >= 4) { Emit("LDS", regB2, $"0x{abs + 2:X4}"); Emit("LDS", regB3, $"0x{abs + 3:X4}"); }
             }
-
-            if (needSignExt)
-            {
-                Emit("MOV", regH, reg);
-                Emit("LSL", regH);
-                Emit("SBC", regH, regH);
-            }
+            EmitWidenFill(signExt, zeroExt, srcSize, size, reg, regH, regB2, regB3);
             return;
         }
 
         var addr = ResolveAddress(val);
         if (string.IsNullOrEmpty(addr)) return;
         DataType srcType = GetValType(val);
-        bool signExt = size == 2 && srcType.SizeOf() == 1 && IsSignedType(srcType);
-        bool zeroExt = size > srcType.SizeOf() && !IsSignedType(srcType) && !signExt;
+        int srcSizeA = srcType.SizeOf();
+        bool signExtA = size > srcSizeA && IsSignedType(srcType);
+        bool zeroExtA = size > srcSizeA && !IsSignedType(srcType);
 
         Emit("LDS", reg, addr);
-        if (zeroExt)
-        {
-            if (size >= 2) Emit("CLR", regH);
-            if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-        }
-        else
-        {
-            if (size >= 2 && !signExt) Emit("LDS", regH, addr + "+1");
-            if (size == 4) { Emit("LDS", regB2, addr + "+2"); Emit("LDS", regB3, addr + "+3"); }
-        }
-
-        if (signExt)
-        {
-            Emit("MOV", regH, reg);
-            Emit("LSL", regH);
-            Emit("SBC", regH, regH);
-        }
+        if (size >= 2 && srcSizeA >= 2) Emit("LDS", regH, addr + "+1");
+        if (size == 4 && srcSizeA >= 4) { Emit("LDS", regB2, addr + "+2"); Emit("LDS", regB3, addr + "+3"); }
+        EmitWidenFill(signExtA, zeroExtA, srcSizeA, size, reg, regH, regB2, regB3);
     }
 
     private void StoreRegInto(string reg, Val val, DataType type = DataType.UINT8)
