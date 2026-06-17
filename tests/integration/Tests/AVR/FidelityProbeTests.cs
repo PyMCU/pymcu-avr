@@ -1981,6 +1981,66 @@ public class FidelityProbeTests
     }
 
     [Test]
+    public void ExceptionPropagatesThroughLevels()
+    {
+        // An error raised deep (c) and uncaught in the intermediate frame (bb) must propagate up
+        // through every CanFail frame to the try in run().
+        const string body =
+            "def c(b: uint8) -> uint8:\n    return 100 // b\n" +
+            "def bb(b: uint8) -> uint8:\n    return c(b) + 1\n" +
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(bb(s))\n" +   // s=0 -> ZeroDivisionError propagates c->bb->run
+            "    except ZeroDivisionError:\n" +
+            "        print(55)\n";
+        RunSeed(body, 0, 1).Should().Equal(55);
+    }
+
+    [Test]
+    public void WrongTypeExceptionPropagatesToOuter()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        try:\n" +
+            "            print(100 // s)\n" +    // ZeroDivisionError
+            "        except IndexError:\n" +      // wrong type -> does not catch
+            "            print(1)\n" +
+            "    except ZeroDivisionError:\n" +    // outer catches
+            "        print(66)\n";
+        RunSeed(body, 0, 1).Should().Equal(66);
+    }
+
+    [Test]
+    public void FinallyRunsOnErrorPath()
+    {
+        const string body =
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(100 // s)\n" +   // s=0 -> ZeroDivisionError
+            "    except ZeroDivisionError:\n" +
+            "        print(7)\n" +
+            "    finally:\n" +
+            "        print(9)\n";
+        RunSeed(body, 0, 2).Should().Equal(7, 9);   // except runs, then finally
+    }
+
+    [Test]
+    public void RaiseFromCalleeCaught()
+    {
+        const string body =
+            "def mayfail(s: uint8) -> uint8:\n" +
+            "    if s == 0:\n        raise ValueError\n" +
+            "    return s * 2\n" +
+            "def run(s: uint8):\n" +
+            "    try:\n" +
+            "        print(mayfail(s))\n" +   // s=0 -> ValueError propagates -> caught
+            "    except ValueError:\n" +
+            "        print(3)\n";
+        RunSeed(body, 0, 1).Should().Equal(3);
+    }
+
+    [Test]
     public void UncaughtExceptionHalts()
     {
         // An UNCAUGHT runtime divide-by-zero must now halt (loud failure, Python-like) rather than
