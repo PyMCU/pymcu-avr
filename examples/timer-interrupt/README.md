@@ -6,8 +6,9 @@ Timer1 overflow interrupt blinking an LED at ~1 Hz.
 
 `Timer(1, 256).irq(on_overflow)` registers an ISR at the Timer1 overflow vector
 and enables `TOIE1` + `SEI` automatically. At prescaler 256 the 16-bit timer
-overflows about every 1.05 s; the ISR sets a `GPIOR0` flag and the main loop
-toggles the LED and sends `T` over UART.
+overflows about every 1.05 s; the ISR sets a plain module global (auto-promoted
+to `GPIOR0` by the compiler) and the main loop toggles the LED and sends `T`
+over UART.
 
 A simpler counterpart to [`timer-ctc`](../timer-ctc) (overflow vs. compare-match).
 
@@ -20,7 +21,7 @@ A simpler counterpart to [`timer-ctc`](../timer-ctc) (overflow vs. compare-match
 ## Key concepts
 
 - `Timer.irq()` overflow interrupt registration
-- `GPIOR0` atomic flag pattern
+- ISR-shared plain global — auto-promoted to `GPIOR0` (volatile semantics, single-cycle I/O)
 
 ## Build & flash
 

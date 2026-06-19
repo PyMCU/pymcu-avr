@@ -37,6 +37,7 @@ def sensor_task():
     # Highest priority (3): reads the free-running TCNT0 hardware counter as
     # a pseudo-ADC input, runs it through a CRC-8/MAXIM pipeline and a
     # bit-reversal, then publishes the result to _crc_out.
+    global _crc_out
     while True:
         raw: uint8 = 0
         asm("IN %0, 0x26", raw)

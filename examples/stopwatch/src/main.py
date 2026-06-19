@@ -8,10 +8,9 @@
 # 61 ticks ~= 1 second. Main loop tracks elapsed seconds and sends them
 # over UART as a raw uint8 byte + '\n' whenever seconds increments.
 #
-# State machine via GPIOR0 bit flags:
-#   GPIOR0[0] = Timer0 OVF flag
-#   GPIOR0[1] = INT0 Start/Stop flag
-#   GPIOR0[2] = INT1 Reset flag
+# Each ISR signals main through its own plain module global. All three are
+# detected as ISR-shared (volatile semantics) and auto-promoted to
+# GPIOR0/1/2, so every flag access is single-cycle I/O with zero SRAM.
 #
 # Hardware: Arduino Uno
 #   Start/Stop button: PD2 (Arduino pin 2), active low, pull-up
@@ -25,23 +24,32 @@
 #   On reset: sends 0, '\n'
 #
 from pymcu.types import uint8, uint16
-from pymcu.chips.atmega328p import PORTB, DDRB, GPIOR0
+from pymcu.chips.atmega328p import PORTB, DDRB
 from pymcu.chips.atmega328p import TCCR0B, TIMSK0
 from pymcu.hal.gpio import Pin
 from pymcu.hal.timer import Timer
 from pymcu.hal.uart import UART
 
+# One flag per ISR, polled and cleared by main. ISR-shared -> auto-promoted
+# to GPIOR registers; all start at 0 on reset.
+tick_f:  uint8 = 0   # Timer0 OVF
+start_f: uint8 = 0   # INT0 start/stop
+reset_f: uint8 = 0   # INT1 reset
+
 
 def timer0_ovf_isr():
-    GPIOR0[0] = 1
+    global tick_f
+    tick_f = 1
 
 
 def int0_isr():
-    GPIOR0[1] = 1
+    global start_f
+    start_f = 1
 
 
 def int1_isr():
-    GPIOR0[2] = 1
+    global reset_f
+    reset_f = 1
 
 
 def main():
@@ -57,10 +65,6 @@ def main():
     btn_start = Pin("PD2", Pin.IN, pull=Pin.PULL_UP)
     btn_reset  = Pin("PD3", Pin.IN, pull=Pin.PULL_UP)
 
-    GPIOR0[0] = 0
-    GPIOR0[1] = 0
-    GPIOR0[2] = 0
-
     btn_start.irq(Pin.IRQ_FALLING, int0_isr)
     btn_reset.irq(Pin.IRQ_FALLING, int1_isr)
 
@@ -73,8 +77,8 @@ def main():
 
     while True:
         # Handle INT0: toggle start/stop
-        if GPIOR0[1] == 1:
-            GPIOR0[1] = 0
+        if start_f == 1:
+            start_f = 0
             if running == 0:
                 running = 1
                 PORTB[5] = 1   # LED on while running
@@ -83,8 +87,8 @@ def main():
                 PORTB[5] = 0
 
         # Handle INT1: reset
-        if GPIOR0[2] == 1:
-            GPIOR0[2] = 0
+        if reset_f == 1:
+            reset_f = 0
             ticks   = 0
             seconds = 0
             running = 0
@@ -93,8 +97,8 @@ def main():
             uart.write('\n')
 
         # Handle Timer0 tick while running
-        if GPIOR0[0] == 1:
-            GPIOR0[0] = 0
+        if tick_f == 1:
+            tick_f = 0
             if running == 1:
                 ticks += 1
                 if ticks >= 61:

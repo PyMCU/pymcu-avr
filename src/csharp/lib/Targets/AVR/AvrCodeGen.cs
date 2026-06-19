@@ -43,10 +43,45 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private Function? _currentFunction;
     private int _maxStaticUsage; // total static SRAM used by StackAllocator; set in Compile()
     private int _bssSize;
+    private int _argSpillBytes;  // bytes of the fixed SRAM region for >R16..R25 overflow arguments
     private bool _needsGc;      // mirrors program.NeedsGc for use in CompileFunction
+
+    // Divmod fusion (per function): __div16 already produces both quotient (R24:R25)
+    // and remainder (R26:R27). When the same dividend is divided AND mod'd by the same
+    // divisor in one basic block (the decimal-print digit loop: r = v % 10; v = v // 10),
+    // the pair collapses to a single __div16 call. _divModFuse maps the primary Binary
+    // (where the call is emitted) to the two result destinations; _divModSkip holds the
+    // secondary Binary, which emits nothing. Reference identity, rebuilt each function.
+    private Dictionary<Binary, (Val Quot, Val Rem)> _divModFuse =
+        new(ReferenceEqualityComparer.Instance);
+    private HashSet<Binary> _divModSkip = new(ReferenceEqualityComparer.Instance);
+
+    // Byte-pack fusion (per function): reconstructing a 16-bit value from two bytes --
+    // result = (hi << 8) | lo  (or + lo) -- is just "low byte = lo, high byte = hi", but
+    // the generic widen+shift+add lowering spends ~10 instructions on it. Every 16-bit
+    // sensor read (ADC ADCH/ADCL, BMP280, DHT, ...) hits this. _bytePackFuse maps the
+    // combining Binary (Add/BitOr, where the packed value is emitted) to the (hi, lo)
+    // byte sources; _bytePackSkip holds the now-dead `hi << 8` shift.
+    private Dictionary<Binary, (Val Hi, Val Lo)> _bytePackFuse =
+        new(ReferenceEqualityComparer.Instance);
+    private HashSet<Binary> _bytePackSkip = new(ReferenceEqualityComparer.Instance);
 
     private string MakeLabel(string prefix = ".L") => $"{prefix}_{_labelCounter++}";
     private static string GetHighReg(string reg) => "R" + (int.Parse(reg[1..]) + 1);
+
+    // If the value is resident in an allocated home register (named-var R4-R15 pool or
+    // R16/R17 temporary pool), return that register's low byte; otherwise null. Used by
+    // reg-reg ALU emitters to consume the operand directly instead of staging it through
+    // R18. Reading a register as the second ALU operand never clobbers it, so this is
+    // safe for both pools.
+    private string? OperandHomeReg(Val v)
+    {
+        var name = v switch { Variable x => x.Name, Temporary t => t.Name, _ => null };
+        if (name == null) return null;
+        if (_regLayout.TryGetValue(name, out var r)) return r;
+        if (_tmpRegLayout.TryGetValue(name, out var r2)) return r2;
+        return null;
+    }
     private void Emit(string m) => _assembly.Add(AvrAsmLine.MakeInstruction(m));
     private void Emit(string m, string o1) => _assembly.Add(AvrAsmLine.MakeInstruction(m, o1));
     private void Emit(string m, string o1, string o2) => _assembly.Add(AvrAsmLine.MakeInstruction(m, o1, o2));
@@ -316,6 +351,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         return false;
     }
 
+    // Picks the division/modulo runtime routine. When `signed` is set, the floor
+    // variant (__divs*/__mods*, Python semantics: quotient floors toward -inf and
+    // the remainder takes the sign of the divisor) is used; otherwise the unsigned
+    // core (__div*/__mod*). `wantMod` selects the modulo entry point.
+    private static string DivModRoutine(bool wantMod, bool is32, bool is16, bool signed)
+    {
+        string sz = is32 ? "32" : is16 ? "16" : "8";
+        return $"__{(wantMod ? "mod" : "div")}{(signed ? "s" : "")}{sz}";
+    }
+
     private void EmitBranch(string cond, string target)
     {
         var inv = new Dictionary<string, string>
@@ -329,6 +374,121 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Emit(inverted, skip);
         Emit("RJMP", target);
         EmitLabel(skip);
+    }
+
+    // Integer-argument register assignment. Each argument takes a 2-register slot (1- or 2-byte
+    // values) or a 4-register block (32-bit), allocated from R25 downward so a wide argument no
+    // longer collides with a previous one (the old fixed [R24,R22,R20,R18] spacing assumed every
+    // arg was <= 2 bytes, so `f(u8, u32)` loaded the u32 into R22:R23:R24:R25 and clobbered arg0).
+    // A 32-bit FIRST arg keeps the R24-anchored PyMCU layout (byte0=R24, byte2=R22); a lower 32-bit
+    // arg is contiguous from its base. Returns the base register (as passed to LoadIntoReg) per arg.
+    // Caller and callee must use this identically. Floats keep their own special-casing.
+    private static List<string> ArgBaseRegs(IReadOnlyList<int> sizes)
+    {
+        var bases = new List<string>(sizes.Count);
+        int top = 25;
+        foreach (int sz in sizes)
+        {
+            int slots = sz >= 4 ? 4 : 2;
+            int low = top - slots + 1;
+            int baseNum = slots == 4 && top == 25 ? 24 : low;
+            // Argument registers must be R16..R25: loading an immediate (LDI/SUBI/...) requires a
+            // high register, and arg values include constants. Assigning a base below R16 (which
+            // avr-gcc reaches for many args) makes the assembler reject "register above 15 required".
+            // Reject rather than silently miscompile (the old code capped at 4 and dropped the rest).
+            if (baseNum < 16)
+                throw new Exception(
+                    "too many/wide arguments to pass in registers (they must fit R16..R25); " +
+                    "use fewer parameters, pack them into a struct/array, or mark the function @inline");
+            bases.Add("R" + baseNum);
+            top = low - 1;
+        }
+
+        return bases;
+    }
+
+    // An argument's home: either a register (R16..R25) or a byte offset into the fixed SRAM
+    // overflow region `_arg_spill`. Register args use the same R16..R25 assignment as ArgBaseRegs;
+    // once an argument no longer fits there, it and every later argument spill to SRAM. Spilling
+    // (rather than reaching into R8..R15) preserves the register allocator's invariant that the
+    // R2..R15 home pool is never touched by the calling convention, so live variables survive calls.
+    private readonly record struct ArgLoc(bool IsReg, string Reg, int SpillOffset, int Size);
+
+    private static List<ArgLoc> AssignArgLocations(IReadOnlyList<int> sizes, out int spillBytes)
+    {
+        var locs = new List<ArgLoc>(sizes.Count);
+        int top = 25;
+        int spill = 0;
+        bool spilling = false;
+        foreach (int sz in sizes)
+        {
+            int slots = sz >= 4 ? 4 : 2;
+            if (!spilling)
+            {
+                int low = top - slots + 1;
+                int baseNum = slots == 4 && top == 25 ? 24 : low;
+                if (baseNum >= 16)
+                {
+                    locs.Add(new ArgLoc(true, "R" + baseNum, 0, sz));
+                    top = low - 1;
+                    continue;
+                }
+                spilling = true;   // out of R16..R25 — this and all later args go to SRAM
+            }
+            // A spilled arg wider than 2 bytes would need 4 scratch registers to stage through;
+            // that is not worth the complexity for an over-budget wide argument. Reject clearly.
+            if (sz > 2)
+                throw new Exception(
+                    "too many arguments: an argument wider than 2 bytes overflows the register file; " +
+                    "reorder so wide arguments come first, use fewer parameters, or mark it @inline");
+            locs.Add(new ArgLoc(false, "", spill, sz));
+            spill += sz;
+        }
+        spillBytes = spill;
+        return locs;
+    }
+
+    // Stage a spilled argument through R26:R27 (X — call-clobbered, never an arg or home register)
+    // and store it to the SRAM overflow region. Spilled args are <= 2 bytes (see AssignArgLocations).
+    private void StoreArgToSpill(Val arg, int offset, DataType type)
+    {
+        int sz = type.SizeOf();
+        LoadIntoReg(arg, "R26", type);
+        Emit("STS", $"_arg_spill + {offset}", "R26");
+        if (sz >= 2) Emit("STS", $"_arg_spill + {offset + 1}", "R27");
+    }
+
+    // Fill the high bytes [srcSize..size-1] of a widened value once its real low bytes are loaded.
+    // zeroExt clears them; signExt replicates the sign of the source's highest real byte (the SBC
+    // idiom yields 0xFF when negative, 0x00 otherwise). Covers all widths: int8->int16/int32 and
+    // int16->int32 (the latter two were previously left as garbage — only size==2 was handled).
+    private void EmitWidenFill(bool signExt, bool zeroExt, int srcSize, int size,
+                               string reg, string regH, string regB2, string regB3)
+    {
+        if (zeroExt)
+        {
+            if (size >= 2 && srcSize < 2) Emit("CLR", regH);
+            if (size == 4 && srcSize < 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
+            return;
+        }
+        if (!signExt) return;
+
+        if (srcSize >= 2)
+        {
+            // srcSize==2 -> size==4: sign-fill bytes 2,3 from the real high byte (regH).
+            Emit("MOV", regB2, regH);
+            Emit("LSL", regB2);
+            Emit("SBC", regB2, regB2);
+            Emit("MOV", regB3, regB2);
+        }
+        else
+        {
+            // srcSize==1: sign-fill byte1 (and bytes 2,3 when widening to 32-bit) from reg.
+            Emit("MOV", regH, reg);
+            Emit("LSL", regH);
+            Emit("SBC", regH, regH);
+            if (size == 4) { Emit("MOV", regB2, regH); Emit("MOV", regB3, regH); }
+        }
     }
 
     private void LoadIntoReg(Val val, string reg, DataType type = DataType.UINT8)
@@ -375,6 +535,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 if (size >= 2) Emit("LDI", regH, $"hi8(gs({fr.FunctionName}))");
                 return;
             }
+            case FlashStrAddr fs:
+            {
+                // 16-bit flash BYTE address of an interned string (FlashData label is
+                // "__flash_" + name, same convention as ArrayLoadFlash). Loaded byte-wise
+                // via LPM by FlashLoadPtr, so this is a byte address (no gs()/word scaling).
+                string fsLabel = "__flash_" + fs.Name.Replace('.', '_');
+                Emit("LDI", reg, $"lo8({fsLabel})");
+                if (size >= 2) Emit("LDI", regH, $"hi8({fsLabel})");
+                return;
+            }
             case MemoryAddress mem:
             {
                 if (mem.Address is >= 0x20 and <= 0x5F)
@@ -401,62 +571,31 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (!string.IsNullOrEmpty(name) && _regLayout.TryGetValue(name, out var srcReg))
         {
             DataType sourceType = GetValType(val);
-            bool needSignExt = size == 2 && sourceType.SizeOf() == 1 && IsSignedType(sourceType);
-            bool needZeroExt = size > sourceType.SizeOf() && !IsSignedType(sourceType) && !needSignExt;
+            int srcSize = sourceType.SizeOf();
+            bool signExt = size > srcSize && IsSignedType(sourceType);
+            bool zeroExt = size > srcSize && !IsSignedType(sourceType);
+            int srcN = int.Parse(srcReg[1..]);
 
             if (srcReg != reg) Emit("MOV", reg, srcReg);
-            else if (!needSignExt && !needZeroExt && srcReg == reg)
-            {
-                // Source already in target reg; still need to populate high bytes if multi-byte
-                if (size >= 2) Emit("MOV", regH, GetHighReg(srcReg));
-                if (size == 4) { Emit("MOV", regB2, $"R{int.Parse(srcReg[1..]) + 2}"); Emit("MOV", regB3, $"R{int.Parse(srcReg[1..]) + 3}"); }
-                return;
-            }
-
-            if (needZeroExt)
-            {
-                if (size >= 2) Emit("CLR", regH);
-                if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-            }
-            else
-            {
-                if (size >= 2 && !needSignExt) Emit("MOV", regH, GetHighReg(srcReg));
-                if (size == 4) { Emit("MOV", regB2, $"R{int.Parse(srcReg[1..]) + 2}"); Emit("MOV", regB3, $"R{int.Parse(srcReg[1..]) + 3}"); }
-            }
-
-            if (needSignExt)
-            {
-                Emit("MOV", regH, reg);
-                Emit("LSL", regH);
-                Emit("SBC", regH, regH);
-            }
+            // Load the source's real bytes that the target needs (the rest are filled below).
+            if (size >= 2 && srcSize >= 2) Emit("MOV", regH, GetHighReg(srcReg));
+            if (size == 4 && srcSize >= 4) { Emit("MOV", regB2, $"R{srcN + 2}"); Emit("MOV", regB3, $"R{srcN + 3}"); }
+            EmitWidenFill(signExt, zeroExt, srcSize, size, reg, regH, regB2, regB3);
             return;
         }
 
         if (!string.IsNullOrEmpty(name) && _tmpRegLayout.TryGetValue(name, out var tmpReg))
         {
             DataType sourceType = GetValType(val);
-            bool needSignExt = size == 2 && sourceType.SizeOf() == 1 && IsSignedType(sourceType);
-            bool needZeroExt = size > sourceType.SizeOf() && !IsSignedType(sourceType) && !needSignExt;
+            int srcSize = sourceType.SizeOf();
+            bool signExt = size > srcSize && IsSignedType(sourceType);
+            bool zeroExt = size > srcSize && !IsSignedType(sourceType);
+            int tmpN = int.Parse(tmpReg[1..]);
 
             if (tmpReg != reg) Emit("MOV", reg, tmpReg);
-            if (needZeroExt)
-            {
-                if (size >= 2) Emit("CLR", regH);
-                if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-            }
-            else
-            {
-                if (size >= 2 && !needSignExt) Emit("MOV", regH, GetHighReg(tmpReg));
-                if (size == 4) { Emit("MOV", regB2, $"R{int.Parse(tmpReg[1..]) + 2}"); Emit("MOV", regB3, $"R{int.Parse(tmpReg[1..]) + 3}"); }
-            }
-
-            if (needSignExt)
-            {
-                Emit("MOV", regH, reg);
-                Emit("LSL", regH);
-                Emit("SBC", regH, regH);
-            }
+            if (size >= 2 && srcSize >= 2) Emit("MOV", regH, GetHighReg(tmpReg));
+            if (size == 4 && srcSize >= 4) { Emit("MOV", regB2, $"R{tmpN + 2}"); Emit("MOV", regB3, $"R{tmpN + 3}"); }
+            EmitWidenFill(signExt, zeroExt, srcSize, size, reg, regH, regB2, regB3);
             return;
         }
 
@@ -464,72 +603,38 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             bool nearY = offset + (size - 1) < 64;
             DataType sourceType = GetValType(val);
-            bool needSignExt = size == 2 && sourceType.SizeOf() == 1 && IsSignedType(sourceType);
-            bool needZeroExt = size > sourceType.SizeOf() && !IsSignedType(sourceType) && !needSignExt;
+            int srcSize = sourceType.SizeOf();
+            bool signExt = size > srcSize && IsSignedType(sourceType);
+            bool zeroExt = size > srcSize && !IsSignedType(sourceType);
 
             if (nearY)
             {
                 Emit("LDD", reg, $"Y+{offset}");
-                if (needZeroExt)
-                {
-                    if (size >= 2) Emit("CLR", regH);
-                    if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-                }
-                else
-                {
-                    if (size >= 2 && !needSignExt) Emit("LDD", regH,  $"Y+{offset + 1}");
-                    if (size == 4) { Emit("LDD", regB2, $"Y+{offset + 2}"); Emit("LDD", regB3, $"Y+{offset + 3}"); }
-                }
+                if (size >= 2 && srcSize >= 2) Emit("LDD", regH, $"Y+{offset + 1}");
+                if (size == 4 && srcSize >= 4) { Emit("LDD", regB2, $"Y+{offset + 2}"); Emit("LDD", regB3, $"Y+{offset + 3}"); }
             }
             else
             {
                 var abs = 0x0100 + offset;
                 Emit("LDS", reg, $"0x{abs:X4}");
-                if (needZeroExt)
-                {
-                    if (size >= 2) Emit("CLR", regH);
-                    if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-                }
-                else
-                {
-                    if (size >= 2 && !needSignExt) Emit("LDS", regH,  $"0x{abs + 1:X4}");
-                    if (size == 4) { Emit("LDS", regB2, $"0x{abs + 2:X4}"); Emit("LDS", regB3, $"0x{abs + 3:X4}"); }
-                }
+                if (size >= 2 && srcSize >= 2) Emit("LDS", regH, $"0x{abs + 1:X4}");
+                if (size == 4 && srcSize >= 4) { Emit("LDS", regB2, $"0x{abs + 2:X4}"); Emit("LDS", regB3, $"0x{abs + 3:X4}"); }
             }
-
-            if (needSignExt)
-            {
-                Emit("MOV", regH, reg);
-                Emit("LSL", regH);
-                Emit("SBC", regH, regH);
-            }
+            EmitWidenFill(signExt, zeroExt, srcSize, size, reg, regH, regB2, regB3);
             return;
         }
 
         var addr = ResolveAddress(val);
         if (string.IsNullOrEmpty(addr)) return;
         DataType srcType = GetValType(val);
-        bool signExt = size == 2 && srcType.SizeOf() == 1 && IsSignedType(srcType);
-        bool zeroExt = size > srcType.SizeOf() && !IsSignedType(srcType) && !signExt;
+        int srcSizeA = srcType.SizeOf();
+        bool signExtA = size > srcSizeA && IsSignedType(srcType);
+        bool zeroExtA = size > srcSizeA && !IsSignedType(srcType);
 
         Emit("LDS", reg, addr);
-        if (zeroExt)
-        {
-            if (size >= 2) Emit("CLR", regH);
-            if (size == 4) { Emit("CLR", regB2); Emit("CLR", regB3); }
-        }
-        else
-        {
-            if (size >= 2 && !signExt) Emit("LDS", regH, addr + "+1");
-            if (size == 4) { Emit("LDS", regB2, addr + "+2"); Emit("LDS", regB3, addr + "+3"); }
-        }
-
-        if (signExt)
-        {
-            Emit("MOV", regH, reg);
-            Emit("LSL", regH);
-            Emit("SBC", regH, regH);
-        }
+        if (size >= 2 && srcSizeA >= 2) Emit("LDS", regH, addr + "+1");
+        if (size == 4 && srcSizeA >= 4) { Emit("LDS", regB2, addr + "+2"); Emit("LDS", regB3, addr + "+3"); }
+        EmitWidenFill(signExtA, zeroExtA, srcSizeA, size, reg, regH, regB2, regB3);
     }
 
     private void StoreRegInto(string reg, Val val, DataType type = DataType.UINT8)
@@ -602,6 +707,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         _allTmpRegNames.Clear();
         _labelCounter = 0;
 
+        // Promote ISR-shared single-byte globals to GPIORn before any allocation
+        // pass runs: promoted names become MemoryAddress operands, so the stack
+        // and register allocators never see them and BSS shrinks accordingly.
+        var gpiorPromotions = AvrGpiorPromotion.Apply(program, cfg);
+
         var allocator = new StackAllocator();
         var (offsets, maxStack) = allocator.Allocate(program);
         _stackLayout = offsets;
@@ -641,7 +751,27 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             _functionParamSizes[func.Name] = sizes;
         }
 
+        // Size the SRAM overflow region: the most bytes any direct call passes beyond R16..R25.
+        _argSpillBytes = 0;
+        foreach (var func in program.Functions)
+            foreach (var instr in func.Body)
+            {
+                if (instr is not Call cl) continue;
+                var sizes = _functionParamSizes.TryGetValue(cl.FunctionName, out var ps) && ps.Count >= cl.Args.Count
+                    ? ps
+                    : cl.Args.Select(a => GetValType(a).SizeOf()).ToList();
+                try
+                {
+                    AssignArgLocations(sizes.Take(cl.Args.Count).ToList(), out int sb);
+                    if (sb > _argSpillBytes) _argSpillBytes = sb;
+                }
+                catch { /* over-budget call; the per-call emit reports it with the right diagnostic */ }
+            }
+
         EmitComment("Generated by pymcuc for " + cfg.Chip);
+
+        foreach (var (gName, gAddr) in gpiorPromotions.OrderBy(kv => kv.Value))
+            EmitComment($"volatile '{gName}' -> GPIOR @ 0x{gAddr:X2} (ISR-shared, auto-promoted)");
 
         foreach (var sym in program.ExternSymbols)
             EmitRaw(".extern " + sym);
@@ -661,6 +791,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (_bssSize > 0)
             EmitRaw($".equ _bss_end, _stack_base + {_bssSize}");
 
+        // Fixed SRAM region for arguments that overflow R16..R25, placed just above the static
+        // frame (the hardware stack grows down from RAMEND, far above). A callee reads its spilled
+        // args from here at entry, before any nested call, so a single shared region is safe.
+        if (_argSpillBytes > 0)
+            EmitRaw($".equ _arg_spill, _stack_base + {_maxStaticUsage}");
+
         if (program.NeedsGc)
             EmitGcSramLayout();
 
@@ -670,6 +806,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         var isrMap = new SortedDictionary<int, Function>();
         foreach (var func in program.Functions.Where(func => func.IsInterrupt))
         {
+            // The vector is a byte address into the table emitted below (vec*2 for vec in
+            // 1..25, i.e. the even addresses 0x02..0x32). A vector outside that range — or
+            // an odd one — would never match a table slot, so the handler was silently
+            // dropped (it ran as dead code, the vector jumped to __bad_interrupt). Reject it.
+            if (func.InterruptVector < 2 || func.InterruptVector > 50 || (func.InterruptVector & 1) != 0)
+            {
+                throw new Exception(
+                    $"@interrupt vector 0x{func.InterruptVector:X} on '{func.Name}' is out of range; " +
+                    "expected an even vector address in 0x02..0x32 (e.g. 0x04 for INT0, 0x20 for TIMER0_OVF)");
+            }
+
             // Add duplicate ISR check that was missing in the C# port
             if (!isrMap.TryAdd(func.InterruptVector, func))
             {
@@ -795,11 +942,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         EmitFlashArrayPool(output);
         if (program.NeedsGc) EmitGcRuntime(output);
-        // Emit the exception runtime when either the SJLJ model (setjmp) is used
-        // OR when the T-flag model calls __pymcu_unhandled_exn for unmatched catches.
-        bool needsExnRuntime = program.ExternSymbols.Contains("setjmp")
-            || program.Functions.Any(f =>
-                f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn"));
+        // Emit the exception runtime when the T-flag model calls __pymcu_unhandled_exn
+        // for an unmatched catch.
+        bool needsExnRuntime = program.Functions.Any(f =>
+                f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn")
+                || f.Body.OfType<BranchOnError>().Any(b => b.ErrorLabel == "__pymcu_unhandled_exn"));
         if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, cfg.Chip);
         WriteSymbolsIfRequested(optimized, program);
         WriteLineMapIfRequested(optimized);
@@ -811,16 +958,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitComment("ISR prologue -- save context");
         // R0 is clobbered by every MUL; R1 is the zero register assumed by SBC/ADC after MUL.
         // avr-gcc saves both in every ISR to prevent corruption of the interrupted context.
-        Emit("PUSH", "R0");
-        Emit("PUSH", "R1");
-        Emit("PUSH", "R16");
-        Emit("PUSH", "R17");
-        Emit("PUSH", "R18");
-        Emit("PUSH", "R19");
-        Emit("PUSH", "R24");
-        Emit("PUSH", "R25");
-        Emit("PUSH", "R26");
-        Emit("PUSH", "R27");
+        // Save the full caller-clobbered range the ISR body — or any function it calls — may
+        // use as scratch. The earlier fixed set omitted R20/R21 (the 16-bit MUL accumulator),
+        // R22/R23 (32-bit math and the 3rd/4th argument pair), and R30/R31 (the Z pointer for
+        // array/flash access). An ISR using any of those silently corrupted the interrupted
+        // code's value held there (e.g. a uint16 multiply in the ISR clobbered main's R20:R21).
+        // R28/R29 (Y, the frame pointer) is used only as a base, never reassigned, so it is
+        // preserved without saving; R2-R15 are the globally-unique named-var pool (an ISR only
+        // touches its OWN names there, never the interrupted function's).
+        foreach (var r in new[] { "R0", "R1", "R16", "R17", "R18", "R19", "R20", "R21",
+                                  "R22", "R23", "R24", "R25", "R26", "R27", "R30", "R31" })
+            Emit("PUSH", r);
         Emit("IN", "R16", "0x3F");
         Emit("PUSH", "R16");
         // Ensure R1 == 0 inside the ISR body (MUL may have left it non-zero in main).
@@ -832,19 +980,80 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitComment("ISR epilogue -- restore context");
         Emit("POP", "R16");
         Emit("OUT", "0x3F", "R16");
-        Emit("POP", "R27");
-        Emit("POP", "R26");
-        Emit("POP", "R25");
-        Emit("POP", "R24");
-        Emit("POP", "R19");
-        Emit("POP", "R18");
-        Emit("POP", "R17");
-        Emit("POP", "R16");
-        Emit("POP", "R1");
-        Emit("POP", "R0");
+        foreach (var r in new[] { "R31", "R30", "R27", "R26", "R25", "R24", "R23", "R22",
+                                  "R21", "R20", "R19", "R18", "R17", "R16", "R1", "R0" })
+            Emit("POP", r);
     }
 
     public override void EmitInterruptReturn() => Emit("RETI");
+
+    // Parse "R12" -> 12; pointer tokens "X"/"Y"/"Z" (and their +/- forms) -> the pair's low reg
+    // (26/28/30); else -1. Used by the ISR-save trimmer to learn which registers a body touches.
+    private static int ParseRegToken(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return -1;
+        char c0 = s[0];
+        if (c0 == 'R' && int.TryParse(s.AsSpan(1), out int n)) return n;
+        if (s.Contains('X')) return 26;
+        if (s.Contains('Z')) return 30;
+        if (s.Contains('Y')) return 28;
+        return -1;
+    }
+
+    private static void AddTouched(string op, HashSet<int> set)
+    {
+        int r = ParseRegToken(op);
+        if (r < 0) return;
+        set.Add(r);
+        // Pointer tokens and (handled at call site) word ops occupy a register pair.
+        if (op.Length > 0 && (op[0] == 'X' || op[0] == 'Y' || op[0] == 'Z')) set.Add(r + 1);
+    }
+
+    // Shrinks the conservative ISR context save (R0,R1,R16-R27,R30,R31,SREG) to the registers
+    // the handler body actually uses. Purely subtractive: it removes a PUSH and the matching
+    // POP(s) only for a register the body provably never touches, so it can never drop a
+    // needed save. R1 and R16 are always kept (R16 backs the SREG save, R1 is the zero
+    // register the prologue clears); if the body makes ANY call, the full set is kept (the
+    // callee may clobber anything caller-saved).
+    private void TrimIsrContextSave(int start, int end)
+    {
+        var used = new HashSet<int>();
+        bool hasCall = false, hasMul = false;
+        for (int i = start; i < end; i++)
+        {
+            var ln = _assembly[i];
+            if (ln.Type != AvrAsmLine.LineType.Instruction) continue;
+            string m = ln.Mnemonic;
+            if (m is "PUSH" or "POP") continue;                                   // context-save itself
+            if ((m == "IN" || m == "OUT") && (ln.Op1 == "0x3F" || ln.Op2 == "0x3F")) continue; // SREG save
+            if (m is "CALL" or "RCALL" or "ICALL" or "EICALL") hasCall = true;
+            if (m.StartsWith("MUL") || m.StartsWith("FMUL")) hasMul = true;
+            AddTouched(ln.Op1, used);
+            AddTouched(ln.Op2, used);
+            // Word ops touch the high half of their register pair implicitly.
+            if (m is "MOVW" or "ADIW" or "SBIW")
+            {
+                int a = ParseRegToken(ln.Op1); if (a >= 0) used.Add(a + 1);
+                if (m == "MOVW") { int b = ParseRegToken(ln.Op2); if (b >= 0) used.Add(b + 1); }
+            }
+        }
+        if (hasMul) { used.Add(0); used.Add(1); }
+        if (hasCall) return;   // a callee may clobber any caller-saved register — keep the full save
+
+        // Trimmable = the caller-saved registers the save covers, minus the always-kept R1/R16.
+        var drop = new HashSet<int>();
+        foreach (var r in new[] { 0, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 30, 31 })
+            if (!used.Contains(r)) drop.Add(r);
+        if (drop.Count == 0) return;
+
+        for (int i = start; i < end; i++)
+        {
+            var ln = _assembly[i];
+            if (ln.Type == AvrAsmLine.LineType.Instruction && ln.Mnemonic is "PUSH" or "POP"
+                && ParseRegToken(ln.Op1) is int rr && drop.Contains(rr))
+                _assembly[i] = AvrAsmLine.MakeEmpty();
+        }
+    }
 
     private void CompileFunction(Function func)
     {
@@ -853,6 +1062,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var (name, _) in _tmpRegLayout)
             _allTmpRegNames.Add(name);
 
+        DetectDivModFusions(func);
+        DetectBytePackFusions(func);
+
+        int funcAsmStart = _assembly.Count;
         EmitLabel(func.Name);
 
         if (func.IsInterrupt && !func.IsNaked) EmitContextSave();
@@ -889,17 +1102,46 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         if (!func.IsInterrupt && func.Name != "main" && func.Params.Count > 0)
         {
-            string[] argRegs = ["R24", "R22", "R20", "R18"];
-            for (var k = 0; k < func.Params.Count && k < 4; k++)
+            var paramSizes = func.Params
+                .Select(p => _varSizes.TryGetValue(p, out var psz0) ? psz0 : 1).ToList();
+            var argLocs = AssignArgLocations(paramSizes, out _);
+            for (var k = 0; k < func.Params.Count; k++)
             {
                 var pname = func.Params[k];
                 bool p16 = _varSizes.TryGetValue(pname, out int psz) && psz == 2;
                 bool p32 = _varSizes.TryGetValue(pname, out int psz32) && psz32 == 4;
                 bool pFloat = p32 && _varIsFloat.Contains(pname);
+
+                // Spilled parameter (<= 2 bytes, see AssignArgLocations): read it from the SRAM
+                // overflow region into its home register or stack slot. Staged through R26 (free
+                // at function entry). Floats/uint32 never spill, so only 1-2 byte widths appear here.
+                if (!argLocs[k].IsReg)
+                {
+                    int spillOff = argLocs[k].SpillOffset;
+                    if (_regLayout.TryGetValue(pname, out var sr))
+                    {
+                        Emit("LDS", sr, $"_arg_spill + {spillOff}");
+                        if (p16) Emit("LDS", GetHighReg(sr), $"_arg_spill + {spillOff + 1}");
+                    }
+                    else if (_stackLayout.TryGetValue(pname, out int soff))
+                    {
+                        if (!IsVariableReadInBody(pname, func.Body)) continue;
+                        bool nearY2 = soff + (p16 ? 1 : 0) < 64;
+                        Emit("LDS", "R26", $"_arg_spill + {spillOff}");
+                        if (nearY2) Emit("STD", $"Y+{soff}", "R26"); else Emit("STS", $"0x{0x0100 + soff:X4}", "R26");
+                        if (p16)
+                        {
+                            Emit("LDS", "R26", $"_arg_spill + {spillOff + 1}");
+                            if (nearY2) Emit("STD", $"Y+{soff + 1}", "R26"); else Emit("STS", $"0x{0x0100 + soff + 1:X4}", "R26");
+                        }
+                    }
+                    continue;
+                }
+
                 // Float ABI: first float arg is in R22(byte0):R23(byte1):R24(byte2):R25(byte3).
                 // uint32 ABI: first arg is in R24(byte0):R25(byte1):R22(byte2):R23(byte3).
                 // For floats, use R22 as base; for uint32, use R24 as base.
-                string aR = pFloat && k == 0 ? "R22" : argRegs[k];
+                string aR = pFloat && k == 0 ? "R22" : argLocs[k].Reg;
                 if (_regLayout.TryGetValue(pname, out var r))
                 {
                     if (aR != r) Emit("MOV", r, aR);
@@ -984,11 +1226,56 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
         }
 
+        // A region whose result is produced DIRECTLY by a trailing Call (a "passthrough", e.g.
+        // `def run_it(self): return self.hook()`) must NOT be outlined: the callee leaves its
+        // result in the return registers (R24:R25), the region's result temp coalesces with them,
+        // and the outliner emits no move -- but the outlined call site reads the result from the
+        // temp's own register (R16:R17), which the subroutine never writes => garbage. Keeping such
+        // a region inline lets the call result be consumed in the caller's own allocation context.
+        bool RegionIsCallPassthrough(int start, int end)
+        {
+            for (int k = end - 1; k > start; k--)   // last real instruction before the end marker
+            {
+                var si = func.Body[k];
+                if (si is DebugLine or InlineExpansionMarker) continue;
+                return si is Call { Dst: not NoneVal };
+            }
+            return false;
+        }
+
+        // The outliner emits ONE occurrence as the subroutine and RCALLs all of them, so every
+        // occurrence must be byte-identical -- otherwise an occurrence that differs (e.g. a force-
+        // inlined method whose result temp lands in a different stack slot per call site) reads its
+        // result from a location the shared body never writes (deep-inheritance go() called twice
+        // returned the right value once, then 0). Only share occurrences that compare equal.
+        bool RangesIdentical(List<(int start, int end)> ranges)
+        {
+            if (ranges.Count <= 1) return true;
+            List<Instruction> Body(int s, int e)
+            {
+                var b = new List<Instruction>();
+                for (int k = s + 1; k < e; k++)
+                    if (func.Body[k] is not DebugLine) b.Add(func.Body[k]);
+                return b;
+            }
+            var first = Body(ranges[0].start, ranges[0].end);
+            for (int r = 1; r < ranges.Count; r++)
+            {
+                var other = Body(ranges[r].start, ranges[r].end);
+                if (other.Count != first.Count) return false;
+                for (int j = 0; j < first.Count; j++)
+                    if (!Equals(first[j], other[j])) return false;
+            }
+            return true;
+        }
+
         // Map funcName → subroutine label; collect subroutine body ranges.
         var outlinedLabels = new Dictionary<string, string>();
         var pendingSubroutines = new List<(string label, int start, int end)>();
         foreach (var (fname, ranges) in inlineGroups)
         {
+            if (ranges.Any(r => RegionIsCallPassthrough(r.start, r.end))) continue;  // keep inline
+            if (!RangesIdentical(ranges)) continue;                                  // keep inline
             var label = MakeLabel("_pymcu_outline");
             outlinedLabels[fname] = label;
             // Body range: [ranges[0].start + 1, ranges[0].end) (exclusive of markers)
@@ -996,13 +1283,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
 
         // --- Main compilation loop with outlining ---
+        // A marked region is either OUTLINED (replaced by an RCALL here, body emitted once as a
+        // subroutine) or kept INLINE (body emitted here). The skip stack tracks, per open marker,
+        // whether its body is being skipped (because it was outlined) or emitted inline. A region
+        // NOT in outlinedLabels must be emitted inline -- the old code unconditionally skipped
+        // every marked region, silently DROPPING any region we chose not to outline.
         bool emittedEpilogue = false;
-        int skipDepth = 0;
+        var skipStack = new Stack<bool>();
+        bool Skipping() => skipStack.Count > 0 && skipStack.Peek();
         foreach (var instr in func.Body)
         {
             if (func.IsInterrupt && !func.IsNaked && instr is Return)
             {
-                if (skipDepth == 0)
+                if (!Skipping())
                 {
                     EmitContextRestore();
                     Emit("RETI");
@@ -1015,18 +1308,24 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             {
                 if (!iem.IsEnd)
                 {
-                    if (skipDepth == 0 && outlinedLabels.TryGetValue(iem.FuncName, out var rcallLabel))
+                    if (!Skipping() && outlinedLabels.TryGetValue(iem.FuncName, out var rcallLabel))
+                    {
                         Emit("RCALL", rcallLabel);
-                    skipDepth++;
+                        skipStack.Push(true);   // outlined: skip the inline body
+                    }
+                    else
+                    {
+                        skipStack.Push(Skipping());  // inline (false) or stay inside a skipped region
+                    }
                 }
                 else
                 {
-                    if (skipDepth > 0) skipDepth--;
+                    if (skipStack.Count > 0) skipStack.Pop();
                 }
                 continue;
             }
 
-            if (skipDepth > 0) continue;
+            if (Skipping()) continue;
 
             CompileInstruction(instr);
         }
@@ -1037,11 +1336,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("RETI");
         }
 
+        // Trim the (conservative) ISR context save down to the registers this handler's body
+        // actually clobbers — recovers the size of trivial handlers without losing the
+        // correctness of the full save (it only ever REMOVES a push/pop of an unused register).
+        if (func.IsInterrupt && !func.IsNaked)
+            TrimIsrContextSave(funcAsmStart, _assembly.Count);
+
         // --- Emit pending subroutines after the function body ---
         foreach (var (label, start, end) in pendingSubroutines)
         {
             EmitLabel(label);
-            int subSkip = 0;
+            var subSkip = new Stack<bool>();
+            bool SubSkipping() => subSkip.Count > 0 && subSkip.Peek();
             for (int i = start; i < end; i++)
             {
                 var si = func.Body[i];
@@ -1049,17 +1355,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 {
                     if (!sim.IsEnd)
                     {
-                        if (subSkip == 0 && outlinedLabels.TryGetValue(sim.FuncName, out var sl))
+                        if (!SubSkipping() && outlinedLabels.TryGetValue(sim.FuncName, out var sl))
+                        {
                             Emit("RCALL", sl);
-                        subSkip++;
+                            subSkip.Push(true);
+                        }
+                        else subSkip.Push(SubSkipping());
                     }
-                    else if (subSkip > 0)
-                    {
-                        subSkip--;
-                    }
+                    else if (subSkip.Count > 0) subSkip.Pop();
                     continue;
                 }
-                if (subSkip > 0) continue;
+                if (SubSkipping()) continue;
                 CompileInstruction(si);
             }
             Emit("RET");
@@ -1117,6 +1423,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 break;
             case ArrayLoad al: CompileArrayLoad(al); break;
             case ArrayLoadFlash alf: CompileArrayLoadFlash(alf); break;
+            case FlashLoadPtr flp: CompileFlashLoadPtr(flp); break;
             case FlashData fd: _flashArrayPool[fd.Name] = fd.Bytes; break;
             case ArrayStore ast: CompileArrayStore(ast); break;
             case BytearrayLoad bl: CompileBytearrayLoad(bl); break;
@@ -1124,8 +1431,6 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case GcAlloc ga:  CompileGcAlloc(ga);  break;
             case GcRoot gr:   CompileGcRoot(gr);   break;
             case GcUnroot gu: CompileGcUnroot(gu); break;
-            case TryBegin tb: CompileTryBegin(tb); break;
-            case RaiseExn re: CompileRaiseExn(re); break;
             case SignalError se: CompileSignalError(se); break;
             case SignalSuccess: CompileSignalSuccess(); break;
             case BranchOnError boe: CompileBranchOnError(boe); break;
@@ -1395,12 +1700,64 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("BRNE", label);
             return;
         }
-        // Float arguments use R22:R25 (arg0) and R18:R21 (arg1) per float convention.
-        // Integer arguments use R24 (arg0), R22 (arg1), R20 (arg2), R18 (arg3).
-        string[] argRegs = ["R24", "R22", "R20", "R18"];
-        for (var k = 0; k < call.Args.Count && k < 4; k++)
+        // delay_us(const): same calibrated 6-cycle busy loop as delay_ms, sized in
+        // microseconds. Emitted inline so a constant micro-delay is a tight loop instead
+        // of a CALL to (or per-site inline of) the 12-NOP _delay_us_avr body. The matching
+        // DCE walk skips AddRef for this same const case, so the subroutine is only
+        // compiled when a runtime (non-constant) delay_us call needs it.
+        if ((call.FunctionName == "_delay_us_avr" || call.FunctionName.EndsWith("__delay_us_avr")) && call.Args.Count == 1 && call.Args[0] is Constant usConst)
         {
-            var argType = GetValType(call.Args[k]);
+            ulong cycles = (ulong)usConst.Value * (cfg.Frequency / 1000000);
+            ulong loops = cycles / 6;
+            if (loops == 0) return;
+
+            string label = $"_dly_L{_loopCounter++}";
+
+            Emit($"LDI", "R18", $"{(loops & 0xFF)}");
+            Emit($"LDI", "R19", $"{((loops >> 8) & 0xFF)}");
+            Emit($"LDI", "R20", $"{((loops >> 16) & 0xFF)}");
+            Emit($"LDI", "R21", $"{((loops >> 24) & 0xFF)}");
+            EmitLabel(label);
+            Emit($"SUBI", "R18", "1");
+            Emit($"SBCI", "R19", "0");
+            Emit($"SBCI", "R20", "0");
+            Emit($"SBCI", "R21", "0");
+            Emit("BRNE", label);
+            return;
+        }
+        // Float arguments use R22:R25 (arg0) and R18:R21 (arg1) per float convention.
+        // Integer arguments are assigned by size (ArgBaseRegs) so a 32-bit arg gets a 4-register
+        // block and does not collide with the previous argument.
+        _functionParamSizes.TryGetValue(call.FunctionName, out var ps);
+        var argSizes = new List<int>(call.Args.Count);
+        for (var k = 0; k < call.Args.Count; k++)
+            argSizes.Add(ps != null && k < ps.Count ? ps[k] : GetValType(call.Args[k]).SizeOf());
+        var argLocs = AssignArgLocations(argSizes, out _);
+
+        // Widen a constant/narrow arg to its declared parameter width (e.g. Constant(-1) for an
+        // int16 param) instead of the size inferred from the value's magnitude.
+        DataType ArgType(int k)
+        {
+            var t = GetValType(call.Args[k]);
+            if (t != DataType.FLOAT
+                && _functionParamSizes.TryGetValue(call.FunctionName, out var pSizes) && k < pSizes.Count
+                && pSizes[k] >= 2 && t.SizeOf() < pSizes[k])
+                t = pSizes[k] == 4 ? DataType.UINT32 : DataType.UINT16;
+            return t;
+        }
+
+        // Pass 1: spilled args FIRST. Their source values (often temps in R16..R25) must be read
+        // before the register-arg loads below overwrite those registers — otherwise a spilled
+        // argument computed by a nested call read garbage (it came through as 0).
+        for (var k = 0; k < call.Args.Count; k++)
+            if (!argLocs[k].IsReg)
+                StoreArgToSpill(call.Args[k], argLocs[k].SpillOffset, ArgType(k));
+
+        // Pass 2: register args.
+        for (var k = 0; k < call.Args.Count; k++)
+        {
+            if (!argLocs[k].IsReg) continue;
+            var argType = ArgType(k);
             if (argType == DataType.FLOAT)
             {
                 // Float arg0 → R22:R25; float arg1 → R18:R21
@@ -1416,17 +1773,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 }
                 continue;
             }
-            // Use the declared parameter size when available so that constants
-            // (e.g. Constant(-1) for an int16 param) are loaded with the correct
-            // width instead of the size inferred from the constant's magnitude.
-            if (_functionParamSizes.TryGetValue(call.FunctionName, out var paramSizes) &&
-                k < paramSizes.Count)
-            {
-                int paramSize = paramSizes[k];
-                if (paramSize >= 2 && argType.SizeOf() < paramSize)
-                    argType = paramSize == 4 ? DataType.UINT32 : DataType.UINT16;
-            }
-            LoadIntoReg(call.Args[k], argRegs[k], argType);
+            LoadIntoReg(call.Args[k], argLocs[k].Reg, argType);
         }
 
         Emit("CALL", call.FunctionName);
@@ -1442,9 +1789,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // The function address is loaded into Z (R30:R31) and ICALL is emitted.
     private void CompileIndirectCall(IndirectCall call)
     {
-        // Set up arguments into standard registers (same ABI as direct Call).
-        string[] argRegs = ["R24", "R22", "R20", "R18"];
-        for (var k = 0; k < call.Args.Count && k < 4; k++)
+        // Set up arguments into standard registers (same ABI as direct Call): size-based base
+        // assignment so a 32-bit argument occupies a 4-register block without colliding.
+        var argRegs = ArgBaseRegs(call.Args.Select(a => GetValType(a).SizeOf()).ToList());
+        for (var k = 0; k < call.Args.Count && k < argRegs.Count; k++)
         {
             var argType = GetValType(call.Args[k]);
             LoadIntoReg(call.Args[k], argRegs[k], argType);
@@ -1481,8 +1829,6 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     /// </summary>
     private void CompileVirtualCall(VirtualCall vc)
     {
-        string[] argRegs = ["R24", "R22", "R20", "R18"];
-
         // Load self pointer into Z (vptr is the first 2 bytes of the object in SRAM).
         string selfName = vc.Self.Name.Replace('.', '_');
         if (_stackLayout.TryGetValue(selfName, out int selfOffset))
@@ -1515,10 +1861,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Emit("LPM", "R31", "Z");
         Emit("MOV", "R30", "R0");
 
-        // Load self as arg 0, then the remaining arguments.
+        // Load self as arg 0, then the remaining arguments (size-based base assignment).
         var allArgs = new List<Val> { vc.Self };
         allArgs.AddRange(vc.Args);
-        for (int k = 0; k < allArgs.Count && k < argRegs.Length; k++)
+        var argRegs = ArgBaseRegs(allArgs.Select(a => GetValType(a).SizeOf()).ToList());
+        for (int k = 0; k < allArgs.Count && k < argRegs.Count; k++)
         {
             var argType = GetValType(allArgs[k]);
             LoadIntoReg(allArgs[k], argRegs[k], argType);
@@ -1721,8 +2068,346 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         StoreRegInto("R24", u.Dst, type);
     }
 
+    // Destination-targeted in-place codegen for 8-bit Add/Sub/And/Or/Xor where the result
+    // lives directly in dst's home register. This removes the codegen's "stage through R24,
+    // store home" round-trip: for `x = x + y` with x in a home register it collapses to a
+    // single `ADD Rx, Ry` (vs MOV/op/MOV). Returns false — emitting nothing — whenever the
+    // AVR register classes or operand shapes don't permit the in-place form, so the caller
+    // falls back to the existing staged path. Validation is done up front; emission only
+    // happens once the whole op is known to be feasible.
+    private bool TryCompileBinaryInPlace(Binary b)
+    {
+        DataType type = GetValType(b.Dst);
+        if (type is not (DataType.UINT8 or DataType.INT8
+                         or DataType.UINT16 or DataType.INT16)) return false;
+        int size = type.SizeOf();   // 1 or 2
+        if (b.Op is not (IrBinOp.Add or IrBinOp.Sub or IrBinOp.BitAnd
+                         or IrBinOp.BitOr or IrBinOp.BitXor)) return false;
+
+        // dst must be register-resident; an SRAM dst gains nothing from in-place codegen.
+        string? rd = OperandHomeReg(b.Dst);
+        if (rd is null) return false;
+        bool rdUpper = int.Parse(rd[1..]) >= 16;   // R16-R31 accept LDI/SUBI/ANDI/ORI
+
+        // src1 must reach rd via MOV/LDD (any register) — not LDI, which is illegal for the
+        // low half. So only a same-width Variable/Temporary qualifies (constants/addresses out).
+        if (b.Src1 is not (Variable or Temporary)) return false;
+        if (GetValType(b.Src1).SizeOf() != size) return false;
+
+        string? rs1 = OperandHomeReg(b.Src1);
+        string? rs2 = OperandHomeReg(b.Src2);
+
+        // Restrict to the augmented form (dst == src1, i.e. src1 already in rd). For
+        // dst != src1 the staged path leaves the result in R24 where the next op can reuse
+        // it, so an in-place `MOV rd,src1; OP rd,...` tends to merely move the extra MOV
+        // rather than remove it. The augmented case is the unambiguous win: the staged path
+        // is always MOV/op/MOV, the in-place form collapses it to a single op on rd.
+        // (Measured 2026-06-14: relaxing this to dst != src1 regressed the example suite by
+        // ~100 bytes — the store-back MOV reappears as reload MOVs in chained expressions.)
+        if (rs1 != rd) return false;
+
+        // src1 already lives in rd, so no load clobbers it; src2 in rd just means `x op x`.
+
+        string mnem = b.Op switch
+        {
+            IrBinOp.Add    => "ADD",
+            IrBinOp.Sub    => "SUB",
+            IrBinOp.BitAnd => "AND",
+            IrBinOp.BitOr  => "OR",
+            IrBinOp.BitXor => "EOR",
+            _              => "",
+        };
+
+        // --- Constant src2: must fit an immediate/inc-dec form valid for rd's class. ---
+        if (b.Src2 is Constant c)
+        {
+            // 16-bit immediates need SUBI/SBCI on an R16-R31 pair; register-pair homes here
+            // are always R4-R15 (the temporary pool is 8-bit), so fall back for 16-bit consts.
+            if (size != 1) return false;
+            if (b.Op is IrBinOp.BitXor) return false;     // no immediate EOR form
+            int v = c.Value & 0xFF;
+            string? emit = b.Op switch
+            {
+                IrBinOp.Add when v == 1   => "INC",
+                IrBinOp.Add when v == 0xFF => "DEC",
+                IrBinOp.Sub when v == 1   => "DEC",
+                IrBinOp.Sub when v == 0xFF => "INC",
+                _ => null,
+            };
+            if (emit is null && !rdUpper) return false;   // immediate form needs R16-R31
+
+            LoadIntoReg(b.Src1, rd, type);
+            if (emit is not null) Emit(emit, rd);
+            else switch (b.Op)
+            {
+                case IrBinOp.Add:    Emit("SUBI", rd, $"{(byte)(-v)}"); break;
+                case IrBinOp.Sub:    Emit("SUBI", rd, $"{v}"); break;
+                case IrBinOp.BitAnd: Emit("ANDI", rd, $"{v}"); break;
+                case IrBinOp.BitOr:  Emit("ORI",  rd, $"{v}"); break;
+            }
+            return true;
+        }
+
+        // --- Register/SRAM src2: byte-wise OP rd, <reg>. ---
+        if (b.Src2 is (Variable or Temporary) && GetValType(b.Src2).SizeOf() == size)
+        {
+            LoadIntoReg(b.Src1, rd, type);
+            string s2 = rs2 ?? "R18";
+            if (rs2 is null) LoadIntoReg(b.Src2, "R18", type);
+            Emit(mnem, rd, s2);
+            if (size == 2)
+            {
+                // High byte carries the borrow/carry for Add/Sub (ADC/SBC).
+                string highMnem = b.Op switch
+                {
+                    IrBinOp.Add => "ADC",
+                    IrBinOp.Sub => "SBC",
+                    _           => mnem,   // AND/OR/EOR are byte-independent
+                };
+                Emit(highMnem, GetHighReg(rd), GetHighReg(s2));
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    // The operand size the Div/Mod lowering runs at: src1 may be wider than dst
+    // (e.g. uint16 // 10 -> uint8 reads the full 16-bit dividend), so the routine is
+    // chosen from the wider of the two. Mirrors the opType computed in CompileBinary.
+    private DataType DivModOpType(Binary b)
+    {
+        var s1 = GetValType(b.Src1);
+        var d = GetValType(b.Dst);
+        return s1.SizeOf() > d.SizeOf() ? s1 : d;
+    }
+
+    // Finds same-operand divide/modulo pairs in a single basic block and records the
+    // fusion. Only unsigned 16-bit (the __div16 contract: quotient in R24:R25, remainder
+    // in R26:R27) is fused. The pair is valid only when, between the two ops, neither the
+    // dividend nor the divisor is rewritten and the second op's destination is never read
+    // or written (its result is materialized early, at the primary) — and no control flow
+    // intervenes, so the two run as one straight line. Mirror images (v % k before v // k
+    // and v // k before v % k) are both handled.
+    private void DetectDivModFusions(Function func)
+    {
+        _divModFuse.Clear();
+        _divModSkip.Clear();
+        var body = func.Body;
+
+        bool Fusable(Binary x) =>
+            x.Op is IrBinOp.Mod or IrBinOp.Div or IrBinOp.FloorDiv
+            && DivModOpType(x).SizeOf() is 1 or 2   // __div8 and __div16 both yield quot+rem
+            && !IsSignedComparison(x.Src1, x.Src2); // signed floor div/mod has its own routines
+        static bool IsMod(IrBinOp op) => op is IrBinOp.Mod;
+        static bool IsDiv(IrBinOp op) => op is IrBinOp.Div or IrBinOp.FloorDiv;
+
+        for (int i = 0; i < body.Count; i++)
+        {
+            if (body[i] is not Binary p || !Fusable(p)) continue;
+            if (_divModSkip.Contains(p)) continue;            // already a prior pair's secondary
+
+            for (int j = i + 1; j < body.Count; j++)
+            {
+                var inst = body[j];
+
+                if (inst is Binary s && Fusable(s)
+                    && ((IsMod(p.Op) && IsDiv(s.Op)) || (IsDiv(p.Op) && IsMod(s.Op)))
+                    && Equals(s.Src1, p.Src1) && Equals(s.Src2, p.Src2)
+                    && !Equals(p.Dst, s.Dst))
+                {
+                    // Verify the second op's destination is untouched in the window; its
+                    // value is stored at the primary, so a read/write between would diverge.
+                    bool clean = true;
+                    for (int k = i + 1; k < j && clean; k++)
+                        if (TouchesVal(body[k], s.Dst, read: true)
+                            || TouchesVal(body[k], s.Dst, read: false))
+                            clean = false;
+                    if (clean)
+                    {
+                        var (quot, rem) = IsMod(p.Op) ? (s.Dst, p.Dst) : (p.Dst, s.Dst);
+                        _divModFuse[p] = (quot, rem);
+                        _divModSkip.Add(s);
+                    }
+                    break;   // this primary is resolved (paired, or a blocking divmod hit)
+                }
+
+                // Only a constrained set of side-effect-free, control-flow-free instructions
+                // may sit between the pair, and none may rewrite the dividend or divisor.
+                if (!IsFusionTransparent(inst)
+                    || TouchesVal(inst, p.Src1, read: false)
+                    || TouchesVal(inst, p.Src2, read: false))
+                    break;
+            }
+        }
+    }
+
+    // Instructions allowed between a fused divmod pair: pure data ops with no control flow
+    // and no opaque memory/register clobber. A CALL, jump, label, return, indirect store,
+    // or anything unrecognised ends the search (conservative).
+    private static bool IsFusionTransparent(Instruction inst) => inst switch
+    {
+        // DebugLine is a source-line marker with no register/memory/control effect; it sits
+        // between two statements (e.g. `hi = x // k` and `lo = x % k`) and must be skipped so
+        // the divmod pair is still recognized — otherwise the fusion only fired for same-
+        // statement pairs like the divmod() builtin.
+        DebugLine => true,
+        Binary or Unary or Copy or Bitcast or ArrayStore or ArrayLoad or ArrayLoadFlash
+            or BytearrayLoad or FlashLoadPtr or BitCheck => true,
+        _ => false,
+    };
+
+    // Conservative read/write test for the scalar Val v. Writes: the instruction's
+    // destination/target equals v. Reads: v appears as a source operand. ArrayStore
+    // writes array memory (never a scalar Val), so it only reads. Unhandled cases fall
+    // through to false here because IsFusionTransparent already gates the instruction set.
+    private static bool TouchesVal(Instruction inst, Val v, bool read)
+    {
+        if (read)
+            return inst switch
+            {
+                Binary x => Equals(x.Src1, v) || Equals(x.Src2, v),
+                Unary x => Equals(x.Src, v),
+                Copy x => Equals(x.Src, v),
+                Bitcast x => Equals(x.Src, v),
+                ArrayStore x => Equals(x.Index, v) || Equals(x.Src, v),
+                ArrayLoad x => Equals(x.Index, v),
+                ArrayLoadFlash x => Equals(x.Index, v),
+                BytearrayLoad x => Equals(x.Index, v),
+                FlashLoadPtr x => Equals(x.Ptr, v) || Equals(x.Index, v),
+                BitCheck x => Equals(x.Source, v),
+                _ => false,
+            };
+        return inst switch
+        {
+            Binary x => Equals(x.Dst, v),
+            Unary x => Equals(x.Dst, v),
+            Copy x => Equals(x.Dst, v),
+            Bitcast x => Equals(x.Dst, v),
+            ArrayLoad x => Equals(x.Dst, v),
+            ArrayLoadFlash x => Equals(x.Dst, v),
+            BytearrayLoad x => Equals(x.Dst, v),
+            FlashLoadPtr x => Equals(x.Dst, v),
+            BitCheck x => Equals(x.Dst, v),
+            _ => false,
+        };
+    }
+
+    // Emits one division for a fused divide/modulo pair and stores both results.
+    // 16-bit (__div16): quotient in R24:R25, remainder in R26:R27 — stash the remainder in
+    // R21:R20 (the divisor R18:R19 is dead) so storing the quotient (which may use X=R26:R27)
+    // cannot clobber it. 8-bit (__div8): quotient in R24, remainder in R25 — stash the
+    // remainder in R19 (divisor hi byte, unused for 8-bit) before storing the quotient.
+    private void EmitFusedDivMod(Binary primary, Val quotDst, Val remDst)
+    {
+        var opType = DivModOpType(primary);     // unsigned, gated to 8- or 16-bit in DetectDivModFusions
+        LoadIntoReg(primary.Src1, "R24", opType);
+        LoadIntoReg(primary.Src2, "R18", opType);
+        if (opType.SizeOf() == 2)
+        {
+            Emit("CALL", "__div16");             // R24:R25 = quotient, R26:R27 = remainder
+            Emit("MOVW", "R20", "R26");          // stash remainder in R21:R20
+            StoreRegInto("R24", quotDst, opType);
+            Emit("MOVW", "R24", "R20");          // remainder -> R24:R25
+            StoreRegInto("R24", remDst, opType);
+        }
+        else
+        {
+            Emit("CALL", "__div8");              // R24 = quotient, R25 = remainder
+            Emit("MOV", "R19", "R25");           // stash remainder (R19 = divisor hi, dead at 8-bit)
+            StoreRegInto("R24", quotDst, opType);
+            Emit("MOV", "R24", "R19");           // remainder -> R24
+            StoreRegInto("R24", remDst, opType);
+        }
+    }
+
+    // Detects the byte-pack idiom -- result = (hi << 8) <op> lo, op in {Add, BitOr} -- in a
+    // single basic block and records the fusion. The shift's destination must be a 16-bit
+    // value used only by the combine; the other combine operand (lo) must be a byte (so its
+    // value lands entirely in the low byte with no carry/overlap). Both operand orders of a
+    // commutative combine are handled. Between the two ops nothing may rewrite hi or lo, the
+    // shift's result must stay untouched, and no control flow may intervene.
+    private void DetectBytePackFusions(Function func)
+    {
+        _bytePackFuse.Clear();
+        _bytePackSkip.Clear();
+        var body = func.Body;
+
+        // tmp is safe to drop only if the combine is its sole reader.
+        int UsesOf(Val v)
+        {
+            int c = 0;
+            foreach (var ins in body)
+                if (TouchesVal(ins, v, read: true)) c++;
+            return c;
+        }
+
+        for (int i = 0; i < body.Count; i++)
+        {
+            if (body[i] is not Binary sh || sh.Op != IrBinOp.LShift) continue;
+            if (sh.Src2 is not Constant { Value: 8 }) continue;
+            if (GetValType(sh.Dst).SizeOf() != 2) continue;          // shift result is 16-bit
+            Val tmp = sh.Dst;
+
+            for (int j = i + 1; j < body.Count; j++)
+            {
+                var inst = body[j];
+
+                if (inst is Binary cmb && cmb.Op is IrBinOp.Add or IrBinOp.BitOr
+                    && GetValType(cmb.Dst).SizeOf() == 2)
+                {
+                    Val? lo = Equals(cmb.Src1, tmp) ? cmb.Src2
+                            : Equals(cmb.Src2, tmp) ? cmb.Src1 : null;
+                    if (lo != null && GetValType(lo).SizeOf() == 1 && UsesOf(tmp) == 1)
+                    {
+                        bool clean = true;
+                        for (int k = i + 1; k < j && clean; k++)
+                            if (TouchesVal(body[k], tmp, read: true)
+                                || TouchesVal(body[k], sh.Src1, read: false)
+                                || TouchesVal(body[k], lo, read: false))
+                                clean = false;
+                        if (clean)
+                        {
+                            _bytePackFuse[cmb] = (sh.Src1, lo);
+                            _bytePackSkip.Add(sh);
+                        }
+                    }
+                    break;   // tmp's combine resolved
+                }
+
+                if (!IsFusionTransparent(inst)
+                    || TouchesVal(inst, tmp, read: true)
+                    || TouchesVal(inst, sh.Src1, read: false))
+                    break;
+            }
+        }
+    }
+
+    // Emits result = (hi << 8) | lo as a direct byte placement: low byte = lo, high byte =
+    // the low byte of hi (matching a 16-bit shift-by-8). hi -> R25 first so loading lo into
+    // R24 cannot clobber it (neither byte source is ever homed in the R24/R25 scratch pair).
+    private void EmitBytePack(Binary combine, Val hi, Val lo)
+    {
+        LoadIntoReg(hi, "R25", DataType.UINT8);
+        LoadIntoReg(lo, "R24", DataType.UINT8);
+        StoreRegInto("R24", combine.Dst, GetValType(combine.Dst));
+    }
+
     private void CompileBinary(Binary b)
     {
+        if (_divModSkip.Contains(b)) return;                 // folded into its paired __div16
+        if (_divModFuse.TryGetValue(b, out var pair))
+        {
+            EmitFusedDivMod(b, pair.Quot, pair.Rem);
+            return;
+        }
+        if (_bytePackSkip.Contains(b)) return;               // dead `hi << 8`, folded into the pack
+        if (_bytePackFuse.TryGetValue(b, out var bp))
+        {
+            EmitBytePack(b, bp.Hi, bp.Lo);
+            return;
+        }
+
         DataType type = GetValType(b.Dst);
         // Delegate float operations to soft-float routines.
         if (type == DataType.FLOAT
@@ -1732,6 +2417,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             CompileFloatBinary(b);
             return;
         }
+
+        // Destination-targeted in-place fast path (8-bit reg-reg / immediate arithmetic):
+        // compute the result directly in dst's home register, skipping the R24 stage and
+        // the store-back (and the src1 load when dst == src1). Falls back to the staged
+        // path below when AVR register classes or the operand shape don't permit it.
+        if (TryCompileBinaryInPlace(b)) return;
         // For Div/Mod and shift ops the source may be wider than the destination
         // (e.g. uint16 >> 8 → uint8 must operate as 16-bit to read the high byte).
         var src1Type = GetValType(b.Src1);
@@ -1772,14 +2463,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                         int byteShift = val / 8;
                         int bitShift  = val % 8;
                         bool s32 = IsSignedType(type);
+                        // Sign-fill byte for the bytes vacated by a whole-byte shift (0xFF if the
+                        // value is negative, else 0x00). Computed from the MSB R23 before the moves
+                        // overwrite it; R26 is scratch in the constant-operand path. Without this a
+                        // signed >> by 8..31 shifts in zeros (logical) instead of the sign.
+                        if (s32 && byteShift >= 1) { Emit("CLR","R26"); Emit("SBRC","R23","7"); Emit("COM","R26"); }
                         if (byteShift >= 4)
                         {
-                            if (s32) { Emit("MOV","R24","R23"); Emit("LSL","R24"); Emit("SBC","R24","R24"); Emit("MOV","R25","R24"); Emit("MOV","R22","R24"); Emit("MOV","R23","R24"); }
+                            if (s32) { Emit("MOV","R24","R26"); Emit("MOV","R25","R26"); Emit("MOV","R22","R26"); Emit("MOV","R23","R26"); }
                             else { Emit("CLR","R24"); Emit("CLR","R25"); Emit("CLR","R22"); Emit("CLR","R23"); }
                         }
-                        else if (byteShift == 3) { Emit("MOV","R24","R23"); Emit("CLR","R25"); Emit("CLR","R22"); Emit("CLR","R23"); }
-                        else if (byteShift == 2) { Emit("MOV","R24","R22"); Emit("MOV","R25","R23"); Emit("CLR","R22"); Emit("CLR","R23"); }
-                        else if (byteShift == 1) { Emit("MOV","R24","R25"); Emit("MOV","R25","R22"); Emit("MOV","R22","R23"); Emit("CLR","R23"); }
+                        else if (byteShift == 3) { Emit("MOV","R24","R23"); if (s32) { Emit("MOV","R25","R26"); Emit("MOV","R22","R26"); Emit("MOV","R23","R26"); } else { Emit("CLR","R25"); Emit("CLR","R22"); Emit("CLR","R23"); } }
+                        else if (byteShift == 2) { Emit("MOV","R24","R22"); Emit("MOV","R25","R23"); if (s32) { Emit("MOV","R22","R26"); Emit("MOV","R23","R26"); } else { Emit("CLR","R22"); Emit("CLR","R23"); } }
+                        else if (byteShift == 1) { Emit("MOV","R24","R25"); Emit("MOV","R25","R22"); Emit("MOV","R22","R23"); if (s32) Emit("MOV","R23","R26"); else Emit("CLR","R23"); }
                         for (int i = 0; i < bitShift; i++)
                         {
                             if (s32) Emit("ASR","R23"); else Emit("LSR","R23");
@@ -1883,10 +2579,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                         bool s16 = IsSignedType(opType);
                         if (byteShift >= 2)
                         {
-                            if (s16) { Emit("MOV","R24","R25"); Emit("LSL","R24"); Emit("SBC","R24","R24"); Emit("CLR","R25"); }
+                            // Shift >= 16: result is all sign bits. SBC R24,R24 leaves 0xFF/0x00
+                            // from carry; both bytes must take it (a signed -1 is 0xFFFF, not 0x00FF).
+                            if (s16) { Emit("MOV","R24","R25"); Emit("LSL","R24"); Emit("SBC","R24","R24"); Emit("MOV","R25","R24"); }
                             else { Emit("CLR","R24"); Emit("CLR","R25"); }
                         }
-                        else if (byteShift == 1) { Emit("MOV","R24","R25"); Emit("CLR","R25"); }
+                        else if (byteShift == 1)
+                        {
+                            Emit("MOV","R24","R25");          // low byte := old high byte
+                            // Vacated high byte must be the sign extension (0xFF if negative),
+                            // not zero — otherwise a signed >> by 8..15 shifts in zeros (logical).
+                            if (s16) { Emit("CLR","R25"); Emit("SBRC","R24","7"); Emit("COM","R25"); }
+                            else Emit("CLR","R25");
+                        }
                         for (int i = 0; i < bitShift; i++)
                         {
                             if (s16) Emit("ASR","R25"); else Emit("LSR","R25");
@@ -1909,15 +2614,31 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
         }
 
-        if (!usedImm) LoadIntoReg(b.Src2, "R18", opType);
+        // Second operand. When it already lives in a home register of the matching
+        // width, use that register pair directly as the ALU operand instead of staging
+        // it through R18 — this drops one MOV per reg-reg arithmetic op (the codegen's
+        // "stage-through-R18" pattern is otherwise pure overhead for register-resident
+        // operands). Only for non-widening reg-reg ops; variable shifts clobber R18 and
+        // 32-bit values have no register homes, so both keep staging.
+        string s2lo = "R18", s2hi = "R19";
+        if (!usedImm)
+        {
+            bool coalesceable = !is32
+                && b.Op is IrBinOp.Add or IrBinOp.Sub or IrBinOp.BitAnd
+                        or IrBinOp.BitOr or IrBinOp.BitXor
+                && GetValType(b.Src2).SizeOf() == opType.SizeOf();
+            string? home = coalesceable ? OperandHomeReg(b.Src2) : null;
+            if (home != null) { s2lo = home; s2hi = GetHighReg(home); }
+            else LoadIntoReg(b.Src2, "R18", opType);
+        }
 
         switch (b.Op)
         {
             case IrBinOp.Add:
                 if (!usedImm)
                 {
-                    Emit("ADD", "R24", "R18");
-                    if (is16 || is32) Emit("ADC", "R25", "R19");
+                    Emit("ADD", "R24", s2lo);
+                    if (is16 || is32) Emit("ADC", "R25", s2hi);
                     if (is32) { Emit("ADC", "R22", "R20"); Emit("ADC", "R23", "R21"); }
                 }
 
@@ -1925,8 +2646,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case IrBinOp.Sub:
                 if (!usedImm)
                 {
-                    Emit("SUB", "R24", "R18");
-                    if (is16 || is32) Emit("SBC", "R25", "R19");
+                    Emit("SUB", "R24", s2lo);
+                    if (is16 || is32) Emit("SBC", "R25", s2hi);
                     if (is32) { Emit("SBC", "R22", "R20"); Emit("SBC", "R23", "R21"); }
                 }
 
@@ -1934,8 +2655,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case IrBinOp.BitAnd:
                 if (!usedImm)
                 {
-                    Emit("AND", "R24", "R18");
-                    if (is16 || is32) Emit("AND", "R25", "R19");
+                    Emit("AND", "R24", s2lo);
+                    if (is16 || is32) Emit("AND", "R25", s2hi);
                     if (is32) { Emit("AND", "R22", "R20"); Emit("AND", "R23", "R21"); }
                 }
 
@@ -1943,15 +2664,15 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case IrBinOp.BitOr:
                 if (!usedImm)
                 {
-                    Emit("OR", "R24", "R18");
-                    if (is16 || is32) Emit("OR", "R25", "R19");
+                    Emit("OR", "R24", s2lo);
+                    if (is16 || is32) Emit("OR", "R25", s2hi);
                     if (is32) { Emit("OR", "R22", "R20"); Emit("OR", "R23", "R21"); }
                 }
 
                 break;
             case IrBinOp.BitXor:
-                Emit("EOR", "R24", "R18");
-                if (is16 || is32) Emit("EOR", "R25", "R19");
+                Emit("EOR", "R24", s2lo);
+                if (is16 || is32) Emit("EOR", "R25", s2hi);
                 if (is32) { Emit("EOR", "R22", "R20"); Emit("EOR", "R23", "R21"); }
                 break;
             case IrBinOp.LShift:
@@ -2003,7 +2724,13 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
                 break;
             case IrBinOp.Mul:
-                if (is16)
+                if (is32)
+                {
+                    // 32-bit product (low 32 bits) via the runtime routine; the inline 8-bit
+                    // fallthrough below would otherwise multiply only the low bytes.
+                    Emit("CALL", "__mul32");
+                }
+                else if (is16)
                 {
                     // 16x16 -> 16-bit product (low 16 bits only).
                     // a = R25:R24 (hi:lo), b = R19:R18 (hi:lo).
@@ -2047,14 +2774,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 break;
             case IrBinOp.Div:
             case IrBinOp.FloorDiv:
-                if (is32) Emit("CALL", "__div32");
-                else if (is16) Emit("CALL", "__div16");
-                else Emit("CALL", "__div8");
+                Emit("CALL", DivModRoutine(false, is32, is16, IsSignedComparison(b.Src1, b.Src2)));
                 break;
             case IrBinOp.Mod:
-                if (is32) Emit("CALL", "__mod32");
-                else if (is16) Emit("CALL", "__mod16");
-                else Emit("CALL", "__mod8");
+                Emit("CALL", DivModRoutine(true, is32, is16, IsSignedComparison(b.Src1, b.Src2)));
                 break;
             case IrBinOp.Equal:
             {
@@ -2454,7 +3177,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     break;
                 }
                 case IrBinOp.Mul:
-                    if (is16)
+                    if (is32)
+                    {
+                        Emit("CALL", "__mul32");
+                    }
+                    else if (is16)
                     {
                         // a = R25:R24 (hi:lo), b = R19:R18 (hi:lo).
                         if (IsSignedType(type))
@@ -2495,14 +3222,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     break;
                 case IrBinOp.Div:
                 case IrBinOp.FloorDiv:
-                    if (is32) Emit("CALL", "__div32");
-                    else if (is16) Emit("CALL", "__div16");
-                    else Emit("CALL", "__div8");
+                    Emit("CALL", DivModRoutine(false, is32, is16, IsSignedComparison(aa.Target, aa.Operand)));
                     break;
                 case IrBinOp.Mod:
-                    if (is32) Emit("CALL", "__mod32");
-                    else if (is16) Emit("CALL", "__mod16");
-                    else Emit("CALL", "__mod8");
+                    Emit("CALL", DivModRoutine(true, is32, is16, IsSignedComparison(aa.Target, aa.Operand)));
                     break;
                 case IrBinOp.Equal:
                 case IrBinOp.NotEqual:
@@ -2549,9 +3272,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             var absBase = 0x0100 + baseOffset;
             Emit("LDI", "R30", $"low({absBase})");
             Emit("LDI", "R31", $"high({absBase})");
-            Emit("CLR", "R16"); // R16 = 0 (Clears carry, but we don't care yet)
             Emit("ADD", "R30", "R24"); // Add offset to Z low byte (Generates carry if overflow)
-            Emit("ADC", "R31", "R16"); // Add 0 + carry to Z high byte
+            Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
             Emit("LD", "R24", "Z");
             if (is16) Emit("LDD", "R25", "Z+1");
         }
@@ -2595,9 +3317,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             var absBase = 0x0100 + baseOffset;
             Emit("LDI", "R30", $"low({absBase})");
             Emit("LDI", "R31", $"high({absBase})");
-            Emit("CLR", "R16"); // R16 = 0
             Emit("ADD", "R30", "R24"); // Z_low = Z_low + offset (Sets Carry if overflow)
-            Emit("ADC", "R31", "R16"); // Z_high = Z_high + 0 + Carry
+            Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
             Emit("ST", "Z", "R18");
             if (is16) Emit("STD", "Z+1", "R19");
         }
@@ -2638,18 +3359,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         else if (bl.Index is Constant cIdx3)
         {
-            Emit("LDI", "R16", $"{cIdx3.Value}");
-            Emit("CLR", "R17");
-            Emit("ADD", "R30", "R16");
-            Emit("ADC", "R31", "R17");
+            // Scratch in R26 (X-low) + R1 (zero reg), never the R16/R17 the linear-scan
+            // allocator hands out -- so a register-allocated value survives this load.
+            Emit("LDI", "R26", $"{cIdx3.Value}");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R1");
             Emit("LD", "R24", "Z");
         }
         else
         {
-            LoadIntoReg(bl.Index, "R16");
-            Emit("CLR", "R17");
-            Emit("ADD", "R30", "R16");
-            Emit("ADC", "R31", "R17");
+            LoadIntoReg(bl.Index, "R26");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R1");
             Emit("LD", "R24", "Z");
         }
 
@@ -2694,18 +3415,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         else if (bs.Index is Constant cIdx3)
         {
-            Emit("LDI", "R16", $"{cIdx3.Value}");
-            Emit("CLR", "R17");
-            Emit("ADD", "R30", "R16");
-            Emit("ADC", "R31", "R17");
+            // Scratch in R26 (X-low) + R1 (zero reg), never the R16/R17 the linear-scan
+            // allocator hands out -- so a register-allocated value survives this store.
+            Emit("LDI", "R26", $"{cIdx3.Value}");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R1");
             Emit("ST", "Z", "R18");
         }
         else
         {
-            LoadIntoReg(bs.Index, "R16");
-            Emit("CLR", "R17");
-            Emit("ADD", "R30", "R16");
-            Emit("ADC", "R31", "R17");
+            LoadIntoReg(bs.Index, "R26");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R1");
             Emit("ST", "Z", "R18");
         }
     }
@@ -2822,6 +3543,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Emit("ADC", "R31", "R1");                 // propagate carry (R1 = 0 after MUL clears)
         Emit("LPM", "R24", "Z");                  // load byte from flash
         StoreRegInto("R24", alf.Dst, DataType.UINT8);
+    }
+
+    private void CompileFlashLoadPtr(FlashLoadPtr flp)
+    {
+        // Dst = flash[Ptr + Index] via LPM, where Ptr is a runtime 16-bit flash byte-address
+        // (e.g. a const[str] passed by reference into a non-@inline subroutine). Mirrors
+        // CompileArrayLoadFlash but with a register-held base instead of a fixed label.
+        LoadIntoReg(flp.Ptr, "R30", DataType.UINT16);  // Z = base flash byte-address
+        LoadIntoReg(flp.Index, "R24");                 // index -> R24 (8-bit)
+        Emit("ADD", "R30", "R24");                     // Z += index
+        Emit("ADC", "R31", "R1");                      // propagate carry (R1 == 0)
+        Emit("LPM", "R24", "Z");                       // load byte from flash
+        StoreRegInto("R24", flp.Dst, DataType.UINT8);
     }
 
     private void EmitFlashArrayPool(TextWriter os)
@@ -3070,6 +3804,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 ArrayLoad al        => IsV(varName, al.Index),
                 ArrayStore ast      => IsV(varName, ast.Index) || IsV(varName, ast.Src),
                 ArrayLoadFlash alf  => IsV(varName, alf.Index),
+                FlashLoadPtr flp    => IsV(varName, flp.Ptr) || IsV(varName, flp.Index),
                 BytearrayLoad bl    => bl.PtrName == varName || IsV(varName, bl.Index),
                 BytearrayStore bst  => bst.PtrName == varName || IsV(varName, bst.Index) || IsV(varName, bst.Src),
                 LoadIndirect li     => IsV(varName, li.SrcPtr),
@@ -3079,7 +3814,6 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 VirtualCall vc      => IsV(varName, vc.Self) || vc.Args.Any(a => IsV(varName, a)),
                 InlineAsm ia        => ia.Operands?.Any(a => IsV(varName, a)) ?? false,
                 SignalError se      => IsV(varName, se.Code),
-                RaiseExn re         => IsV(varName, re.Code),
                 GcAlloc ga          => IsV(varName, ga.Size),
                 _                   => false,
             };
@@ -3455,69 +4189,6 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             JsonSerializer.Serialize(entries, AvrVarMapJsonContext.Default.ListVarMapEntry));
     }
 
-    private void CompileTryBegin(TryBegin tb)
-    {
-        string jmpBufName = (tb.JmpBufVar as Variable)?.Name ?? "";
-        if (!_stackLayout.TryGetValue(jmpBufName, out int jmpBufOffset))
-            throw new Exception($"jmpbuf variable '{jmpBufName}' not found in stack layout");
-
-        int jmpBufAddr = 0x0100 + jmpBufOffset;
-        Emit("LDI", "R24", $"lo8({jmpBufAddr})");
-        Emit("LDI", "R25", $"hi8({jmpBufAddr})");
-
-        if (_stackLayout.TryGetValue("__pymcu_active_jmpbuf", out int activeOffset))
-        {
-            int activeAddr = 0x0100 + activeOffset;
-            Emit("STS", activeAddr.ToString(), "R24");
-            Emit("STS", (activeAddr + 1).ToString(), "R25");
-        }
-
-        Emit("CALL", "setjmp");
-
-        string exnCodeName = (tb.ExnCodeVar as Variable)?.Name ?? "";
-        if (_stackLayout.TryGetValue(exnCodeName, out int exnOffset))
-        {
-            if (exnOffset < 64)
-                Emit("STD", $"Y+{exnOffset}", "R24");
-            else
-            {
-                int exnAddr = 0x0100 + exnOffset;
-                Emit("STS", exnAddr.ToString(), "R24");
-            }
-        }
-
-        Emit("TST", "R24");
-        EmitBranch("BRNE", tb.CatchLabel);
-    }
-
-    private void CompileRaiseExn(RaiseExn re)
-    {
-        if (re.Code is Constant c) _usedExnCodes.Add(c.Value);
-        LoadIntoReg(re.Code, "R22", DataType.UINT8);
-        Emit("CLR", "R23");
-
-        if (_stackLayout.TryGetValue("__pymcu_active_jmpbuf", out int activeOffset))
-        {
-            int activeAddr = 0x0100 + activeOffset;
-            Emit("LDS", "R24", activeAddr.ToString());
-            Emit("LDS", "R25", (activeAddr + 1).ToString());
-        }
-        else
-        {
-            Emit("LDI", "R24", "0");
-            Emit("LDI", "R25", "0");
-        }
-
-        string noHandlerLabel = $"L_no_handler_{_labelCounter++}";
-        Emit("MOV", "R16", "R24");
-        Emit("OR", "R16", "R25");
-        Emit("TST", "R16");
-        Emit("BREQ", noHandlerLabel);
-        Emit("CALL", "longjmp");
-        EmitLabel(noHandlerLabel);
-        Emit("CALL", "__pymcu_unhandled_exn");
-    }
-
     // -------------------------------------------------------------------------
     // T-flag error propagation (ABI interna PyMCU — reemplaza SJLJ)
     // -------------------------------------------------------------------------
@@ -3531,6 +4202,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // Load the error code into R22 so the catch dispatcher can identify the type.
         if (se.Code is not Constant { Value: 0 })
             LoadIntoReg(se.Code, "R22", DataType.UINT8);
+
+        if (se.CatchLabel != null)
+        {
+            // Local raise: the `raise` is lexically inside a `try` body in this same
+            // function. Deliver the error code straight to the local catch dispatcher.
+            // The dispatcher discriminates on R22 alone, so we neither set T (no caller
+            // is involved) nor RET — we just jump. Leaving T untouched means a locally
+            // caught raise can never leak an error to a later call site or the caller.
+            // JMP (vs RJMP) is range-safe; the linker relaxes it to RJMP under -mrelax.
+            Emit("JMP", se.CatchLabel);
+            return;
+        }
 
         Emit("SET");   // BSET 6 — T = 1 (signal error to caller)
 

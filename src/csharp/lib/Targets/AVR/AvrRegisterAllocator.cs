@@ -32,6 +32,27 @@ public static class AvrRegisterAllocator
         var useCount = new Dictionary<string, int>();
         var varTypes = new Dictionary<string, DataType>();
 
+        // First pass: collect names that MUST live in SRAM because some codegen
+        // path resolves them by address rather than through _regLayout. Registerizing
+        // any of these would desynchronize address-based and register-based accesses.
+        //  - GcRoot/GcUnroot push the variable's absolute SRAM address onto the shadow
+        //    stack (GetGcRefSramAddr throws if the name is not in the stack layout).
+        //  - Bytearray / array base names are dereferenced via their SRAM offset.
+        var unsafeNames = new HashSet<string>();
+        foreach (var instr in program.Functions.SelectMany(func => func.Body))
+        {
+            switch (instr)
+            {
+                case GcRoot gr when NameOf(gr.Var) is { } gn: unsafeNames.Add(gn); break;
+                case GcUnroot gu when NameOf(gu.Var) is { } un: unsafeNames.Add(un); break;
+                case BytearrayLoad bl: unsafeNames.Add(bl.PtrName); break;
+                case BytearrayStore bs: unsafeNames.Add(bs.PtrName); break;
+                case ArrayLoad al: unsafeNames.Add(al.ArrayName); break;
+                case ArrayStore ast: unsafeNames.Add(ast.ArrayName); break;
+                case ArrayLoadFlash alf: unsafeNames.Add(alf.ArrayName); break;
+            }
+        }
+
         foreach (var instr in program.Functions.SelectMany(func => func.Body))
         {
             switch (instr)
@@ -108,18 +129,46 @@ public static class AvrRegisterAllocator
                     CountVal(ast.Index);
                     CountVal(ast.Src);
                     break;
+                // IndirectCall/GcAlloc were absent, so a VARIABLE that is an indirect call's
+                // result/args/target or a GC allocation's result/size was never counted and so
+                // never won an R2-R15 home (it fell to a stack slot). Counting them lets such
+                // variables be register-homed; R2-R15 are callee-saved, so they survive the call.
+                case IndirectCall ic:
+                    CountVal(ic.FuncAddr);
+                    foreach (var a in ic.Args) CountVal(a);
+                    CountVal(ic.Dst);
+                    break;
+                case GcAlloc ga:
+                    CountVal(ga.Size);
+                    CountVal(ga.Dst);
+                    break;
             }
         }
 
-        // Collect eligible: only UINT8/UINT16 (1-2 bytes). Exclude UINT32+ because the
-        // global allocator has no callee-save/restore, so multi-byte values spanning a
-        // function call boundary would be clobbered by the callee's own register usage.
+        // Collect eligible: only UINT8/UINT16/INT8/INT16 (1-2 bytes). Exclude:
+        //  - UINT32+/FLOAT (multi-byte; not handled by this fixed R4-R15 layout here).
+        //  - GC_REF/FUNCREF pointers (need an address / shadow-stack handling).
+        //  - unsafe names that some path resolves by SRAM address (see first pass).
+        // Note: R4-R15 are NEVER used as codegen scratch, and this allocator assigns a
+        // globally-unique register per name. So a value in R4-R15 survives any call
+        // (the callee's own named vars get different registers; leaf scratch is R16-R27).
+        // That invariant — not a DotCount heuristic — is what makes cross-call safety hold,
+        // so inline-expanded locals (dotted names) are eligible too.
         var sorted = useCount
-            .Where(kv => varTypes.TryGetValue(kv.Key, out var dt) && SizeOfType(dt) <= 2)
-            .OrderByDescending(kv => kv.Value).ToList();
+            .Where(kv => varTypes.TryGetValue(kv.Key, out var dt)
+                         && SizeOfType(dt) <= 2
+                         && dt != DataType.GC_REF && dt != DataType.FUNCREF
+                         && !unsafeNames.Contains(kv.Key))
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal).ToList();
 
         var result = new Dictionary<string, string>();
-        var nextReg = 4;
+        // R2-R15 are the callee-saved home pool. R2/R3 are otherwise unused by the codegen
+        // (which stages through R0/R1 and R16-R27) and by the math runtime, and — like R4-R15
+        // — the allocator's unique-per-name guarantee keeps an ISR's homes disjoint from main's,
+        // so they need no context-save. Including them gives two more register homes program-wide,
+        // displacing the lowest-priority spills (each frame access is a 2-word LDD/STD).
+        var nextReg = 2;
 
         foreach (var (name, _) in sorted)
         {
@@ -132,12 +181,16 @@ public static class AvrRegisterAllocator
 
         return result;
 
-        static int DotCount(string s) => s.Count(c => c == '.');
+        static string? NameOf(Val val) => val switch
+        {
+            Variable v  => v.Name,
+            Temporary t => t.Name,
+            _           => null,
+        };
 
         void CountVal(Val val)
         {
             if (val is not Variable v) return;
-            if (DotCount(v.Name) >= 2) return;
             useCount.TryGetValue(v.Name, out int count);
             useCount[v.Name] = count + 1;
             varTypes[v.Name] = v.Type;

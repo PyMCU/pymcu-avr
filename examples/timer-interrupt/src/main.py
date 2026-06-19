@@ -4,7 +4,9 @@
 #   - Timer(n, prescaler): zero-cost timer ZCA, prescaler folded at compile time
 #   - Timer.irq(handler): registers handler at the OVF vector via compile_isr;
 #     no @interrupt decorator or manual TIMSK/SEI writes needed
-#   - GPIOR0 atomic flag pattern: ISR sets bit, main loop clears and acts
+#   - ISR<->main signaling through a plain module global: detected as
+#     ISR-shared (volatile semantics) and auto-promoted to GPIOR0, so the
+#     flag accesses compile to single-cycle OUT/IN -- no manual GPIOR idiom
 #
 # Hardware: Arduino Uno
 #   - LED on PB5 (Arduino pin 13, built-in) -- blinks every ~1 second
@@ -14,15 +16,19 @@
 #   overflow period = 65536 * 256 / 16_000_000 ~= 1.049 s
 #
 from pymcu.types import uint8
-from pymcu.chips.atmega328p import GPIOR0
 from pymcu.hal.gpio import Pin
 from pymcu.hal.uart import UART
 from pymcu.hal.timer import Timer
 
+# Set by the ISR, polled and cleared by main. ISR-shared -> auto-promoted
+# to GPIOR0; starts at 0 on reset.
+tick: uint8 = 0
+
 
 def on_overflow():
-    # Minimal ISR: set atomic flag using SBI (no register corruption)
-    GPIOR0[0] = 1
+    # Minimal ISR: set the shared flag (compiles to OUT on GPIOR0)
+    global tick
+    tick = 1
 
 
 def main():
@@ -34,12 +40,11 @@ def main():
     timer = Timer(1, 256)
     timer.irq(on_overflow)
 
-    GPIOR0[0] = 0
     uart.println("TIMER1 IRQ BLINK")
 
     while True:
-        if GPIOR0[0] == 1:
-            GPIOR0[0] = 0
+        if tick == 1:
+            tick = 0
             led.toggle()
             uart.write('T')
             uart.write('\n')

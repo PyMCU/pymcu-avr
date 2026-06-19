@@ -7,19 +7,26 @@
 # TIMER1_COMPA vector and enables OCIE1A + SEI automatically.
 # No @interrupt decorator or manual TIMSK/SEI writes needed.
 #
+# The ISR signals main through a plain module global: detected as
+# ISR-shared (volatile semantics) and auto-promoted to GPIOR0.
+#
 # Hardware: Arduino Uno
 #   - LED on PB5 (built-in, pin 13)
 #   - UART TX 9600 baud: sends "CTC\n" on boot, "C\n" on each 1 Hz tick
 #
 from pymcu.types import uint8
-from pymcu.chips.atmega328p import GPIOR0
 from pymcu.hal.gpio import Pin
 from pymcu.hal.uart import UART
 from pymcu.hal.timer import Timer
 
+# Set by the ISR, polled and cleared by main. ISR-shared -> auto-promoted
+# to GPIOR0; starts at 0 on reset.
+tick: uint8 = 0
+
 
 def timer1_compa_isr():
-    GPIOR0[0] = 1
+    global tick
+    tick = 1
 
 
 def main():
@@ -30,13 +37,11 @@ def main():
     t.set_compare(62499)
     t.irq(timer1_compa_isr, Timer.IRQ_COMPA)   # places ISR at TIMER1_COMPA vector
 
-    GPIOR0[0] = 0
-
     uart.println("CTC")
 
     while True:
-        if GPIOR0[0] == 1:
-            GPIOR0[0] = 0
+        if tick == 1:
+            tick = 0
             led.toggle()
             uart.write('C')
             uart.write('\n')

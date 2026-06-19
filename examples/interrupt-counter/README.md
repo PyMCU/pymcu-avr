@@ -6,7 +6,8 @@ External interrupt (INT0) press counter.
 
 `btn.irq(Pin.IRQ_FALLING, int0_isr)` configures the INT0 hardware interrupt on
 **PD2** (falling edge), enables the interrupt mask, and sets `SEI` — no manual
-`EICRA`/`EIMSK` writes. The ISR sets an atomic flag in `GPIOR0`; the main loop
+`EICRA`/`EIMSK` writes. The ISR sets a plain module global — the compiler
+detects it as ISR-shared and auto-promotes it to `GPIOR0` — and the main loop
 clears it, increments a counter, toggles the LED, and sends the raw count over
 UART.
 
@@ -20,7 +21,7 @@ UART.
 ## Key concepts
 
 - `Pin.irq()` for hardware external interrupts
-- `GPIOR0` SBI/CBI atomic flag pattern (ISR sets, main clears)
+- ISR-shared plain global (ISR sets, main clears) — auto-promoted to `GPIOR0`, compiles to SBI/CBI/IN/OUT
 
 ## Build & flash
 

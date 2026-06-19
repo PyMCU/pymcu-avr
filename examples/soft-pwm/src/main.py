@@ -1,6 +1,7 @@
 # ATmega328P: Software PWM via Timer0 overflow ISR + duty-cycle counter
 #
-# Timer0 OVF ISR (~4.1ms at 16MHz/1024) sets GPIOR0[0] flag.
+# Timer0 OVF ISR (~4.1ms at 16MHz/1024) sets a plain module global --
+# detected as ISR-shared (volatile semantics) and auto-promoted to GPIOR0.
 # Main loop maintains a 0-99 counter; while counter < duty the LED is on.
 # Duty cycle bounces: 0 -> 25 -> 50 -> 75 -> 100 -> 75 -> 50 -> 25 -> 0.
 # Each step lasts 100 timer ticks (~0.41 s).
@@ -10,14 +11,18 @@
 #   UART TX on PD1 at 9600 baud
 #
 from pymcu.types import uint8
-from pymcu.chips.atmega328p import GPIOR0
 from pymcu.hal.gpio import Pin
 from pymcu.hal.uart import UART
 from pymcu.hal.timer import Timer
 
+# Set by the ISR, polled and cleared by main. ISR-shared -> auto-promoted
+# to GPIOR0; starts at 0 on reset.
+tick: uint8 = 0
+
 
 def timer0_ovf_isr():
-    GPIOR0[0] = 1
+    global tick
+    tick = 1
 
 
 # Returns the duty cycle percentage (0-100) for a given bounce phase (0-7).
@@ -40,7 +45,6 @@ def main():
     timer = Timer(0, 1024)
     timer.irq(timer0_ovf_isr)
 
-    GPIOR0[0] = 0
     uart.println("SOFT PWM")
 
     counter:    uint8 = 0
@@ -49,8 +53,8 @@ def main():
     phase:      uint8 = 0
 
     while True:
-        if GPIOR0[0] == 1:
-            GPIOR0[0] = 0
+        if tick == 1:
+            tick = 0
 
             counter = counter + 1
             if counter >= 100:

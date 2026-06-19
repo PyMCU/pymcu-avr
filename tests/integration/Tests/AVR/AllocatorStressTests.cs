@@ -1,0 +1,228 @@
+using FluentAssertions;
+using NUnit.Framework;
+using Avr8Sharp.TestKit.Boards;
+
+namespace PyMCU.IntegrationTests.Tests.AVR;
+
+/// <summary>
+/// Property / differential tests for the AVR register allocator and codegen.
+///
+/// Each seed (see <see cref="AllocStressProgram"/>) generates a register-pressure-heavy
+/// program whose final variable values are also computed in C# with PyMCU's exact
+/// fixed-width semantics. The program is compiled, simulated, and its printed decimals are
+/// compared against that oracle. A clobbered/mis-homed register, a dropped call-spanning
+/// value, or any allocation bug shows up as a mismatch — the safety net for the planned
+/// register-allocator redesign (codegen backlog A17/A31): run this before and after, the
+/// values must stay identical.
+/// </summary>
+[TestFixture]
+public class AllocatorStressTests
+{
+    // A spread of fixed seeds: deterministic and reproducible. Each is a distinct program;
+    // builds are content-hash cached. Keep the count modest — each compiles + simulates.
+    private static readonly int[] Seeds = { 1, 2, 3, 7, 13, 42, 99, 123, 777, 2024 };
+
+    [TestCaseSource(nameof(Seeds))]
+    public void GeneratedProgram_MatchesReferenceSemantics(int seed)
+    {
+        var prog = AllocStressProgram.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+
+        // Run to the "GO" banner, then inject the runtime seed byte the program reads with
+        // read_blocking(). Every value derives from it, so nothing constant-folds.
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+
+        // "GO\n" banner + one decimal per printed value, each "<n>\n".
+        int wantLines = prog.Expected.Count + 1;
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= wantLines, maxMs: 4000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: simulated output must match the fixed-width reference.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
+    // Interrupt-safety: a Timer2 overflow ISR fires repeatedly while main runs a
+    // register-pressure computation. A correct context save/restore leaves main's printed
+    // values equal to the ISR-free reference. This is the path the callee-save allocator
+    // redesign (A33) must not break — an ISR that fails to preserve a register main has live
+    // would diverge here.
+    [TestCaseSource(nameof(Seeds))]
+    public void IsrDoesNotPerturbMain(int seed)
+    {
+        var prog = IsrSafetyProgram.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: a Timer2 ISR firing mid-computation must not perturb main's values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
+    // Heavy sweep for validating the register-allocator redesign: run before and after the
+    // change, the results must be identical. [Explicit] so it does not slow the normal CI run
+    // (each case compiles + simulates). Invoke with:
+    //   dotnet test --filter "FullyQualifiedName~AllocatorStressTests.Sweep"
+    [Test, Explicit("heavy: run on demand to validate an allocator/codegen change")]
+    public void Sweep()
+    {
+        var failures = new List<string>();
+        for (int seed = 1; seed <= 100; seed++)
+        {
+            var prog = AllocStressProgram.Generate(seed);
+            var hex = PymcuCompiler.BuildSource(prog.Source);
+            var uno = new ArduinoUnoSimulation();
+            uno.WithHex(hex);
+            uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+            uno.Serial.InjectByte(prog.InputByte);
+            uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 4000);
+            var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+            if (!got.SequenceEqual(prog.Expected))
+                failures.Add($"seed {seed}: expected [{string.Join(",", prog.Expected)}] got [{string.Join(",", got)}]");
+        }
+        failures.Should().BeEmpty($"{failures.Count} seed(s) miscompiled:\n{string.Join("\n", failures)}");
+    }
+
+    // Heavy interrupt-safety sweep (100 seeds). [Explicit] like Sweep.
+    [Test, Explicit("heavy: run on demand to validate an ISR/allocator change")]
+    public void IsrSweep()
+    {
+        var failures = new List<string>();
+        for (int seed = 1; seed <= 100; seed++)
+        {
+            var prog = IsrSafetyProgram.Generate(seed);
+            var hex = PymcuCompiler.BuildSource(prog.Source);
+            var uno = new ArduinoUnoSimulation();
+            uno.WithHex(hex);
+            uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+            uno.Serial.InjectByte(prog.InputByte);
+            uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+            var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+            if (!got.SequenceEqual(prog.Expected))
+                failures.Add($"seed {seed}: expected [{string.Join(",", prog.Expected)}] got [{string.Join(",", got)}]");
+        }
+        failures.Should().BeEmpty($"{failures.Count} seed(s) had an ISR perturb main:\n{string.Join("\n", failures)}");
+    }
+
+    // Z-pointer interrupt safety: main does runtime-indexed array reads (address materialized
+    // into Z = R30:R31) while an ISR that also indexes an array fires. The ISR clobbers Z; the
+    // context-save must preserve it or main's in-progress array address is corrupted. Exercises
+    // the R30/R31 part of the caller-clobbered save set.
+    [TestCaseSource(nameof(Seeds))]
+    public void IsrArrayDoesNotPerturbMain(int seed)
+    {
+        var prog = IsrArrayProgram.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: an array-indexing ISR (Z pointer) must not perturb main's values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
+    // 16-bit interrupt safety: main holds a mix of uint8 and uint16 locals live across a loop
+    // while an ISR doing uint16 arithmetic fires. Adds the register-PAIR dimension — the ISR
+    // must preserve any 16-bit pair main holds, and 16-bit slots must not partially alias.
+    [TestCaseSource(nameof(Seeds))]
+    public void IsrU16DoesNotPerturbMain(int seed)
+    {
+        var prog = IsrU16Program.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: a uint16 ISR must not perturb main's 8/16-bit values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
+    // An ISR that makes a nested call (to a helper entered in interrupt context) while keeping
+    // a local live across that call. Validates that the ISR's whole call-tree gets a stack
+    // region disjoint from main, and that the ISR's call-spanning local survives the nested
+    // call — both independent of main's values, which must equal the ISR-free reference.
+    [TestCaseSource(nameof(Seeds))]
+    public void IsrWithNestedCallDoesNotPerturbMain(int seed)
+    {
+        var prog = IsrNestedCallProgram.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: an ISR making a nested call must not perturb main's values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
+    // Two simultaneous interrupt handlers (Timer0 + Timer2 overflow), each with its own
+    // locals, fire while main runs a register-pressure loop. Validates that the allocator
+    // gives each ISR a region disjoint from main AND from the other ISR (the per-ISR isrBase
+    // increment in StackAllocator) — an overlap between the two ISRs, or either with main,
+    // would perturb main's printed values.
+    [TestCaseSource(nameof(Seeds))]
+    public void TwoIsrsDoNotPerturbMain(int seed)
+    {
+        var prog = TwoIsrProgram.Generate(seed);
+        var hex = PymcuCompiler.BuildSource(prog.Source);
+
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(prog.InputByte);
+        uno.RunUntilSerial(uno.Serial, s => CountNewlines(s) >= prog.Expected.Count + 1, maxMs: 6000);
+
+        var got = ParseDecimalsAfterBanner(uno.Serial.Text, prog.Expected.Count);
+        got.Should().Equal(prog.Expected,
+            $"seed {seed}: two ISRs firing mid-computation must not perturb main's values.\n" +
+            $"--- program ---\n{prog.Source}\n--- serial ---\n{uno.Serial.Text}");
+    }
+
+    private static int CountNewlines(string s)
+    {
+        int n = 0;
+        foreach (var c in s) if (c == '\n') n++;
+        return n;
+    }
+
+    // Skips the "GO" banner, then reads the next `count` lines as decimals.
+    private static List<int> ParseDecimalsAfterBanner(string text, int count)
+    {
+        var lines = text.Replace("\r", "").Split('\n');
+        int start = Array.FindIndex(lines, l => l.Trim() == "GO");
+        var result = new List<int>();
+        for (int i = start + 1; i < lines.Length && result.Count < count; i++)
+        {
+            var t = lines[i].Trim();
+            if (t.Length == 0) continue;
+            if (int.TryParse(t, out int v)) result.Add(v);
+            else break;   // unexpected garbage — stop; the Equal assertion will report it
+        }
+        return result;
+    }
+}

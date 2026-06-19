@@ -25,7 +25,7 @@ button (**PD2**) toggle between a verbose and a compact UART display.
 ## Key concepts
 
 - Two simultaneous interrupt sources (Timer0 OVF + INT0)
-- `GPIOR0` bit flags coordinating ISRs and the main loop
+- ISR-shared plain globals coordinating ISRs and the main loop — auto-promoted to `GPIOR` registers
 - Min/max + EMA filtering
 
 ## Build & flash

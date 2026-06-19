@@ -11,7 +11,8 @@ Runs three simultaneous ISRs:
 - **TIMER0_OVF** — ~16.384 ms tick (61 ticks ≈ 1 second)
 
 The LED is on while running; elapsed seconds are sent over UART as a raw byte +
-newline. State is coordinated through `GPIOR0` bit flags.
+newline. Each ISR signals main through its own plain module global — all three
+are auto-promoted to `GPIOR0/1/2` by the compiler.
 
 ## Hardware
 
@@ -23,7 +24,7 @@ newline. State is coordinated through `GPIOR0` bit flags.
 ## Key concepts
 
 - Three concurrent interrupt sources
-- `GPIOR0` bit flags for ISR ↔ main communication
+- ISR-shared plain globals for ISR ↔ main communication — auto-promoted to `GPIOR` registers
 
 ## Build & flash
 

@@ -44,6 +44,47 @@ public static class PymcuCompiler
         => Cache.GetOrAdd("fx:" + name,
             _ => new Lazy<string>(() => Compile(Path.Combine(RepoRoot, "tests", "integration", "fixtures", name), name))).Value;
 
+    /// <summary>
+    /// Absolute path of a fixture directory — for tests that inspect build
+    /// artifacts (e.g. <c>dist/debug/firmware.asm</c>) after <see cref="BuildFixture"/>.
+    /// </summary>
+    public static string FixtureDir(string name)
+        => Path.Combine(RepoRoot, "tests", "integration", "fixtures", name);
+
+    /// <summary>
+    /// Compiles an arbitrary generated <c>main.py</c> source (e.g. a property/differential
+    /// test program for the register allocator). The program is materialized into a
+    /// throwaway project under the system temp directory and built with <c>pymcu build</c>.
+    /// Cached by content hash so identical programs compile once.
+    /// </summary>
+    public static string BuildSource(string mainPy)
+        => Cache.GetOrAdd("src:" + Sha(mainPy), _ => new Lazy<string>(() => CompileSource(mainPy))).Value;
+
+    private static string Sha(string s)
+    {
+        var bytes = System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(s));
+        return Convert.ToHexString(bytes);
+    }
+
+    private static string CompileSource(string mainPy)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "pymcu-gen", Sha(mainPy)[..16]);
+        Directory.CreateDirectory(Path.Combine(dir, "src"));
+        File.WriteAllText(Path.Combine(dir, "pyproject.toml"),
+            "[project]\n" +
+            "name = \"gen\"\n" +
+            "version = \"0.1.0\"\n" +
+            "requires-python = \">=3.11\"\n" +
+            "dependencies = [\"pymcu-stdlib>=0.1.2a5\", \"pymcu>=0.1.0a27\"]\n\n" +
+            "[tool.pymcu]\n" +
+            "target = \"atmega328p\"\n" +
+            "frequency = 16000000\n" +
+            "sources = \"src\"\n" +
+            "entry = \"main.py\"\n");
+        File.WriteAllText(Path.Combine(dir, "src", "main.py"), mainPy);
+        return Compile(dir, "gen-" + Sha(mainPy)[..8]);
+    }
+
     // ── Internal ─────────────────────────────────────────────────────────────
 
     private static string Compile(string exampleDir, string name)

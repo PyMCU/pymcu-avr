@@ -46,7 +46,10 @@ public static class AvrLinearScan
         for (int i = 0; i < func.Body.Count; ++i)
         {
             var instr = func.Body[i];
-            if (instr is Call) callIndices.Add(i);
+            // IndirectCall and GcAlloc transfer control to a callee/allocator and clobber the
+            // caller-saved scratch the same way a direct Call does, so a temp whose live range
+            // spans them must be spilled rather than kept in R16/R17.
+            if (instr is Call or IndirectCall or GcAlloc) callIndices.Add(i);
 
             switch (instr)
             {
@@ -114,6 +117,11 @@ public static class AvrLinearScan
                     VisitVal(cl.Dst, i);
                     foreach (var a in cl.Args) VisitVal(a, i);
                     break;
+                case FlashLoadPtr flp:
+                    VisitVal(flp.Ptr, i);
+                    VisitVal(flp.Index, i);
+                    VisitVal(flp.Dst, i);
+                    break;
                 case LoadIndirect li:
                     VisitVal(li.SrcPtr, i);
                     VisitVal(li.Dst, i);
@@ -121,6 +129,46 @@ public static class AvrLinearScan
                 case StoreIndirect si:
                     VisitVal(si.DstPtr, i);
                     VisitVal(si.Src, i);
+                    break;
+                // Array/bytearray ops were absent here, so a temp DEFINED by an ArrayLoad (or used
+                // as an index/source) had no interval at that point -- its live range was seen as
+                // starting only at a later consumer. Two temps that truly overlap (an earlier load
+                // result still live while a second load's index is computed) then shared R16 and
+                // clobbered each other (`arr[idx] + arr[s - 5]` returned just the second element).
+                case ArrayLoad al2:
+                    VisitVal(al2.Index, i);
+                    VisitVal(al2.Dst, i);
+                    break;
+                case ArrayLoadFlash alf2:
+                    VisitVal(alf2.Index, i);
+                    VisitVal(alf2.Dst, i);
+                    break;
+                case ArrayStore ast2:
+                    VisitVal(ast2.Index, i);
+                    VisitVal(ast2.Src, i);
+                    break;
+                case BytearrayLoad bld2:
+                    VisitVal(bld2.Index, i);
+                    VisitVal(bld2.Dst, i);
+                    break;
+                case BytearrayStore bst2:
+                    VisitVal(bst2.Index, i);
+                    VisitVal(bst2.Src, i);
+                    break;
+                // Same omission as the array ops: an indirect call's result and a GC allocation's
+                // pointer are temps that must be tracked, or they share a slot with an overlapping
+                // temp and get clobbered (`fps[0](s) + fps[1](s)` lost the first call's result).
+                case IndirectCall ic:
+                    VisitVal(ic.FuncAddr, i);
+                    foreach (var a in ic.Args) VisitVal(a, i);
+                    VisitVal(ic.Dst, i);
+                    break;
+                case GcAlloc ga:
+                    VisitVal(ga.Size, i);
+                    VisitVal(ga.Dst, i);
+                    break;
+                case SignalError se:
+                    VisitVal(se.Code, i);
                     break;
             }
         }
@@ -138,32 +186,46 @@ public static class AvrLinearScan
             }
         }
 
-        // Collect eligible (UINT8, no call span), sort by def
+        // Collect eligible (1- or 2-byte scalar temps that do not span a call), by def.
+        // 16-bit temps were previously always spilled to stack slots; allowing them to
+        // occupy the R16:R17 pair removes the store/reload traffic the codegen otherwise
+        // emits around every uint16 temporary (StoreRegInto/LoadIntoReg already drive the
+        // high byte via GetHighReg, so a pair-homed temp needs no codegen change).
         var eligible = intervals.Values
-            .Where(iv => !iv.SpansCall && iv.Type == DataType.UINT8)
+            .Where(iv => !iv.SpansCall && (iv.Type.SizeOf() == 1 || iv.Type.SizeOf() == 2))
             .OrderBy(iv => iv.Def)
             .ToList();
 
-        // Greedy assignment to R16/R17
+        // Two byte-slots: slot[0] = R16, slot[1] = R17. An 8-bit temp takes one slot; a
+        // 16-bit temp takes the pair (R16:R17, low in R16). Greedy with last-use expiry.
         var result = new Dictionary<string, string>();
-        var active = new LiveInterval?[2];
+        var slot = new LiveInterval?[2];
 
         foreach (var iv in eligible)
         {
             for (int k = 0; k < 2; ++k)
-            {
-                if (active[k] != null && active[k]!.LastUse < iv.Def)
-                    active[k] = null;
-            }
+                if (slot[k] != null && slot[k]!.LastUse < iv.Def)
+                    slot[k] = null;
 
-            for (int k = 0; k < 2; ++k)
+            if (iv.Type.SizeOf() == 2)
             {
-                if (active[k] == null)
+                // Needs the whole pair free.
+                if (slot[0] == null && slot[1] == null)
                 {
-                    result[iv.Name] = k == 0 ? "R16" : "R17";
-                    active[k] = iv;
-                    break;
+                    result[iv.Name] = "R16";
+                    slot[0] = iv;
+                    slot[1] = iv;
                 }
+            }
+            else
+            {
+                for (int k = 0; k < 2; ++k)
+                    if (slot[k] == null)
+                    {
+                        result[iv.Name] = k == 0 ? "R16" : "R17";
+                        slot[k] = iv;
+                        break;
+                    }
             }
         }
 

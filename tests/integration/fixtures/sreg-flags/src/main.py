@@ -22,13 +22,14 @@ from pymcu.types import uint8, asm
 
 
 def add_u8(a: uint8, b: uint8) -> uint8:
-    """Return a+b. Both params are runtime: forces ADD Rd,Rr to be emitted."""
-    return a + b
+    """Return a+b as fixed-width 8-bit. The explicit uint8(...) cast opts out of arithmetic
+    promotion so a real 8-bit ADD Rd,Rr is emitted (and its 8-bit SREG flags are observable)."""
+    return uint8(a + b)
 
 
 def sub_u8(a: uint8, b: uint8) -> uint8:
-    """Return a-b. Both params are runtime: forces SUB Rd,Rr to be emitted."""
-    return a - b
+    """Return a-b as fixed-width 8-bit (explicit cast -> 8-bit SUB Rd,Rr, 8-bit flags)."""
+    return uint8(a - b)
 
 
 def main():

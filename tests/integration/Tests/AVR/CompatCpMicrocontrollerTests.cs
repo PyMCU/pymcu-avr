@@ -15,8 +15,9 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// Expected UART: [0x5A, 0x00, 0x44].
 ///   Byte 0 (0x5A): a value written to and read back from nvm[0] -- proves an
 ///                  EEPROM write/read round-trip on hardware.
-///   Byte 1 (0x00): cpu.reset_reason == ResetReason.POWER_ON -- the simulator
-///                  boots with MCUSR.PORF set, decoded by the MCUSR reader.
+///   Byte 1 (0x00): cpu.reset_reason == ResetReason.POWER_ON -- the test seeds
+///                  MCUSR.PORF (real silicon sets it on power-up; the bare core
+///                  does not), and the @property getter decodes it live.
 ///   Byte 2 (0x44, 'D'): the done marker, reached only after the watchdog
 ///                  arm/feed/disable sequence ran without resetting the chip.
 ///
@@ -30,6 +31,13 @@ public class CompatCpMicrocontrollerTests
 {
     private const byte ResetReasonPowerOn = 0x00;
 
+    // MCUSR (DATA 0x54) and its power-on flag (PORF, bit 0). Real AVR silicon sets
+    // PORF on power-up; the bare AVR8Sharp core boots MCUSR=0, so we seed PORF here
+    // to model a genuine cold boot. reset_reason reads MCUSR live (it is a @property
+    // getter now actually invoked), so the register must hold a realistic value.
+    private const int McusrAddr = 0x54;
+    private const byte McusrPorf = 0x01;
+
     private string _hex = null!;
 
     [OneTimeSetUp]
@@ -39,6 +47,7 @@ public class CompatCpMicrocontrollerTests
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(_hex);
+        uno.Data[McusrAddr] = McusrPorf;   // model real power-on (PORF set)
         return uno;
     }
 
