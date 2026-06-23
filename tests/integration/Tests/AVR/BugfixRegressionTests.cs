@@ -81,4 +81,36 @@ def main():
         int start = Array.FindIndex(lines, l => l.Trim() == "GO");
         lines[start + 1].Trim().Should().Be("5.0", "arg0 must survive building arg1");
     }
+
+    // Float `//` must floor the quotient toward -inf, not truncate (it previously mapped to plain
+    // division: 5.0 // 2.0 gave 2.5 instead of 2.0, and -5.0 // 2.0 gave -2.5 instead of -3.0).
+    [Test]
+    public void FloatFloorDiv_FloorsTowardNegInf()
+    {
+        const string src = """
+from pymcu.types import uint8
+from pymcu.hal.uart import UART
+
+
+def main():
+    uart = UART(9600)
+    uart.println("GO")
+    s: uint8 = uart.read_blocking()
+    print(float(s) // 2.0)
+    print((0.0 - float(s)) // 2.0)
+    while True:
+        pass
+""";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(5);          // 5.0 // 2.0 == 2.0 ; -5.0 // 2.0 == -3.0
+        uno.RunUntilSerial(uno.Serial, t => t.Replace("\r", "").Split('\n').Length >= 4, maxMs: 4000);
+
+        var lines = uno.Serial.Text.Replace("\r", "").Split('\n');
+        int start = Array.FindIndex(lines, l => l.Trim() == "GO");
+        lines[start + 1].Trim().Should().Be("2.0", "5.0 // 2.0 floors to 2.0");
+        lines[start + 2].Trim().Should().Be("-3.0", "-5.0 // 2.0 floors toward -inf to -3.0");
+    }
 }

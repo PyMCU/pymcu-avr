@@ -300,6 +300,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 _ => throw new NotSupportedException($"Float arith op {b.Op} not supported")
             };
             Emit("CALL", routine);
+            // Python float `//` floors the quotient (toward -inf), not truncates. __divsf3 gives
+            // true division; apply floorf() (avr-libc single-precision; the double-named `floor`
+            // is not provided). This must happen before any float->int narrowing so e.g.
+            // int(-7.0 // 2.0) == -4, not -3.
+            if (b.Op == IrBinOp.FloorDiv) Emit("CALL", "floorf");
             var dstType = GetValType(b.Dst);
             if (dstType == DataType.FLOAT)
                 StoreFloatFromRegs(b.Dst);
