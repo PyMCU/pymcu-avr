@@ -2540,12 +2540,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                         usedImm = true;
                         break;
                     case IrBinOp.LShift:
-                        for (int i = 0; i < (val & 7); i++) Emit("LSL", "R24");
+                        // A shift count >= 8 on an 8-bit value yields 0, not value & 7 of it.
+                        if (val >= 8) Emit("CLR", "R24");
+                        else for (int i = 0; i < val; i++) Emit("LSL", "R24");
                         usedImm = true;
                         break;
                     case IrBinOp.RShift:
-                        for (int i = 0; i < (val & 7); i++)
-                            if (IsSignedType(type)) Emit("ASR", "R24"); else Emit("LSR", "R24");
+                        if (IsSignedType(type))
+                            // Signed >> saturates the sign bit; ASR 7 already fills all bits.
+                            for (int i = 0; i < Math.Min(val, 7); i++) Emit("ASR", "R24");
+                        else if (val >= 8) Emit("CLR", "R24");
+                        else for (int i = 0; i < val; i++) Emit("LSR", "R24");
                         usedImm = true;
                         break;
                 }
@@ -3062,12 +3067,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                         usedImm = true;
                         break;
                     case IrBinOp.LShift:
-                        for (int i = 0; i < (val & 7); i++) Emit("LSL", "R24");
+                        // A shift count >= 8 on an 8-bit value yields 0, not value & 7 of it.
+                        if (val >= 8) Emit("CLR", "R24");
+                        else for (int i = 0; i < val; i++) Emit("LSL", "R24");
                         usedImm = true;
                         break;
                     case IrBinOp.RShift:
-                        for (int i = 0; i < (val & 7); i++)
-                            if (IsSignedType(type)) Emit("ASR", "R24"); else Emit("LSR", "R24");
+                        if (IsSignedType(type))
+                            // Signed >> saturates the sign bit; ASR 7 already fills all bits.
+                            for (int i = 0; i < Math.Min(val, 7); i++) Emit("ASR", "R24");
+                        else if (val >= 8) Emit("CLR", "R24");
+                        else for (int i = 0; i < val; i++) Emit("LSR", "R24");
                         usedImm = true;
                         break;
                     case IrBinOp.Mul:
