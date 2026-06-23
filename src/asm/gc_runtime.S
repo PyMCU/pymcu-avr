@@ -380,3 +380,22 @@ _guss_next:
 
 _guss_done:
     RET
+
+; ---------------------------------------------------------------------------
+; gc_list_fixup  --  repoint every GC_REF variable from old_user_ptr to new_user_ptr.
+;
+; Called by list realloc after the backing buffer is copied to a new location: Python list
+; aliasing requires that EVERY variable referencing the list (not just the one that grew it)
+; observe the new address. Delegates to _gc_update_ss, which walks the shadow stack.
+;
+; ABI: standard PyMCU calling convention.
+;   arg0 (R25:R24) = old_user_ptr   arg1 (R23:R22) = new_user_ptr
+; _gc_update_ss wants old in R23:R22 and new in R25:R24, so swap the two pairs first.
+; Clobbers what _gc_update_ss clobbers (R16-R21, R26-R27) plus R18.
+; ---------------------------------------------------------------------------
+gc_list_fixup:
+    MOVW    R18, R22                    ; R19:R18 = new (temp)
+    MOVW    R22, R24                    ; R23:R22 = old
+    MOVW    R24, R18                    ; R25:R24 = new
+    CALL    _gc_update_ss
+    RET
