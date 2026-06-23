@@ -969,12 +969,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         EmitFlashArrayPool(output);
         if (program.NeedsGc) EmitGcRuntime(output);
+        // Collect the constant exception codes raised anywhere in the program so EmitExnRuntime
+        // emits their diagnostic name table + UART printer. (Done over the whole program rather
+        // than relying on per-function codegen, which DCE can skip.)
+        foreach (var f in program.Functions)
+            foreach (var se in f.Body.OfType<SignalError>())
+                if (se.Code is Constant ce && ce.Value != 0)
+                    _usedExnCodes.Add(ce.Value);
+
         // Emit the exception runtime when the T-flag model calls __pymcu_unhandled_exn
         // for an unmatched catch.
         bool needsExnRuntime = program.Functions.Any(f =>
                 f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn")
                 || f.Body.OfType<BranchOnError>().Any(b => b.ErrorLabel == "__pymcu_unhandled_exn"));
-        if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, cfg.Chip);
+        if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, ChipName());
         WriteSymbolsIfRequested(optimized, program);
         WriteLineMapIfRequested(optimized);
         WriteVarMapIfRequested(program);
@@ -3778,6 +3786,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             os.WriteLine();
             return;
         }
+        // atmega32u4/16u4 have no USART0; their only UART is USART1 (UCSR1A/B = 0xC8/0xC9,
+        // UDR1 = 0xCE). All other UART parts here use the 328p-compatible USART0 map.
+        bool is32u4 = chip is "atmega32u4" or "atmega16u4";
+        string ucsrA = is32u4 ? "0xC8" : "0xC0";   // UDRE bit 5
+        string ucsrB = is32u4 ? "0xC9" : "0xC1";   // TXEN bit 3
+        string udr   = is32u4 ? "0xCE" : "0xC6";
         foreach (int code in codes)
         {
             os.WriteLine($"__exn_str_{code}:");
@@ -3786,7 +3800,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         os.WriteLine("    .balign 2");
         os.WriteLine();
         os.WriteLine("__pymcu_unhandled_exn:");
-        os.WriteLine("    lds   R16, 0xC1");
+        os.WriteLine($"    lds   R16, {ucsrB}");
         os.WriteLine("    sbrs  R16, 3");
         os.WriteLine("    rjmp  __exn_halt");
         if (codes.Count == 1)
@@ -3818,10 +3832,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         os.WriteLine("    tst   R16");
         os.WriteLine("    breq  __exn_halt");
         os.WriteLine("__exn_wait_udre:");
-        os.WriteLine("    lds   R17, 0xC0");
+        os.WriteLine($"    lds   R17, {ucsrA}");
         os.WriteLine("    sbrs  R17, 5");
         os.WriteLine("    rjmp  __exn_wait_udre");
-        os.WriteLine("    sts   0xC6, R16");
+        os.WriteLine($"    sts   {udr}, R16");
         os.WriteLine("    rjmp  __exn_print_loop");
         os.WriteLine("__exn_halt:");
         os.WriteLine("    cli");

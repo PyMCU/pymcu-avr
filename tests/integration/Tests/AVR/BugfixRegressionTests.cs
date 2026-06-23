@@ -183,4 +183,33 @@ def main():
         lines[start + 1].Trim().Should().Be("0", "not 65536 is False (value is non-zero)");
         lines[start + 2].Trim().Should().Be("1", "not 0 is True");
     }
+
+    // An uncaught exception must print its name over UART (E:ValueError) before halting; the
+    // diagnostic table was previously dead code (the exception codes were never collected, and
+    // the runtime read cfg.Chip which the backend CLI leaves empty).
+    [Test]
+    public void UncaughtException_PrintsDiagnosticName()
+    {
+        const string src = """
+from pymcu.hal.uart import UART
+
+
+def boom():
+    raise ValueError
+
+
+def main():
+    uart = UART(9600)
+    uart.println("GO")
+    boom()
+    while True:
+        pass
+""";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("ValueError"), maxMs: 5000);
+        uno.Serial.Text.Should().Contain("E:ValueError");
+    }
 }
