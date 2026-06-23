@@ -1754,26 +1754,36 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 StoreArgToSpill(call.Args[k], argLocs[k].SpillOffset, ArgType(k));
 
         // Pass 2: register args.
+        // Every float is staged through R22:R25, and LoadFloatIntoRegs may CALL __floatsisf,
+        // which clobbers R18-R27. Loading args in index order therefore lets a second float
+        // overwrite the first (both transit R22:R25) and lets a conversion CALL clobber an
+        // already-loaded register argument. Instead: build each float register arg first and
+        // stash it on the stack — so all __floatsisf CALLs run while no destination register is
+        // live — then load the integer register args, then pop each float into its ABI register
+        // (float arg0 -> R22:R25, float arg1 -> R18:R21). Float register args only occur at
+        // k <= 1 (two floats fill R18:R25); higher float positions spill and are handled above.
+        var stashedFloatArgs = new List<int>();   // arg indices, in push order
+        for (var k = 0; k < call.Args.Count && k <= 1; k++)
+        {
+            if (!argLocs[k].IsReg || ArgType(k) != DataType.FLOAT) continue;
+            LoadFloatIntoRegs(call.Args[k]);                 // -> R22:R25 (may CALL __floatsisf)
+            Emit("PUSH", "R25"); Emit("PUSH", "R24");
+            Emit("PUSH", "R23"); Emit("PUSH", "R22");        // R22 (LSB) ends up on top of stack
+            stashedFloatArgs.Add(k);
+        }
         for (var k = 0; k < call.Args.Count; k++)
         {
             if (!argLocs[k].IsReg) continue;
-            var argType = ArgType(k);
-            if (argType == DataType.FLOAT)
-            {
-                // Float arg0 → R22:R25; float arg1 → R18:R21
-                if (k == 0)
-                    LoadFloatIntoRegs(call.Args[k]);
-                else if (k == 1)
-                {
-                    LoadFloatIntoRegs(call.Args[k]);
-                    Emit("MOV", "R18", "R22");
-                    Emit("MOV", "R19", "R23");
-                    Emit("MOV", "R20", "R24");
-                    Emit("MOV", "R21", "R25");
-                }
-                continue;
-            }
-            LoadIntoReg(call.Args[k], argLocs[k].Reg, argType);
+            if (ArgType(k) == DataType.FLOAT) continue;       // floats handled via stash above
+            LoadIntoReg(call.Args[k], argLocs[k].Reg, ArgType(k));
+        }
+        // Pop in reverse push order so each float lands in its register without clobbering ints.
+        for (var i = stashedFloatArgs.Count - 1; i >= 0; i--)
+        {
+            if (stashedFloatArgs[i] == 0)
+            { Emit("POP", "R22"); Emit("POP", "R23"); Emit("POP", "R24"); Emit("POP", "R25"); }
+            else
+            { Emit("POP", "R18"); Emit("POP", "R19"); Emit("POP", "R20"); Emit("POP", "R21"); }
         }
 
         Emit("CALL", call.FunctionName);
