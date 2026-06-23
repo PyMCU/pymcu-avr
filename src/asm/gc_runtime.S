@@ -191,12 +191,12 @@ _gdm_loop:
     CPC     R19, R21
     BRLO    _gdm_next
 
-    ; --- Skip if gc_ref >= heap_top ---
+    ; --- Skip if gc_ref >= heap_top ---  (unsigned address compare)
     LDS     R20, _gc_heap_top_lo
     LDS     R21, _gc_heap_top_hi
     CP      R18, R20
     CPC     R19, R21
-    BRGE    _gdm_next
+    BRSH    _gdm_next
 
     ; --- Mark: header at user_ptr - 2 ---
     MOVW    R26, R18
@@ -246,7 +246,7 @@ _gc_do_compact:
 _gdc_loop:
     CP      R28, R16
     CPC     R29, R17
-    BRGE    _gdc_done                   ; Y >= heap_top: finished
+    BRSH    _gdc_done                   ; Y >= heap_top: finished (unsigned address compare)
 
     ; --- Load object header at Y ---
     LD      R18, Y                      ; mark byte
