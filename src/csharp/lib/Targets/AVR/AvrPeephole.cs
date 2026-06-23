@@ -1148,9 +1148,12 @@ public static class AvrPeephole
     private static readonly int[] TempRegs = { 16, 17 };
 
     // Mnemonics whose first operand is a pure destination (written, not read).
+    // POP is deliberately excluded: although it writes its operand, it also has a
+    // side effect (it pops the stack / advances SP), so removing a "dead" POP would
+    // unbalance the stack against its matching PUSH. It is not a pure write.
     private static readonly HashSet<string> PureWriteOp1 = new()
     {
-        "MOV", "LDI", "LDD", "LDS", "IN", "POP", "CLR", "SER", "LPM", "ELPM",
+        "MOV", "LDI", "LDD", "LDS", "IN", "CLR", "SER", "LPM", "ELPM",
     };
 
     /// <summary>
