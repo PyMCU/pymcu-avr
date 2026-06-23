@@ -1858,6 +1858,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             var argType = GetValType(call.Args[k]);
             LoadIntoReg(call.Args[k], argRegs[k], argType);
+            // A function pointer carries no parameter-width info, so a 1-byte value passed to a
+            // wider (uint16/int16) parameter would otherwise leave the slot's high byte as garbage.
+            // ArgBaseRegs reserves a 2-register slot per argument, so extend the high byte here
+            // (sign for signed values, zero otherwise). uint8->uint8 just sets a harmless R25=0.
+            if (argType.SizeOf() == 1)
+            {
+                var hi = GetHighReg(argRegs[k]);
+                Emit("CLR", hi);
+                if (IsSignedType(argType))
+                {
+                    Emit("SBRC", argRegs[k], "7");   // if value's sign bit set,
+                    Emit("COM", hi);                  // make high byte 0xFF
+                }
+            }
         }
 
         // Load function address into Z register (R30:R31).

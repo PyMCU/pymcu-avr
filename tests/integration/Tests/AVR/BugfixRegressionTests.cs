@@ -113,4 +113,41 @@ def main():
         lines[start + 1].Trim().Should().Be("2.0", "5.0 // 2.0 floors to 2.0");
         lines[start + 2].Trim().Should().Be("-3.0", "-5.0 // 2.0 floors toward -inf to -3.0");
     }
+
+    // A narrow value passed through a function pointer to a wider parameter must be zero/sign
+    // extended; previously only R24 was loaded, leaving the uint16 arg's high byte as garbage.
+    [Test]
+    public void FunctionPointer_NarrowArgWidenedToWideParam()
+    {
+        const string src = """
+from pymcu.types import uint8, uint16, Callable
+from pymcu.hal.uart import UART
+
+
+def echo16(x: uint16) -> uint16:
+    return x
+
+
+def main():
+    uart = UART(9600)
+    uart.println("GO")
+    s: uint8 = uart.read_blocking()
+    fn: Callable = echo16
+    r: uint16 = fn(s)
+    print(r)
+    print(r)
+    while True:
+        pass
+""";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(5);          // echo16(5) must return 5, not 5 + garbage*256
+        uno.RunUntilSerial(uno.Serial, t => t.Replace("\r", "").Split('\n').Length >= 4, maxMs: 3000);
+
+        var lines = uno.Serial.Text.Replace("\r", "").Split('\n');
+        int start = Array.FindIndex(lines, l => l.Trim() == "GO");
+        lines[start + 1].Trim().Should().Be("5", "uint8 arg must zero-extend to the uint16 param");
+    }
 }
