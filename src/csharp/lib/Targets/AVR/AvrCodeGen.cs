@@ -777,8 +777,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             EmitRaw(".extern " + sym);
         if (program.ExternSymbols.Count > 0) EmitRaw("");
 
-        EmitRaw(".equ RAMSTART, 0x0100");
+        EmitRaw($".equ RAMSTART, 0x{RamStart():X4}");
         EmitRaw(".equ _stack_base, RAMSTART");
+        EmitRaw($".equ RAMEND, 0x{RamEnd():X4}");
 
         foreach (var (name, offset) in _stackLayout)
         {
@@ -987,6 +988,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
     public override void EmitInterruptReturn() => Emit("RETI");
 
+    // First SRAM byte in the data space. ATtiny parts start at 0x60; ATmega at 0x100.
+    // Mirrors the toolchain's _RAMSTART table (avrgas.py) so the codegen and linker agree.
+    private int RamStart()
+    {
+        var chip = cfg.Chip.ToLowerInvariant();
+        return chip.StartsWith("attiny") ? 0x60 : 0x100;
+    }
+
+    // Last usable SRAM byte = where the hardware stack pointer is initialised.
+    // Derived from the device's RAM size when known; falls back to the historical
+    // ATmega328P value (0x08FF) when RamSize is not populated (e.g. unit tests).
+    private int RamEnd()
+        => cfg.RamSize > 0 ? RamStart() + cfg.RamSize - 1 : 0x08FF;
+
     // Parse "R12" -> 12; pointer tokens "X"/"Y"/"Z" (and their +/- forms) -> the pair's low reg
     // (26/28/30); else -1. Used by the ISR-save trimmer to learn which registers a body touches.
     private static int ParseRegToken(string s)
@@ -1073,9 +1088,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (func.Name == "main")
         {
             Emit("CLR", "R1");
-            Emit("LDI", "R16", "hi8(0x08FF)");
+            Emit("LDI", "R16", "hi8(RAMEND)");
             Emit("OUT", "0x3E", "R16");
-            Emit("LDI", "R16", "lo8(0x08FF)");
+            Emit("LDI", "R16", "lo8(RAMEND)");
             Emit("OUT", "0x3D", "R16");
             Emit("LDI", "R28", "lo8(_stack_base)");
             Emit("LDI", "R29", "hi8(_stack_base)");
