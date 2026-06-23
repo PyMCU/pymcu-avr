@@ -150,4 +150,37 @@ def main():
         int start = Array.FindIndex(lines, l => l.Trim() == "GO");
         lines[start + 1].Trim().Should().Be("5", "uint8 arg must zero-extend to the uint16 param");
     }
+
+    // `not` on a 32-bit value must test all four bytes; previously only the low byte was tested,
+    // so `not 0x00010000` wrongly gave True (1) instead of False (0).
+    [Test]
+    public void Not_Int32_TestsAllBytes()
+    {
+        const string src = """
+from pymcu.types import uint8, int32
+from pymcu.hal.uart import UART
+
+
+def main():
+    uart = UART(9600)
+    uart.println("GO")
+    s: uint8 = uart.read_blocking()
+    x: int32 = int32(s) * 65536
+    print(uint8(not x))
+    print(uint8(not int32(0)))
+    while True:
+        pass
+""";
+        var hex = PymcuCompiler.BuildSource(src);
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(hex);
+        uno.RunUntilSerial(uno.Serial, "GO\n", maxMs: 500);
+        uno.Serial.InjectByte(1);          // x = 65536 (low byte 0, byte2 = 1): not x must be 0
+        uno.RunUntilSerial(uno.Serial, t => t.Replace("\r", "").Split('\n').Length >= 4, maxMs: 3000);
+
+        var lines = uno.Serial.Text.Replace("\r", "").Split('\n');
+        int start = Array.FindIndex(lines, l => l.Trim() == "GO");
+        lines[start + 1].Trim().Should().Be("0", "not 65536 is False (value is non-zero)");
+        lines[start + 2].Trim().Should().Be("1", "not 0 is True");
+    }
 }

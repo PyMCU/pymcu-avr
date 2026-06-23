@@ -2127,18 +2127,29 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 if (is32) { Emit("COM", "R22"); Emit("COM", "R23"); }
                 break;
             case IrUnOp.Not:
+            {
+                // `not` tests the truthiness of the OPERAND, which may be wider than the bool
+                // result (e.g. `not int32`). Reload the source at its own width and OR every byte
+                // together so a value with a zero low byte but non-zero high bytes is still truthy.
+                var srcType = GetValType(u.Src);
+                int srcSize = srcType.SizeOf();
+                LoadIntoReg(u.Src, "R24", srcType);
                 var lTrue = MakeLabel("L_NOT_TRUE");
                 var lDone = MakeLabel("L_NOT_DONE");
-                if (is16) Emit("OR", "R24", "R25");
+                if (srcSize >= 2) Emit("OR", "R24", "R25");
+                if (srcSize == 4) { Emit("OR", "R24", "R22"); Emit("OR", "R24", "R23"); }
                 Emit("TST", "R24");
                 EmitBranch("BREQ", lTrue);
                 Emit("CLR", "R24");
-                if (is16) Emit("CLR", "R25");
                 Emit("RJMP", lDone);
                 EmitLabel(lTrue);
                 Emit("LDI", "R24", "1");
                 EmitLabel(lDone);
+                // Result is a 0/1 byte; zero any high bytes the destination width requires.
+                if (is16 || is32) Emit("CLR", "R25");
+                if (is32) { Emit("CLR", "R22"); Emit("CLR", "R23"); }
                 break;
+            }
         }
 
         StoreRegInto("R24", u.Dst, type);
