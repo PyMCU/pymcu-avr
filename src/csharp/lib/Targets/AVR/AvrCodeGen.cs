@@ -1025,11 +1025,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
     public override void EmitInterruptReturn() => Emit("RETI");
 
+    // The backend CLI populates TargetChip (not Chip); the in-process path sets Chip. Accept either.
+    private string ChipName() => !string.IsNullOrEmpty(cfg.Chip) ? cfg.Chip : cfg.TargetChip;
+
     // First SRAM byte in the data space. ATtiny parts start at 0x60; ATmega at 0x100.
     // Mirrors the toolchain's _RAMSTART table (avrgas.py) so the codegen and linker agree.
     private int RamStart()
     {
-        var chip = cfg.Chip.ToLowerInvariant();
+        var chip = ChipName().ToLowerInvariant();
         return chip.StartsWith("attiny") ? 0x60 : 0x100;
     }
 
@@ -1038,6 +1041,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // ATmega328P value (0x08FF) when RamSize is not populated (e.g. unit tests).
     private int RamEnd()
         => cfg.RamSize > 0 ? RamStart() + cfg.RamSize - 1 : 0x08FF;
+
+    // Parts with > 64 KB flash (e.g. atmega2560) need RAMPZ + ELPM to reach tables the linker
+    // places above byte address 0xFFFF; plain LPM only uses the 16-bit Z. RAMPZ is IO 0x3B.
+    // FlashSize is often unset on the backend CLI path, so fall back to a known-chip list.
+    private bool LargeFlash
+    {
+        get
+        {
+            if (cfg.FlashSize > 0x10000) return true;
+            return ChipName().ToLowerInvariant() is "atmega2560" or "atmega2561" or "atmega1280"
+                or "atmega1281" or "atmega1284" or "atmega1284p" or "atmega128" or "atmega128a";
+        }
+    }
 
     // Parse "R12" -> 12; pointer tokens "X"/"Y"/"Z" (and their +/- forms) -> the pair's low reg
     // (26/28/30); else -1. Used by the ISR-save trimmer to learn which registers a body touches.
@@ -3640,7 +3656,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Emit("LDI", "R31", $"hi8({label})");      // ZH = base byte address
         Emit("ADD", "R30", "R24");                // Z += index (8-bit index, no overflow for small tables)
         Emit("ADC", "R31", "R1");                 // propagate carry (R1 = 0 after MUL clears)
-        Emit("LPM", "R24", "Z");                  // load byte from flash
+        if (LargeFlash)
+        {
+            // > 64 KB flash: the table may sit above 0xFFFF, so address it via RAMPZ:Z + ELPM.
+            // The index in R24 is consumed; reuse it as the byte-2 scratch. LDI doesn't touch
+            // SREG, so the carry out of the Z add above is still live for the byte-2 ADC.
+            Emit("LDI", "R24", $"hh8({label})");
+            Emit("ADC", "R24", "R1");
+            Emit("OUT", "0x3B", "R24");           // RAMPZ
+            Emit("ELPM", "R24", "Z");             // load byte from far flash
+        }
+        else
+        {
+            Emit("LPM", "R24", "Z");              // load byte from flash
+        }
         StoreRegInto("R24", alf.Dst, DataType.UINT8);
     }
 
