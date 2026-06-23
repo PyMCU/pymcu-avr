@@ -133,8 +133,17 @@ _gai_fail:
 ; gc_collect  --  run a full mark-then-compact GC cycle.
 ; ---------------------------------------------------------------------------
 gc_collect:
+    ; Compaction relocates live objects and rewrites GC_REF variables. If an interrupt fires
+    ; mid-collection and its handler touches a GC_REF (or allocates), it observes a half-moved
+    ; heap and corrupts it. Disable interrupts for the duration, preserving the caller's prior
+    ; I-flag state (restored verbatim, so a collect invoked with interrupts already off stays off).
+    IN      R18, 0x3F                   ; R18 = SREG snapshot (I flag)
+    CLI
+    PUSH    R18                         ; preserve across the mark/compact calls
     CALL    _gc_do_mark
     CALL    _gc_do_compact
+    POP     R18
+    OUT     0x3F, R18                   ; restore SREG (re-enables interrupts iff they were on)
     RET
 
 ; ---------------------------------------------------------------------------
