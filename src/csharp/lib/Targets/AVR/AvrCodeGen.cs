@@ -41,6 +41,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private Dictionary<string, List<int>> _functionParamSizes = new();
     private int _labelCounter;
     private Function? _currentFunction;
+    // R2-R15 registers used as variable homes program-wide (incl. high byte of 16-bit homes).
+    // An ISR that re-enters a function shared with mainline code must preserve these.
+    private List<string> _isrHomeRegs = new();
+    // The subset actually saved by the current ISR's prologue, restored by its epilogue.
+    private List<string> _isrExtraSaves = new();
     private int _maxStaticUsage; // total static SRAM used by StackAllocator; set in Compile()
     private int _bssSize;
     private int _argSpillBytes;  // bytes of the fixed SRAM region for >R16..R25 overflow arguments
@@ -721,6 +726,22 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         _bssSize = program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum();
         _regLayout = AvrRegisterAllocator.Allocate(program);
 
+        // Registers R2-R15 used as variable homes (including the high byte of a 16-bit home).
+        // The allocator hands these out uniquely per name, so an ISR's own homes never overlap
+        // mainline homes -- but a function reachable from BOTH an ISR and mainline code shares the
+        // SAME home registers across both invocations. If such a function is interrupted mid-body
+        // and the ISR re-enters it, the inner call clobbers the outer call's live homes. ISRs that
+        // make any call therefore preserve these registers (see EmitContextSave).
+        var homeRegs = new SortedSet<int>();
+        foreach (var (name, reg) in _regLayout)
+        {
+            int rn = ParseRegToken(reg);
+            if (rn is < 2 or > 15) continue;
+            homeRegs.Add(rn);
+            if (_varSizes.TryGetValue(name, out int sz) && sz == 2) homeRegs.Add(rn + 1);
+        }
+        _isrHomeRegs = homeRegs.Select(rn => "R" + rn).ToList();
+
         // Build set of float-typed variable names for correct register assignment.
         _varIsFloat = [];
         foreach (var func in program.Functions)
@@ -970,6 +991,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var r in new[] { "R0", "R1", "R16", "R17", "R18", "R19", "R20", "R21",
                                   "R22", "R23", "R24", "R25", "R26", "R27", "R30", "R31" })
             Emit("PUSH", r);
+        // If this ISR makes any call it may re-enter a function shared with mainline code, whose
+        // R2-R15 variable homes would then be the SAME registers as the interrupted invocation's.
+        // Preserve them. A leaf ISR (no calls) only writes its own uniquely-named homes, which by
+        // the allocator's unique-per-name guarantee never overlap the interrupted code, so it
+        // needs no extra save.
+        bool mayReenter = _currentFunction?.Body.Any(i => i is Call or IndirectCall) ?? false;
+        _isrExtraSaves = mayReenter ? _isrHomeRegs : new List<string>();
+        foreach (var r in _isrExtraSaves) Emit("PUSH", r);
         Emit("IN", "R16", "0x3F");
         Emit("PUSH", "R16");
         // Ensure R1 == 0 inside the ISR body (MUL may have left it non-zero in main).
@@ -981,6 +1010,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitComment("ISR epilogue -- restore context");
         Emit("POP", "R16");
         Emit("OUT", "0x3F", "R16");
+        // Restore the R2-R15 homes saved by EmitContextSave, in reverse push order.
+        for (int i = _isrExtraSaves.Count - 1; i >= 0; i--)
+            Emit("POP", _isrExtraSaves[i]);
         foreach (var r in new[] { "R31", "R30", "R27", "R26", "R25", "R24", "R23", "R22",
                                   "R21", "R20", "R19", "R18", "R17", "R16", "R1", "R0" })
             Emit("POP", r);
