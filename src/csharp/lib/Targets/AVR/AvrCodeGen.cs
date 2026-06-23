@@ -3263,7 +3263,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (al.Index is Constant c)
         {
             var offset = baseOffset + c.Value * elemSize;
-            if (offset < 64)
+            // LDD displacement is 6-bit (max 63): the high byte at offset+1 must also fit.
+            if (offset + elemSize - 1 < 64)
             {
                 Emit("LDD", "R24", $"Y+{offset}");
                 if (is16) Emit("LDD", "R25", $"Y+{offset + 1}");
@@ -3306,7 +3307,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (ast.Index is Constant c)
         {
             var offset = baseOffset + c.Value * elemSize;
-            if (offset < 64)
+            // STD displacement is 6-bit (max 63): the high byte at offset+1 must also fit.
+            if (offset + elemSize - 1 < 64)
             {
                 Emit("STD", $"Y+{offset}", "R24");
                 if (is16) Emit("STD", $"Y+{offset + 1}", "R25");
