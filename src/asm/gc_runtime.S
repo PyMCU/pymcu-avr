@@ -49,6 +49,15 @@ gc_init:
 ; Returns user_ptr in R24:R25 (0x0000 = permanent OOM).
 ; ---------------------------------------------------------------------------
 gc_alloc:
+    ; Object headers store the payload length in a single byte, so sizes > 255 cannot be
+    ; represented. Truncating the size byte would desynchronise object boundaries during
+    ; compaction and corrupt the heap; fail the allocation (return 0x0000) instead.
+    TST     R25                         ; size hi byte != 0  =>  size >= 256
+    BREQ    _galloc_size_ok
+    CLR     R24
+    CLR     R25
+    RET
+_galloc_size_ok:
     ; Copy size into R22:R23 so we can restore it if gc_collect clobbers R24:R25.
     ; _gc_alloc_inner does NOT clobber R22:R23, so the first call is safe.
     ; gc_collect (via _gc_do_compact) DOES clobber R22, so we PUSH before it.
