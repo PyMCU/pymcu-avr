@@ -41,6 +41,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private Dictionary<string, List<int>> _functionParamSizes = new();
     private int _labelCounter;
     private Function? _currentFunction;
+    // R2-R15 registers used as variable homes program-wide (incl. high byte of 16-bit homes).
+    // An ISR that re-enters a function shared with mainline code must preserve these.
+    private List<string> _isrHomeRegs = new();
+    // The subset actually saved by the current ISR's prologue, restored by its epilogue.
+    private List<string> _isrExtraSaves = new();
     private int _maxStaticUsage; // total static SRAM used by StackAllocator; set in Compile()
     private int _bssSize;
     private int _argSpillBytes;  // bytes of the fixed SRAM region for >R16..R25 overflow arguments
@@ -295,6 +300,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 _ => throw new NotSupportedException($"Float arith op {b.Op} not supported")
             };
             Emit("CALL", routine);
+            // Python float `//` floors the quotient (toward -inf), not truncates. __divsf3 gives
+            // true division; apply floorf() (avr-libc single-precision; the double-named `floor`
+            // is not provided). This must happen before any float->int narrowing so e.g.
+            // int(-7.0 // 2.0) == -4, not -3.
+            if (b.Op == IrBinOp.FloorDiv) Emit("CALL", "floorf");
             var dstType = GetValType(b.Dst);
             if (dstType == DataType.FLOAT)
                 StoreFloatFromRegs(b.Dst);
@@ -721,6 +731,22 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         _bssSize = program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum();
         _regLayout = AvrRegisterAllocator.Allocate(program);
 
+        // Registers R2-R15 used as variable homes (including the high byte of a 16-bit home).
+        // The allocator hands these out uniquely per name, so an ISR's own homes never overlap
+        // mainline homes -- but a function reachable from BOTH an ISR and mainline code shares the
+        // SAME home registers across both invocations. If such a function is interrupted mid-body
+        // and the ISR re-enters it, the inner call clobbers the outer call's live homes. ISRs that
+        // make any call therefore preserve these registers (see EmitContextSave).
+        var homeRegs = new SortedSet<int>();
+        foreach (var (name, reg) in _regLayout)
+        {
+            int rn = ParseRegToken(reg);
+            if (rn is < 2 or > 15) continue;
+            homeRegs.Add(rn);
+            if (_varSizes.TryGetValue(name, out int sz) && sz == 2) homeRegs.Add(rn + 1);
+        }
+        _isrHomeRegs = homeRegs.Select(rn => "R" + rn).ToList();
+
         // Build set of float-typed variable names for correct register assignment.
         _varIsFloat = [];
         foreach (var func in program.Functions)
@@ -777,8 +803,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             EmitRaw(".extern " + sym);
         if (program.ExternSymbols.Count > 0) EmitRaw("");
 
-        EmitRaw(".equ RAMSTART, 0x0100");
+        EmitRaw($".equ RAMSTART, 0x{RamStart():X4}");
         EmitRaw(".equ _stack_base, RAMSTART");
+        EmitRaw($".equ RAMEND, 0x{RamEnd():X4}");
 
         foreach (var (name, offset) in _stackLayout)
         {
@@ -837,9 +864,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         //   AVRA .org 0x0012 → avr-as .org 0x0024 (byte).
         // To place RJMP at byte 0x0024, we need AVRA .org = 0x0012 = vec*2.
         // This matches overflowInterrupt = vec*2 (the byte address on real hardware).
+        // Vector-table slot size depends on the core. avr5/avr6 (ATmega) use 2-word (4-byte)
+        // slots — an RJMP placed every 2 words (AVRA word .org = vec*2). Reduced-core avr25
+        // (ATtiny) parts have 1-word (2-byte) slots, so the table is half as wide (.org = vec).
+        // _avra_to_gnuas() doubles the word .org to a byte .org either way.
+        var vecWordStride = IsReducedCore() ? 1 : 2;
         for (var vec = 1; vec <= 25; vec++)
         {
-            EmitRaw($".org 0x{vec * 2:X4}");
+            EmitRaw($".org 0x{vec * vecWordStride:X4}");
 
             if (isrMap.TryGetValue(vec * 2, out var isrFunc))
             {
@@ -942,12 +974,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         EmitFlashArrayPool(output);
         if (program.NeedsGc) EmitGcRuntime(output);
+        // Collect the constant exception codes raised anywhere in the program so EmitExnRuntime
+        // emits their diagnostic name table + UART printer. (Done over the whole program rather
+        // than relying on per-function codegen, which DCE can skip.)
+        foreach (var f in program.Functions)
+            foreach (var se in f.Body.OfType<SignalError>())
+                if (se.Code is Constant ce && ce.Value != 0)
+                    _usedExnCodes.Add(ce.Value);
+
         // Emit the exception runtime when the T-flag model calls __pymcu_unhandled_exn
         // for an unmatched catch.
         bool needsExnRuntime = program.Functions.Any(f =>
                 f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn")
                 || f.Body.OfType<BranchOnError>().Any(b => b.ErrorLabel == "__pymcu_unhandled_exn"));
-        if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, cfg.Chip);
+        if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, ChipName());
         WriteSymbolsIfRequested(optimized, program);
         WriteLineMapIfRequested(optimized);
         WriteVarMapIfRequested(program);
@@ -969,6 +1009,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var r in new[] { "R0", "R1", "R16", "R17", "R18", "R19", "R20", "R21",
                                   "R22", "R23", "R24", "R25", "R26", "R27", "R30", "R31" })
             Emit("PUSH", r);
+        // If this ISR makes any call it may re-enter a function shared with mainline code, whose
+        // R2-R15 variable homes would then be the SAME registers as the interrupted invocation's.
+        // Preserve them. A leaf ISR (no calls) only writes its own uniquely-named homes, which by
+        // the allocator's unique-per-name guarantee never overlap the interrupted code, so it
+        // needs no extra save.
+        bool mayReenter = _currentFunction?.Body.Any(i => i is Call or IndirectCall) ?? false;
+        _isrExtraSaves = mayReenter ? _isrHomeRegs : new List<string>();
+        foreach (var r in _isrExtraSaves) Emit("PUSH", r);
         Emit("IN", "R16", "0x3F");
         Emit("PUSH", "R16");
         // Ensure R1 == 0 inside the ISR body (MUL may have left it non-zero in main).
@@ -980,12 +1028,66 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitComment("ISR epilogue -- restore context");
         Emit("POP", "R16");
         Emit("OUT", "0x3F", "R16");
+        // Restore the R2-R15 homes saved by EmitContextSave, in reverse push order.
+        for (int i = _isrExtraSaves.Count - 1; i >= 0; i--)
+            Emit("POP", _isrExtraSaves[i]);
         foreach (var r in new[] { "R31", "R30", "R27", "R26", "R25", "R24", "R23", "R22",
                                   "R21", "R20", "R19", "R18", "R17", "R16", "R1", "R0" })
             Emit("POP", r);
     }
 
     public override void EmitInterruptReturn() => Emit("RETI");
+
+    // The backend CLI populates TargetChip (not Chip); the in-process path sets Chip. Accept either.
+    private string ChipName() => !string.IsNullOrEmpty(cfg.Chip) ? cfg.Chip : cfg.TargetChip;
+
+    // Authoritative chip name for memory/core *layout* decisions (RAMSTART/RAMEND, vector slot
+    // size). The build --target is the source of truth: the source's declared chip can fall back
+    // to atmega328p for not-yet-ported parts, which would mislead ChipName() into ATmega layout.
+    private string LayoutChip()
+        => (!string.IsNullOrEmpty(cfg.TargetChip) ? cfg.TargetChip : cfg.Chip).ToLowerInvariant();
+
+    private bool IsReducedCore() => LayoutChip().StartsWith("attiny");
+
+    // First SRAM byte in the data space. ATtiny parts start at 0x60; ATmega at 0x100.
+    // Mirrors the toolchain's _RAMSTART table (avrgas.py) so the codegen and linker agree.
+    private int RamStart() => IsReducedCore() ? 0x60 : 0x100;
+
+    // SRAM size (bytes) for reduced-core ATtiny parts, whose RAMEND differs sharply from the
+    // ATmega328P fallback. Without this the stack would initialise at 0x08FF — far outside a
+    // 64–512 byte ATtiny SRAM — and corrupt I/O space on the first PUSH/CALL.
+    private static readonly Dictionary<string, int> AttinyRamSize = new()
+    {
+        ["attiny13"] = 64,   ["attiny13a"] = 64,
+        ["attiny24"] = 128,  ["attiny44"]  = 256, ["attiny84"] = 512,
+        ["attiny25"] = 128,  ["attiny45"]  = 256, ["attiny85"] = 512,
+        ["attiny2313"] = 128, ["attiny4313"] = 256,
+    };
+
+    // Last usable SRAM byte = where the hardware stack pointer is initialised.
+    // Prefer the device's RAM size from the IR; else a known-ATtiny lookup; else the historical
+    // ATmega328P value (0x08FF), which is correct for the ATmegaX8 family in simulation.
+    private int RamEnd()
+    {
+        if (AttinyRamSize.TryGetValue(LayoutChip(), out var size))
+            return RamStart() + size - 1;
+        if (cfg.RamSize > 0)
+            return RamStart() + cfg.RamSize - 1;
+        return 0x08FF;
+    }
+
+    // Parts with > 64 KB flash (e.g. atmega2560) need RAMPZ + ELPM to reach tables the linker
+    // places above byte address 0xFFFF; plain LPM only uses the 16-bit Z. RAMPZ is IO 0x3B.
+    // FlashSize is often unset on the backend CLI path, so fall back to a known-chip list.
+    private bool LargeFlash
+    {
+        get
+        {
+            if (cfg.FlashSize > 0x10000) return true;
+            return ChipName().ToLowerInvariant() is "atmega2560" or "atmega2561" or "atmega1280"
+                or "atmega1281" or "atmega1284" or "atmega1284p" or "atmega128" or "atmega128a";
+        }
+    }
 
     // Parse "R12" -> 12; pointer tokens "X"/"Y"/"Z" (and their +/- forms) -> the pair's low reg
     // (26/28/30); else -1. Used by the ISR-save trimmer to learn which registers a body touches.
@@ -1073,9 +1175,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (func.Name == "main")
         {
             Emit("CLR", "R1");
-            Emit("LDI", "R16", "hi8(0x08FF)");
+            Emit("LDI", "R16", "hi8(RAMEND)");
             Emit("OUT", "0x3E", "R16");
-            Emit("LDI", "R16", "lo8(0x08FF)");
+            Emit("LDI", "R16", "lo8(RAMEND)");
             Emit("OUT", "0x3D", "R16");
             Emit("LDI", "R28", "lo8(_stack_base)");
             Emit("LDI", "R29", "hi8(_stack_base)");
@@ -1754,26 +1856,36 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 StoreArgToSpill(call.Args[k], argLocs[k].SpillOffset, ArgType(k));
 
         // Pass 2: register args.
+        // Every float is staged through R22:R25, and LoadFloatIntoRegs may CALL __floatsisf,
+        // which clobbers R18-R27. Loading args in index order therefore lets a second float
+        // overwrite the first (both transit R22:R25) and lets a conversion CALL clobber an
+        // already-loaded register argument. Instead: build each float register arg first and
+        // stash it on the stack — so all __floatsisf CALLs run while no destination register is
+        // live — then load the integer register args, then pop each float into its ABI register
+        // (float arg0 -> R22:R25, float arg1 -> R18:R21). Float register args only occur at
+        // k <= 1 (two floats fill R18:R25); higher float positions spill and are handled above.
+        var stashedFloatArgs = new List<int>();   // arg indices, in push order
+        for (var k = 0; k < call.Args.Count && k <= 1; k++)
+        {
+            if (!argLocs[k].IsReg || ArgType(k) != DataType.FLOAT) continue;
+            LoadFloatIntoRegs(call.Args[k]);                 // -> R22:R25 (may CALL __floatsisf)
+            Emit("PUSH", "R25"); Emit("PUSH", "R24");
+            Emit("PUSH", "R23"); Emit("PUSH", "R22");        // R22 (LSB) ends up on top of stack
+            stashedFloatArgs.Add(k);
+        }
         for (var k = 0; k < call.Args.Count; k++)
         {
             if (!argLocs[k].IsReg) continue;
-            var argType = ArgType(k);
-            if (argType == DataType.FLOAT)
-            {
-                // Float arg0 → R22:R25; float arg1 → R18:R21
-                if (k == 0)
-                    LoadFloatIntoRegs(call.Args[k]);
-                else if (k == 1)
-                {
-                    LoadFloatIntoRegs(call.Args[k]);
-                    Emit("MOV", "R18", "R22");
-                    Emit("MOV", "R19", "R23");
-                    Emit("MOV", "R20", "R24");
-                    Emit("MOV", "R21", "R25");
-                }
-                continue;
-            }
-            LoadIntoReg(call.Args[k], argLocs[k].Reg, argType);
+            if (ArgType(k) == DataType.FLOAT) continue;       // floats handled via stash above
+            LoadIntoReg(call.Args[k], argLocs[k].Reg, ArgType(k));
+        }
+        // Pop in reverse push order so each float lands in its register without clobbering ints.
+        for (var i = stashedFloatArgs.Count - 1; i >= 0; i--)
+        {
+            if (stashedFloatArgs[i] == 0)
+            { Emit("POP", "R22"); Emit("POP", "R23"); Emit("POP", "R24"); Emit("POP", "R25"); }
+            else
+            { Emit("POP", "R18"); Emit("POP", "R19"); Emit("POP", "R20"); Emit("POP", "R21"); }
         }
 
         Emit("CALL", call.FunctionName);
@@ -1796,6 +1908,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             var argType = GetValType(call.Args[k]);
             LoadIntoReg(call.Args[k], argRegs[k], argType);
+            // A function pointer carries no parameter-width info, so a 1-byte value passed to a
+            // wider (uint16/int16) parameter would otherwise leave the slot's high byte as garbage.
+            // ArgBaseRegs reserves a 2-register slot per argument, so extend the high byte here
+            // (sign for signed values, zero otherwise). uint8->uint8 just sets a harmless R25=0.
+            if (argType.SizeOf() == 1)
+            {
+                var hi = GetHighReg(argRegs[k]);
+                Emit("CLR", hi);
+                if (IsSignedType(argType))
+                {
+                    Emit("SBRC", argRegs[k], "7");   // if value's sign bit set,
+                    Emit("COM", hi);                  // make high byte 0xFF
+                }
+            }
         }
 
         // Load function address into Z register (R30:R31).
@@ -2051,18 +2177,29 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 if (is32) { Emit("COM", "R22"); Emit("COM", "R23"); }
                 break;
             case IrUnOp.Not:
+            {
+                // `not` tests the truthiness of the OPERAND, which may be wider than the bool
+                // result (e.g. `not int32`). Reload the source at its own width and OR every byte
+                // together so a value with a zero low byte but non-zero high bytes is still truthy.
+                var srcType = GetValType(u.Src);
+                int srcSize = srcType.SizeOf();
+                LoadIntoReg(u.Src, "R24", srcType);
                 var lTrue = MakeLabel("L_NOT_TRUE");
                 var lDone = MakeLabel("L_NOT_DONE");
-                if (is16) Emit("OR", "R24", "R25");
+                if (srcSize >= 2) Emit("OR", "R24", "R25");
+                if (srcSize == 4) { Emit("OR", "R24", "R22"); Emit("OR", "R24", "R23"); }
                 Emit("TST", "R24");
                 EmitBranch("BREQ", lTrue);
                 Emit("CLR", "R24");
-                if (is16) Emit("CLR", "R25");
                 Emit("RJMP", lDone);
                 EmitLabel(lTrue);
                 Emit("LDI", "R24", "1");
                 EmitLabel(lDone);
+                // Result is a 0/1 byte; zero any high bytes the destination width requires.
+                if (is16 || is32) Emit("CLR", "R25");
+                if (is32) { Emit("CLR", "R22"); Emit("CLR", "R23"); }
                 break;
+            }
         }
 
         StoreRegInto("R24", u.Dst, type);
@@ -2540,12 +2677,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                         usedImm = true;
                         break;
                     case IrBinOp.LShift:
-                        for (int i = 0; i < (val & 7); i++) Emit("LSL", "R24");
+                        // A shift count >= 8 on an 8-bit value yields 0, not value & 7 of it.
+                        if (val >= 8) Emit("CLR", "R24");
+                        else for (int i = 0; i < val; i++) Emit("LSL", "R24");
                         usedImm = true;
                         break;
                     case IrBinOp.RShift:
-                        for (int i = 0; i < (val & 7); i++)
-                            if (IsSignedType(type)) Emit("ASR", "R24"); else Emit("LSR", "R24");
+                        if (IsSignedType(type))
+                            // Signed >> saturates the sign bit; ASR 7 already fills all bits.
+                            for (int i = 0; i < Math.Min(val, 7); i++) Emit("ASR", "R24");
+                        else if (val >= 8) Emit("CLR", "R24");
+                        else for (int i = 0; i < val; i++) Emit("LSR", "R24");
                         usedImm = true;
                         break;
                 }
@@ -3062,12 +3204,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                         usedImm = true;
                         break;
                     case IrBinOp.LShift:
-                        for (int i = 0; i < (val & 7); i++) Emit("LSL", "R24");
+                        // A shift count >= 8 on an 8-bit value yields 0, not value & 7 of it.
+                        if (val >= 8) Emit("CLR", "R24");
+                        else for (int i = 0; i < val; i++) Emit("LSL", "R24");
                         usedImm = true;
                         break;
                     case IrBinOp.RShift:
-                        for (int i = 0; i < (val & 7); i++)
-                            if (IsSignedType(type)) Emit("ASR", "R24"); else Emit("LSR", "R24");
+                        if (IsSignedType(type))
+                            // Signed >> saturates the sign bit; ASR 7 already fills all bits.
+                            for (int i = 0; i < Math.Min(val, 7); i++) Emit("ASR", "R24");
+                        else if (val >= 8) Emit("CLR", "R24");
+                        else for (int i = 0; i < val; i++) Emit("LSR", "R24");
                         usedImm = true;
                         break;
                     case IrBinOp.Mul:
@@ -3253,7 +3400,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (al.Index is Constant c)
         {
             var offset = baseOffset + c.Value * elemSize;
-            if (offset < 64)
+            // LDD displacement is 6-bit (max 63): the high byte at offset+1 must also fit.
+            if (offset + elemSize - 1 < 64)
             {
                 Emit("LDD", "R24", $"Y+{offset}");
                 if (is16) Emit("LDD", "R25", $"Y+{offset + 1}");
@@ -3296,7 +3444,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (ast.Index is Constant c)
         {
             var offset = baseOffset + c.Value * elemSize;
-            if (offset < 64)
+            // STD displacement is 6-bit (max 63): the high byte at offset+1 must also fit.
+            if (offset + elemSize - 1 < 64)
             {
                 Emit("STD", $"Y+{offset}", "R24");
                 if (is16) Emit("STD", $"Y+{offset + 1}", "R25");
@@ -3541,7 +3690,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Emit("LDI", "R31", $"hi8({label})");      // ZH = base byte address
         Emit("ADD", "R30", "R24");                // Z += index (8-bit index, no overflow for small tables)
         Emit("ADC", "R31", "R1");                 // propagate carry (R1 = 0 after MUL clears)
-        Emit("LPM", "R24", "Z");                  // load byte from flash
+        if (LargeFlash)
+        {
+            // > 64 KB flash: the table may sit above 0xFFFF, so address it via RAMPZ:Z + ELPM.
+            // The index in R24 is consumed; reuse it as the byte-2 scratch. LDI doesn't touch
+            // SREG, so the carry out of the Z add above is still live for the byte-2 ADC.
+            Emit("LDI", "R24", $"hh8({label})");
+            Emit("ADC", "R24", "R1");
+            Emit("OUT", "0x3B", "R24");           // RAMPZ
+            Emit("ELPM", "R24", "Z");             // load byte from far flash
+        }
+        else
+        {
+            Emit("LPM", "R24", "Z");              // load byte from flash
+        }
         StoreRegInto("R24", alf.Dst, DataType.UINT8);
     }
 
@@ -3650,6 +3812,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             os.WriteLine();
             return;
         }
+        // atmega32u4/16u4 have no USART0; their only UART is USART1 (UCSR1A/B = 0xC8/0xC9,
+        // UDR1 = 0xCE). All other UART parts here use the 328p-compatible USART0 map.
+        bool is32u4 = chip is "atmega32u4" or "atmega16u4";
+        string ucsrA = is32u4 ? "0xC8" : "0xC0";   // UDRE bit 5
+        string ucsrB = is32u4 ? "0xC9" : "0xC1";   // TXEN bit 3
+        string udr   = is32u4 ? "0xCE" : "0xC6";
         foreach (int code in codes)
         {
             os.WriteLine($"__exn_str_{code}:");
@@ -3658,7 +3826,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         os.WriteLine("    .balign 2");
         os.WriteLine();
         os.WriteLine("__pymcu_unhandled_exn:");
-        os.WriteLine("    lds   R16, 0xC1");
+        os.WriteLine($"    lds   R16, {ucsrB}");
         os.WriteLine("    sbrs  R16, 3");
         os.WriteLine("    rjmp  __exn_halt");
         if (codes.Count == 1)
@@ -3690,10 +3858,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         os.WriteLine("    tst   R16");
         os.WriteLine("    breq  __exn_halt");
         os.WriteLine("__exn_wait_udre:");
-        os.WriteLine("    lds   R17, 0xC0");
+        os.WriteLine($"    lds   R17, {ucsrA}");
         os.WriteLine("    sbrs  R17, 5");
         os.WriteLine("    rjmp  __exn_wait_udre");
-        os.WriteLine("    sts   0xC6, R16");
+        os.WriteLine($"    sts   {udr}, R16");
         os.WriteLine("    rjmp  __exn_print_loop");
         os.WriteLine("__exn_halt:");
         os.WriteLine("    cli");

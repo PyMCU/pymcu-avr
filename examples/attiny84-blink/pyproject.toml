@@ -1,0 +1,10 @@
+[project]
+name = "attiny84-blink"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.pymcu]
+target = "attiny84"
+frequency = 8000000
+sources = "src"
+entry = "main.py"

@@ -49,6 +49,15 @@ gc_init:
 ; Returns user_ptr in R24:R25 (0x0000 = permanent OOM).
 ; ---------------------------------------------------------------------------
 gc_alloc:
+    ; Object headers store the payload length in a single byte, so sizes > 255 cannot be
+    ; represented. Truncating the size byte would desynchronise object boundaries during
+    ; compaction and corrupt the heap; fail the allocation (return 0x0000) instead.
+    TST     R25                         ; size hi byte != 0  =>  size >= 256
+    BREQ    _galloc_size_ok
+    CLR     R24
+    CLR     R25
+    RET
+_galloc_size_ok:
     ; Copy size into R22:R23 so we can restore it if gc_collect clobbers R24:R25.
     ; _gc_alloc_inner does NOT clobber R22:R23, so the first call is safe.
     ; gc_collect (via _gc_do_compact) DOES clobber R22, so we PUSH before it.
@@ -124,8 +133,17 @@ _gai_fail:
 ; gc_collect  --  run a full mark-then-compact GC cycle.
 ; ---------------------------------------------------------------------------
 gc_collect:
+    ; Compaction relocates live objects and rewrites GC_REF variables. If an interrupt fires
+    ; mid-collection and its handler touches a GC_REF (or allocates), it observes a half-moved
+    ; heap and corrupts it. Disable interrupts for the duration, preserving the caller's prior
+    ; I-flag state (restored verbatim, so a collect invoked with interrupts already off stays off).
+    IN      R18, 0x3F                   ; R18 = SREG snapshot (I flag)
+    CLI
+    PUSH    R18                         ; preserve across the mark/compact calls
     CALL    _gc_do_mark
     CALL    _gc_do_compact
+    POP     R18
+    OUT     0x3F, R18                   ; restore SREG (re-enables interrupts iff they were on)
     RET
 
 ; ---------------------------------------------------------------------------
@@ -173,12 +191,12 @@ _gdm_loop:
     CPC     R19, R21
     BRLO    _gdm_next
 
-    ; --- Skip if gc_ref >= heap_top ---
+    ; --- Skip if gc_ref >= heap_top ---  (unsigned address compare)
     LDS     R20, _gc_heap_top_lo
     LDS     R21, _gc_heap_top_hi
     CP      R18, R20
     CPC     R19, R21
-    BRGE    _gdm_next
+    BRSH    _gdm_next
 
     ; --- Mark: header at user_ptr - 2 ---
     MOVW    R26, R18
@@ -228,7 +246,7 @@ _gc_do_compact:
 _gdc_loop:
     CP      R28, R16
     CPC     R29, R17
-    BRGE    _gdc_done                   ; Y >= heap_top: finished
+    BRSH    _gdc_done                   ; Y >= heap_top: finished (unsigned address compare)
 
     ; --- Load object header at Y ---
     LD      R18, Y                      ; mark byte
@@ -361,4 +379,23 @@ _guss_next:
     RJMP    _guss_loop
 
 _guss_done:
+    RET
+
+; ---------------------------------------------------------------------------
+; gc_list_fixup  --  repoint every GC_REF variable from old_user_ptr to new_user_ptr.
+;
+; Called by list realloc after the backing buffer is copied to a new location: Python list
+; aliasing requires that EVERY variable referencing the list (not just the one that grew it)
+; observe the new address. Delegates to _gc_update_ss, which walks the shadow stack.
+;
+; ABI: standard PyMCU calling convention.
+;   arg0 (R25:R24) = old_user_ptr   arg1 (R23:R22) = new_user_ptr
+; _gc_update_ss wants old in R23:R22 and new in R25:R24, so swap the two pairs first.
+; Clobbers what _gc_update_ss clobbers (R16-R21, R26-R27) plus R18.
+; ---------------------------------------------------------------------------
+gc_list_fixup:
+    MOVW    R18, R22                    ; R19:R18 = new (temp)
+    MOVW    R22, R24                    ; R23:R22 = old
+    MOVW    R24, R18                    ; R25:R24 = new
+    CALL    _gc_update_ss
     RET

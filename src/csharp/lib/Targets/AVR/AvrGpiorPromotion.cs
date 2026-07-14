@@ -84,6 +84,13 @@ public static class AvrGpiorPromotion
         // Exclusions + explicit-GPIOR conflict scan + use counting, single walk.
         var usedAddresses = new HashSet<int>();
         var useCount = eligible.ToDictionary(n => n, _ => 0);
+        // Globals touched with bit operations (set/clear/test/write). On megaAVR only the
+        // bit-addressable GPIOR (0x3E) services these atomically via SBI/CBI/SBIS/SBIC; the
+        // others fall back to a non-atomic LDS/ORI/STS read-modify-write. Track them so they get
+        // first claim on a bit-addressable slot -- otherwise a more frequently-used plain global
+        // could take 0x3E and push a real ISR-shared bit-flag onto 0x4A/0x4B, silently losing the
+        // atomicity that is the whole point of the promotion.
+        var bitManipulated = new HashSet<string>();
         foreach (var instr in program.Functions.SelectMany(f => f.Body))
         {
             switch (instr)
@@ -103,6 +110,12 @@ public static class AvrGpiorPromotion
                     break;
                 case GcRoot { Var: Variable grv }: eligible.Remove(grv.Name); break;
                 case GcUnroot { Var: Variable guv }: eligible.Remove(guv.Name); break;
+                case BitSet { Target: Variable bsv }:        bitManipulated.Add(bsv.Name); break;
+                case BitClear { Target: Variable bclv }:     bitManipulated.Add(bclv.Name); break;
+                case BitCheck { Source: Variable bkv }:      bitManipulated.Add(bkv.Name); break;
+                case BitWrite { Target: Variable bwv }:      bitManipulated.Add(bwv.Name); break;
+                case JumpIfBitSet { Source: Variable jsv }:  bitManipulated.Add(jsv.Name); break;
+                case JumpIfBitClear { Source: Variable jcv }: bitManipulated.Add(jcv.Name); break;
             }
 
             VisitVals(instr, val =>
@@ -115,10 +128,13 @@ public static class AvrGpiorPromotion
         var freeGpiors = gpiors.Where(a => !usedAddresses.Contains(a)).ToList();
         if (freeGpiors.Count == 0) return result;
 
-        // Most-used global first: it gets GPIOR0, the SBI/CBI-reachable register.
+        // Bit-manipulated flags first (freeGpiors is ordered bit-addressable-first, so they claim
+        // the SBI/CBI-reachable GPIOR), then by use frequency. This keeps a real ISR-shared bit
+        // flag atomic even when a plain global is referenced more often.
         var winners = useCount
             .Where(kv => eligible.Contains(kv.Key) && kv.Value > 0)
-            .OrderByDescending(kv => kv.Value)
+            .OrderByDescending(kv => bitManipulated.Contains(kv.Key))
+            .ThenByDescending(kv => kv.Value)
             .ThenBy(kv => kv.Key, StringComparer.Ordinal)
             .Take(freeGpiors.Count)
             .Select((kv, i) => (Name: kv.Key, Address: freeGpiors[i]))

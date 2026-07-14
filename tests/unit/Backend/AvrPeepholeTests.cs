@@ -31,8 +31,12 @@ public class AvrPeepholeTests
     [Fact]
     public void RedundantLDI_DifferentValues_BothKept()
     {
+        // Use R16 between the two loads so the first LDI is live (a dead first load would be
+        // removed by dead-store elimination). The redundant-LDI dedup must not collapse two
+        // different values into one.
         var result = Opt(
             AvrAsmLine.MakeInstruction("LDI", "R16", "1"),
+            AvrAsmLine.MakeInstruction("OUT", "0x05", "R16"),
             AvrAsmLine.MakeInstruction("LDI", "R16", "2"));
 
         Assert.Contains(result, l => l.Mnemonic == "LDI" && l.Op2 == "1");

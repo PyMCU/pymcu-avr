@@ -41,8 +41,8 @@ public class AVRCodeGenTests
         // AVR: LDI R24, 1  then  SUBI R24, 254  (ADD immediate via SUBI -2 = SUBI 254)
         Assert.Contains("LDI\tR24, 1", asm);
         Assert.Contains("SUBI\tR24, 254", asm);
-        // `a` is greedy-allocated to R4
-        Assert.Contains("MOV\tR4, R24", asm);
+        // `a` is greedy-allocated to the first home register, R2 (the pool starts at R2).
+        Assert.Contains("MOV\tR2, R24", asm);
     }
 
     // ─── IO Optimization ──────────────────────────────────────────────────
@@ -386,10 +386,10 @@ public class AVRCodeGenTests
     }
 
     // ─── ISR context save/restore: R0 and R1 ─────────────────────────────
-    // R0 is clobbered by every MUL instruction.
-    // R1 is the zero register relied on by SBC/ADC patterns after MUL.
-    // Both must be saved in the ISR prologue and restored in the epilogue,
-    // matching what avr-gcc generates for every ISR.
+    // R0 is clobbered by every MUL instruction; R1 is the zero register relied on by
+    // SBC/ADC patterns after MUL. When the ISR body (or a callee) uses them they must be
+    // saved in the prologue and restored in the epilogue. The save trimmer omits R0 for an
+    // ISR that never touches it, so these tests give the ISR a MUL to make R0 live.
 
     [Fact]
     public void IsrContextSave_PushesR0AndR1()
@@ -401,7 +401,9 @@ public class AVRCodeGenTests
             Name = "timer_isr",
             IsInterrupt = true,
             InterruptVector = 0x14,
-            Body = [new Return(new NoneVal())]
+            // MUL clobbers R0:R1, so the prologue must preserve them.
+            Body = [new Binary(IrBinaryOp.Mul, new Variable("a"), new Variable("b"), new Variable("c")),
+                    new Return(new NoneVal())]
         });
 
         var asm = Compile(prog);
@@ -421,7 +423,8 @@ public class AVRCodeGenTests
             Name = "timer_isr",
             IsInterrupt = true,
             InterruptVector = 0x14,
-            Body = [new Return(new NoneVal())]
+            Body = [new Binary(IrBinaryOp.Mul, new Variable("a"), new Variable("b"), new Variable("c")),
+                    new Return(new NoneVal())]
         });
 
         var asm = Compile(prog);
