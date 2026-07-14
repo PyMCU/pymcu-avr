@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pymcu-test"
+version = "0.1.0"
+description = "Turnkey pytest fixtures for simulating PyMCU firmware with the avr8sharp emulator."
+readme = "README.md"
+authors = [
+    { name = "Iván Montiel Cardona", email = "contact@pymcu.org" },
+]
+requires-python = ">=3.11"
+license = { text = "BUSL-1.1" }
+keywords = ["pymcu", "avr", "pytest", "simulation", "firmware", "testing"]
+classifiers = [
+    "Framework :: Pytest",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Embedded Systems",
+]
+dependencies = [
+    "pytest>=7.0",
+    "avr8sharp>=1.1.0b1",
+]
+
+[project.urls]
+Homepage = "https://github.com/PyMCU/pymcu-avr"
+Repository = "https://github.com/PyMCU/pymcu-avr"
+
+# Auto-register as a pytest plugin: the fixtures are available with no conftest wiring.
+[project.entry-points.pytest11]
+pymcu_test = "pymcu_test.plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pymcu_test"]
