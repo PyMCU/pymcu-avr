@@ -864,9 +864,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         //   AVRA .org 0x0012 → avr-as .org 0x0024 (byte).
         // To place RJMP at byte 0x0024, we need AVRA .org = 0x0012 = vec*2.
         // This matches overflowInterrupt = vec*2 (the byte address on real hardware).
+        // Vector-table slot size depends on the core. avr5/avr6 (ATmega) use 2-word (4-byte)
+        // slots — an RJMP placed every 2 words (AVRA word .org = vec*2). Reduced-core avr25
+        // (ATtiny) parts have 1-word (2-byte) slots, so the table is half as wide (.org = vec).
+        // _avra_to_gnuas() doubles the word .org to a byte .org either way.
+        var vecWordStride = IsReducedCore() ? 1 : 2;
         for (var vec = 1; vec <= 25; vec++)
         {
-            EmitRaw($".org 0x{vec * 2:X4}");
+            EmitRaw($".org 0x{vec * vecWordStride:X4}");
 
             if (isrMap.TryGetValue(vec * 2, out var isrFunc))
             {
@@ -1036,19 +1041,40 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // The backend CLI populates TargetChip (not Chip); the in-process path sets Chip. Accept either.
     private string ChipName() => !string.IsNullOrEmpty(cfg.Chip) ? cfg.Chip : cfg.TargetChip;
 
+    // Authoritative chip name for memory/core *layout* decisions (RAMSTART/RAMEND, vector slot
+    // size). The build --target is the source of truth: the source's declared chip can fall back
+    // to atmega328p for not-yet-ported parts, which would mislead ChipName() into ATmega layout.
+    private string LayoutChip()
+        => (!string.IsNullOrEmpty(cfg.TargetChip) ? cfg.TargetChip : cfg.Chip).ToLowerInvariant();
+
+    private bool IsReducedCore() => LayoutChip().StartsWith("attiny");
+
     // First SRAM byte in the data space. ATtiny parts start at 0x60; ATmega at 0x100.
     // Mirrors the toolchain's _RAMSTART table (avrgas.py) so the codegen and linker agree.
-    private int RamStart()
+    private int RamStart() => IsReducedCore() ? 0x60 : 0x100;
+
+    // SRAM size (bytes) for reduced-core ATtiny parts, whose RAMEND differs sharply from the
+    // ATmega328P fallback. Without this the stack would initialise at 0x08FF — far outside a
+    // 64–512 byte ATtiny SRAM — and corrupt I/O space on the first PUSH/CALL.
+    private static readonly Dictionary<string, int> AttinyRamSize = new()
     {
-        var chip = ChipName().ToLowerInvariant();
-        return chip.StartsWith("attiny") ? 0x60 : 0x100;
-    }
+        ["attiny13"] = 64,   ["attiny13a"] = 64,
+        ["attiny24"] = 128,  ["attiny44"]  = 256, ["attiny84"] = 512,
+        ["attiny25"] = 128,  ["attiny45"]  = 256, ["attiny85"] = 512,
+        ["attiny2313"] = 128, ["attiny4313"] = 256,
+    };
 
     // Last usable SRAM byte = where the hardware stack pointer is initialised.
-    // Derived from the device's RAM size when known; falls back to the historical
-    // ATmega328P value (0x08FF) when RamSize is not populated (e.g. unit tests).
+    // Prefer the device's RAM size from the IR; else a known-ATtiny lookup; else the historical
+    // ATmega328P value (0x08FF), which is correct for the ATmegaX8 family in simulation.
     private int RamEnd()
-        => cfg.RamSize > 0 ? RamStart() + cfg.RamSize - 1 : 0x08FF;
+    {
+        if (AttinyRamSize.TryGetValue(LayoutChip(), out var size))
+            return RamStart() + size - 1;
+        if (cfg.RamSize > 0)
+            return RamStart() + cfg.RamSize - 1;
+        return 0x08FF;
+    }
 
     // Parts with > 64 KB flash (e.g. atmega2560) need RAMPZ + ELPM to reach tables the linker
     // places above byte address 0xFFFF; plain LPM only uses the 16-bit Z. RAMPZ is IO 0x3B.

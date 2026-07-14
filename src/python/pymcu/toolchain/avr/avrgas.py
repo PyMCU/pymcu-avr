@@ -114,6 +114,15 @@ class AvrgasToolchain(ExternalToolchain):
     }
     _DEFAULT_RAMSTART = 0x100  # ATmega48/88/168/328(P) and similar
 
+    # Reduced-core parts (avr25 and below) lack the 2-word JMP/CALL instructions; only the
+    # PC-relative RJMP/RCALL exist. The atmega-oriented "emit JMP/CALL, let -mrelax shrink"
+    # strategy fails for these — avr-as rejects JMP/CALL outright. Their flash is ≤8 KB, well
+    # within RJMP/RCALL's ±2 K-word reach, so keeping the relative forms is always safe.
+    _NO_JMP_CHIPS: frozenset[str] = frozenset(_RAMSTART)  # the ATtiny family above
+
+    def _has_jmp(self) -> bool:
+        return self.chip.lower() not in self._NO_JMP_CHIPS
+
     def _chip_ramstart(self) -> int:
         return self._RAMSTART.get(self.chip.lower(), self._DEFAULT_RAMSTART)
 
@@ -382,7 +391,7 @@ class AvrgasToolchain(ExternalToolchain):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _preprocess_asm(src: str) -> str:
+    def _preprocess_asm(src: str, has_jmp: bool = True) -> str:
         """
         Translate compiler output directives to GNU AS (avr-as) equivalents.
 
@@ -437,8 +446,10 @@ class AvrgasToolchain(ExternalToolchain):
             # the compact encoding while large ones still link. The atmega-style
             # vector table is 4-byte-per-slot (.org spacing), which a 4-byte JMP
             # fills exactly.
-            line = _re.sub(r"\bRCALL\b", "CALL", line)
-            line = _re.sub(r"\bRJMP\b", "JMP", line)
+            # Reduced-core parts (ATtiny/avr25) have no JMP/CALL — keep the relative forms.
+            if has_jmp:
+                line = _re.sub(r"\bRCALL\b", "CALL", line)
+                line = _re.sub(r"\bRJMP\b", "JMP", line)
             # .db ...  →  .byte ...
             line = _re.sub(r"^\s*\.db\b", ".byte", line)
 
@@ -487,7 +498,7 @@ class AvrgasToolchain(ExternalToolchain):
 
         # Translate AVRA-specific syntax to GNU AS before assembling
         src = asm_file.read_text()
-        translated = self._preprocess_asm(src)
+        translated = self._preprocess_asm(src, has_jmp=self._has_jmp())
         asm_file.write_text(translated)
 
         cmd = [
