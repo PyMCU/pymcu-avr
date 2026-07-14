@@ -23,3 +23,8 @@ TestResults/
 
 # dotnet publish output
 build/bin/
+
+# venv symlink (points at the monorepo venv) and the locally deployed backend binary
+.venv
+src/python/pymcu/backend/avr/pymcuc-avr
+*.signlock
