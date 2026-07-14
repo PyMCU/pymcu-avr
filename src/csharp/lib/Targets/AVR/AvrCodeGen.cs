@@ -199,10 +199,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             if (offset + 3 < 64)
             {
-                Emit("LDD", "R22", $"Y+{offset}");
-                Emit("LDD", "R23", $"Y+{offset + 1}");
-                Emit("LDD", "R24", $"Y+{offset + 2}");
-                Emit("LDD", "R25", $"Y+{offset + 3}");
+                EmitSlotLoad("R22", offset);
+                EmitSlotLoad("R23", offset + 1);
+                EmitSlotLoad("R24", offset + 2);
+                EmitSlotLoad("R25", offset + 3);
             }
             else
             {
@@ -243,10 +243,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             if (offset + 3 < 64)
             {
-                Emit("STD", $"Y+{offset}", "R22");
-                Emit("STD", $"Y+{offset + 1}", "R23");
-                Emit("STD", $"Y+{offset + 2}", "R24");
-                Emit("STD", $"Y+{offset + 3}", "R25");
+                EmitSlotStore(offset, "R22");
+                EmitSlotStore(offset + 1, "R23");
+                EmitSlotStore(offset + 2, "R24");
+                EmitSlotStore(offset + 3, "R25");
             }
             else
             {
@@ -619,9 +619,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
             if (nearY)
             {
-                Emit("LDD", reg, $"Y+{offset}");
-                if (size >= 2 && srcSize >= 2) Emit("LDD", regH, $"Y+{offset + 1}");
-                if (size == 4 && srcSize >= 4) { Emit("LDD", regB2, $"Y+{offset + 2}"); Emit("LDD", regB3, $"Y+{offset + 3}"); }
+                EmitSlotLoad(reg, offset);
+                if (size >= 2 && srcSize >= 2) EmitSlotLoad(regH, offset + 1);
+                if (size == 4 && srcSize >= 4) { EmitSlotLoad(regB2, offset + 2); EmitSlotLoad(regB3, offset + 3); }
             }
             else
             {
@@ -689,9 +689,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             bool nearY = offset + (size - 1) < 64;
             if (nearY)
             {
-                Emit("STD", $"Y+{offset}", reg);
-                if (size >= 2) Emit("STD", $"Y+{offset + 1}", regH);
-                if (size == 4) { Emit("STD", $"Y+{offset + 2}", regB2); Emit("STD", $"Y+{offset + 3}", regB3); }
+                EmitSlotStore(offset, reg);
+                if (size >= 2) EmitSlotStore(offset + 1, regH);
+                if (size == 4) { EmitSlotStore(offset + 2, regB2); EmitSlotStore(offset + 3, regB3); }
             }
             else
             {
@@ -1053,6 +1053,23 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // Mirrors the toolchain's _RAMSTART table (avrgas.py) so the codegen and linker agree.
     private int RamStart() => IsReducedCore() ? 0x60 : 0x100;
 
+    // Frame-slot access. LDD/STD Y+q encodes a 6-bit displacement (q = 0..63); a program
+    // whose static frame layout grows past that (deep call overlays, many wide locals)
+    // needs absolute LDS/STS instead -- Y stays parked at _stack_base (= RamStart()), so
+    // the absolute address is RamStart() + offset. 2 words instead of 1, only paid by the
+    // slots beyond the window.
+    private void EmitSlotLoad(string reg, int offset)
+    {
+        if (offset <= 63) Emit("LDD", reg, $"Y+{offset}");
+        else Emit("LDS", reg, $"0x{RamStart() + offset:X4}");
+    }
+
+    private void EmitSlotStore(int offset, string reg)
+    {
+        if (offset <= 63) Emit("STD", $"Y+{offset}", reg);
+        else Emit("STS", $"0x{RamStart() + offset:X4}", reg);
+    }
+
     // SRAM size (bytes) for reduced-core ATtiny parts, whose RAMEND differs sharply from the
     // ATmega328P fallback. Without this the stack would initialise at 0x08FF — far outside a
     // 64–512 byte ATtiny SRAM — and corrupt I/O space on the first PUSH/CALL.
@@ -1228,13 +1245,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     else if (_stackLayout.TryGetValue(pname, out int soff))
                     {
                         if (!IsVariableReadInBody(pname, func.Body)) continue;
-                        bool nearY2 = soff + (p16 ? 1 : 0) < 64;
+                        // EmitSlotStore falls back to absolute STS beyond the Y+63 window
+                        // (and uses RamStart(), fixing the old hardcoded 0x0100 on ATtiny).
                         Emit("LDS", "R26", $"_arg_spill + {spillOff}");
-                        if (nearY2) Emit("STD", $"Y+{soff}", "R26"); else Emit("STS", $"0x{0x0100 + soff:X4}", "R26");
+                        EmitSlotStore(soff, "R26");
                         if (p16)
                         {
                             Emit("LDS", "R26", $"_arg_spill + {spillOff + 1}");
-                            if (nearY2) Emit("STD", $"Y+{soff + 1}", "R26"); else Emit("STS", $"0x{0x0100 + soff + 1:X4}", "R26");
+                            EmitSlotStore(soff + 1, "R26");
                         }
                     }
                     continue;
@@ -1268,14 +1286,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     bool nearY = off + (pSize - 1) < 64;
                     if (nearY)
                     {
-                        Emit("STD", $"Y+{off}", aR);
-                        if (p16 || p32) Emit("STD", $"Y+{off + 1}", GetHighReg(aR));
+                        EmitSlotStore(off, aR);
+                        if (p16 || p32) EmitSlotStore(off + 1, GetHighReg(aR));
                         if (p32)
                         {
                             string aR2 = pFloat && k == 0 ? "R24" : (k == 0 ? "R22" : $"R{int.Parse(aR[1..]) + 2}");
                             string aR3 = pFloat && k == 0 ? "R25" : (k == 0 ? "R23" : $"R{int.Parse(aR[1..]) + 3}");
-                            Emit("STD", $"Y+{off + 2}", aR2);
-                            Emit("STD", $"Y+{off + 3}", aR3);
+                            EmitSlotStore(off + 2, aR2);
+                            EmitSlotStore(off + 3, aR3);
                         }
                     }
                     else
@@ -1966,8 +1984,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         string selfName = vc.Self.Name.Replace('.', '_');
         if (_stackLayout.TryGetValue(selfName, out int selfOffset))
         {
-            Emit("LDD", "R30", $"Y+{selfOffset}");
-            Emit("LDD", "R31", $"Y+{selfOffset + 1}");
+            EmitSlotLoad("R30", selfOffset);
+            EmitSlotLoad("R31", selfOffset + 1);
         }
         else
         {
@@ -3410,8 +3428,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             // LDD displacement is 6-bit (max 63): the high byte at offset+1 must also fit.
             if (offset + elemSize - 1 < 64)
             {
-                Emit("LDD", "R24", $"Y+{offset}");
-                if (is16) Emit("LDD", "R25", $"Y+{offset + 1}");
+                EmitSlotLoad("R24", offset);
+                if (is16) EmitSlotLoad("R25", offset + 1);
             }
             else
             {
@@ -3454,8 +3472,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             // STD displacement is 6-bit (max 63): the high byte at offset+1 must also fit.
             if (offset + elemSize - 1 < 64)
             {
-                Emit("STD", $"Y+{offset}", "R24");
-                if (is16) Emit("STD", $"Y+{offset + 1}", "R25");
+                EmitSlotStore(offset, "R24");
+                if (is16) EmitSlotStore(offset + 1, "R25");
             }
             else
             {
@@ -3492,8 +3510,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         else if (_stackLayout.TryGetValue(bl.PtrName, out int ptrOffset))
         {
-            Emit("LDD", "R30", $"Y+{ptrOffset}");
-            Emit("LDD", "R31", $"Y+{ptrOffset + 1}");
+            EmitSlotLoad("R30", ptrOffset);
+            EmitSlotLoad("R31", ptrOffset + 1);
         }
         else
         {
@@ -3548,8 +3566,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         else if (_stackLayout.TryGetValue(bs.PtrName, out int ptrOffset))
         {
-            Emit("LDD", "R30", $"Y+{ptrOffset}");
-            Emit("LDD", "R31", $"Y+{ptrOffset + 1}");
+            EmitSlotLoad("R30", ptrOffset);
+            EmitSlotLoad("R31", ptrOffset + 1);
         }
         else
         {
