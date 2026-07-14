@@ -1536,6 +1536,13 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case SignalError se: CompileSignalError(se); break;
             case SignalSuccess: CompileSignalSuccess(); break;
             case BranchOnError boe: CompileBranchOnError(boe); break;
+
+            // Every IR instruction must be handled explicitly (or consumed earlier, like
+            // InlineExpansionMarker in CompileFunction). A silent fall-through here miscompiles.
+            default:
+                throw new NotSupportedException(
+                    $"AVR backend: unhandled IR instruction '{instr.GetType().Name}'. " +
+                    "Add an explicit case (or a documented no-op) for it.");
         }
     }
 
