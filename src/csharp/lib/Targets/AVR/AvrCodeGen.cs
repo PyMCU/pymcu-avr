@@ -71,6 +71,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         new(ReferenceEqualityComparer.Instance);
     private HashSet<Binary> _bytePackSkip = new(ReferenceEqualityComparer.Instance);
 
+    // Constant-delay outlining: how many surviving call sites lower to each busy-loop
+    // iteration count, and which of those counts actually got a shared subroutine emitted.
+    private readonly Dictionary<ulong, int> _delaySiteCensus = new();
+    private readonly SortedSet<ulong> _emittedDelaySubs = [];
+
     private string MakeLabel(string prefix = ".L") => $"{prefix}_{_labelCounter++}";
     private static string GetHighReg(string reg) => "R" + (int.Parse(reg[1..]) + 1);
 
@@ -892,10 +897,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // after the devirtualization pass (empty for the vast majority of programs).
         EmitVtables(program);
 
-        foreach (var func in program.Functions.Where(func => func.IsInterrupt))
-            CompileFunction(func);
-
         // --- Call Graph Analysis for DCE ---
+        // Runs before any function is emitted: the const-delay census below needs the
+        // surviving call sites, and an ISR can hold delay sites too.
         var referencedFuncs = new HashSet<string>();
         var worklist = new Queue<string>();
         
@@ -920,20 +924,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             {
                 if (instr is Call c)
                 {
-                    if ((c.FunctionName == "_delay_ms_avr" || c.FunctionName.EndsWith("__delay_ms_avr")) 
-                        && c.Args.Count == 1 && c.Args[0] is Constant msConst)
-                    {
-                        ulong cycles = (ulong)msConst.Value * (cfg.Frequency / 1000);
-                        ulong loops = cycles / 6;
-                        if (loops > 0) continue; 
-                    }
-                    if ((c.FunctionName == "_delay_us_avr" || c.FunctionName.EndsWith("__delay_us_avr")) 
-                        && c.Args.Count == 1 && c.Args[0] is Constant usConst)
-                    {
-                        ulong cycles = (ulong)usConst.Value * (cfg.Frequency / 1000000);
-                        ulong loops = cycles / 6;
-                        if (loops > 0) continue; 
-                    }
+                    // A constant delay lowers to a calibrated busy loop, so the
+                    // _delay_*_avr subroutine itself is only needed for runtime counts.
+                    if (ConstDelayLoops(c) is > 0) continue;
                     AddRef(c.FunctionName);
                 }
                 // VirtualCall: the DefiningClass implementation must survive DCE.
@@ -956,6 +949,21 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         // ------------------------------------
 
+        // Census of the constant-delay busy loops that will actually be emitted, keyed by
+        // loop count. A count reached from 2+ sites becomes a shared subroutine instead of
+        // 18 bytes of inline loop per site (see EmitConstDelay).
+        _delaySiteCensus.Clear();
+        _emittedDelaySubs.Clear();
+        foreach (var func in program.Functions
+                     .Where(f => referencedFuncs.Contains(f.Name))
+                     .Where(f => f.IsInterrupt || !f.IsInline || f.Name == "main"))
+            foreach (var instr in func.Body)
+                if (instr is Call dc && ConstDelayLoops(dc) is { } dl && dl > 0)
+                    _delaySiteCensus[dl] = _delaySiteCensus.GetValueOrDefault(dl) + 1;
+
+        foreach (var func in program.Functions.Where(func => func.IsInterrupt))
+            CompileFunction(func);
+
         foreach (var func in program.Functions.Where(func => !func.IsInterrupt)
                      .Where(func => referencedFuncs.Contains(func.Name))
                      .Where(func => !func.IsInline || func.Name == "main"))
@@ -972,6 +980,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var line in optimized)
             output.WriteLine(line.ToString());
 
+        EmitDelayRuntime(output);
         EmitFlashArrayPool(output);
         if (program.NeedsGc) EmitGcRuntime(output);
         // Collect the constant exception codes raised anywhere in the program so EmitExnRuntime
@@ -1805,51 +1814,91 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitLabel(skip);
     }
 
-    private void CompileCall(Call call)
+    // Iteration count of the calibrated busy loop a delay_ms/delay_us call with a constant
+    // argument lowers to, or null when the call is not one (or the delay rounds to nothing).
+    private ulong? ConstDelayLoops(Call call)
     {
-        if ((call.FunctionName == "_delay_ms_avr" || call.FunctionName.EndsWith("__delay_ms_avr")) && call.Args.Count == 1 && call.Args[0] is Constant msConst)
+        if (call.Args.Count != 1 || call.Args[0] is not Constant k) return null;
+        bool ms = call.FunctionName == "_delay_ms_avr" || call.FunctionName.EndsWith("__delay_ms_avr");
+        bool us = call.FunctionName == "_delay_us_avr" || call.FunctionName.EndsWith("__delay_us_avr");
+        if (!ms && !us) return null;
+        ulong perUnit = ms ? cfg.Frequency / 1000 : cfg.Frequency / 1000000;
+        ulong loops = (ulong)k.Value * perUnit / 6;
+        return loops == 0 ? null : loops;
+    }
+
+    private static string DelaySubName(ulong loops) => $"__dly_c{loops}";
+
+    // A constant delay is 18 bytes of inline loop (4x LDI + a 5-instruction loop). When the
+    // same iteration count is reached from two or more surviving call sites, the loop moves
+    // into a shared parameterless subroutine and each site becomes a 4-byte CALL -- the
+    // break-even is 2 sites (2*4 + 20 < 2*18), and a delay-heavy driver like the HD44780 LCD
+    // has ~80 sites over a handful of distinct counts.
+    //
+    // Timing: the subroutine runs `loops - 1` iterations, so the 8 cycles of CALL+RET stand in
+    // for the 6 cycles of the iteration it drops. That leaves the delay a cycle or two LONGER
+    // than the inline form regardless of the count, never shorter -- delay_ms(1) at 16 MHz
+    // measures 16 001 cycles outlined against 16 000 inline (DelayOutlineTests).
+    //
+    // Reduced-core parts (avr25 ATtiny) have no CALL, and the RCALL that replaces it only
+    // reaches +/-2K words -- not the whole flash of the larger ones. Those parts keep the
+    // inline loop; they are 2-8 KB devices that do not run the delay-heavy drivers this pays off on.
+    private void EmitConstDelay(ulong loops)
+    {
+        if (loops >= 2 && !IsReducedCore() && _delaySiteCensus.GetValueOrDefault(loops) >= 2)
         {
-            ulong cycles = (ulong)msConst.Value * (cfg.Frequency / 1000);
-            ulong loops = cycles / 6;
-            if (loops == 0) return;
-
-            string label = $"_dly_L{_loopCounter++}";
-
-            Emit($"LDI", "R18", $"{(loops & 0xFF)}");
-            Emit($"LDI", "R19", $"{((loops >> 8) & 0xFF)}");
-            Emit($"LDI", "R20", $"{((loops >> 16) & 0xFF)}");
-            Emit($"LDI", "R21", $"{((loops >> 24) & 0xFF)}");
-            EmitLabel(label);
-            Emit($"SUBI", "R18", "1");
-            Emit($"SBCI", "R19", "0");
-            Emit($"SBCI", "R20", "0");
-            Emit($"SBCI", "R21", "0");
-            Emit("BRNE", label);
+            _emittedDelaySubs.Add(loops);
+            Emit("CALL", DelaySubName(loops));
             return;
         }
-        // delay_us(const): same calibrated 6-cycle busy loop as delay_ms, sized in
-        // microseconds. Emitted inline so a constant micro-delay is a tight loop instead
-        // of a CALL to (or per-site inline of) the 12-NOP _delay_us_avr body. The matching
-        // DCE walk skips AddRef for this same const case, so the subroutine is only
-        // compiled when a runtime (non-constant) delay_us call needs it.
-        if ((call.FunctionName == "_delay_us_avr" || call.FunctionName.EndsWith("__delay_us_avr")) && call.Args.Count == 1 && call.Args[0] is Constant usConst)
+
+        string label = $"_dly_L{_loopCounter++}";
+        Emit("LDI", "R18", $"{loops & 0xFF}");
+        Emit("LDI", "R19", $"{(loops >> 8) & 0xFF}");
+        Emit("LDI", "R20", $"{(loops >> 16) & 0xFF}");
+        Emit("LDI", "R21", $"{(loops >> 24) & 0xFF}");
+        EmitLabel(label);
+        Emit("SUBI", "R18", "1");
+        Emit("SBCI", "R19", "0");
+        Emit("SBCI", "R20", "0");
+        Emit("SBCI", "R21", "0");
+        Emit("BRNE", label);
+    }
+
+    // Shared bodies for the counts EmitConstDelay outlined. Written straight to the output
+    // after the peephole, like the exception and GC runtimes: these are hand-sized sequences
+    // whose cycle count is the contract, so no optimisation pass may touch them.
+    private void EmitDelayRuntime(TextWriter output)
+    {
+        foreach (var loops in _emittedDelaySubs)
         {
-            ulong cycles = (ulong)usConst.Value * (cfg.Frequency / 1000000);
-            ulong loops = cycles / 6;
-            if (loops == 0) return;
+            ulong n = loops - 1;
+            string label = $"_dly_S{loops}";
+            output.WriteLine();
+            output.WriteLine($"{DelaySubName(loops)}:");
+            output.WriteLine($"\tLDI\tR18, {n & 0xFF}");
+            output.WriteLine($"\tLDI\tR19, {(n >> 8) & 0xFF}");
+            output.WriteLine($"\tLDI\tR20, {(n >> 16) & 0xFF}");
+            output.WriteLine($"\tLDI\tR21, {(n >> 24) & 0xFF}");
+            output.WriteLine($"{label}:");
+            output.WriteLine("\tSUBI\tR18, 1");
+            output.WriteLine("\tSBCI\tR19, 0");
+            output.WriteLine("\tSBCI\tR20, 0");
+            output.WriteLine("\tSBCI\tR21, 0");
+            output.WriteLine($"\tBRNE\t{label}");
+            output.WriteLine("\tRET");
+        }
+    }
 
-            string label = $"_dly_L{_loopCounter++}";
-
-            Emit($"LDI", "R18", $"{(loops & 0xFF)}");
-            Emit($"LDI", "R19", $"{((loops >> 8) & 0xFF)}");
-            Emit($"LDI", "R20", $"{((loops >> 16) & 0xFF)}");
-            Emit($"LDI", "R21", $"{((loops >> 24) & 0xFF)}");
-            EmitLabel(label);
-            Emit($"SUBI", "R18", "1");
-            Emit($"SBCI", "R19", "0");
-            Emit($"SBCI", "R20", "0");
-            Emit($"SBCI", "R21", "0");
-            Emit("BRNE", label);
+    private void CompileCall(Call call)
+    {
+        // delay_ms(const) / delay_us(const): a calibrated 6-cycle busy loop, emitted here
+        // instead of calling (or per-site inlining) the _delay_*_avr body. The matching DCE
+        // walk skips AddRef for this same const case, so the subroutine is only compiled
+        // when a runtime (non-constant) delay call needs it.
+        if (ConstDelayLoops(call) is { } delayLoops)
+        {
+            EmitConstDelay(delayLoops);
             return;
         }
         // Float arguments use R22:R25 (arg0) and R18:R21 (arg1) per float convention.
