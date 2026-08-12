@@ -2134,38 +2134,45 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private void CompileLoadIndirect(LoadIndirect li)
     {
         LoadIntoReg(li.SrcPtr, "R26", DataType.UINT16);
-        DataType dstType = GetValType(li.Dst);
-        int dstSize = dstType.SizeOf();
-        if (dstSize == 4)
+        // Access width is the pointer's element type when known (li.Elem); fall back to
+        // the destination's type for legacy IR that left it UINT8. The destination may be
+        // collapsed to a narrower view by the optimizer — the pointer decides the width.
+        DataType accessType = li.Elem != DataType.UINT8 ? li.Elem : GetValType(li.Dst);
+        int accessSize = accessType.SizeOf();
+        if (accessSize == 4)
         {
             Emit("LD", "R24", "X+");
             Emit("LD", "R25", "X+");
             Emit("LD", "R22", "X+");
             Emit("LD", "R23", "X");
         }
-        else if (dstSize == 2)
+        else if (accessSize == 2)
         {
             Emit("LD", "R24", "X+");
             Emit("LD", "R25", "X");
         }
         else Emit("LD", "R24", "X");
-        StoreRegInto("R24", li.Dst, dstType);
+        StoreRegInto("R24", li.Dst, accessType);
     }
 
     private void CompileStoreIndirect(StoreIndirect si)
     {
         LoadIntoReg(si.DstPtr, "R26", DataType.UINT16);
-        DataType srcType = GetValType(si.Src);
-        LoadIntoReg(si.Src, "R24", srcType);
-        int srcSize = srcType.SizeOf();
-        if (srcSize == 4)
+        // Access width is the pointer's element type when known (si.Elem); fall back to
+        // the source value's type for legacy IR that left it UINT8. The source may have
+        // been collapsed to a raw constant by copy-forwarding, and a constant's type is
+        // its magnitude — storing `0x12` through a ptr[uint16] must still write 2 bytes.
+        DataType accessType = si.Elem != DataType.UINT8 ? si.Elem : GetValType(si.Src);
+        LoadIntoReg(si.Src, "R24", accessType);
+        int accessSize = accessType.SizeOf();
+        if (accessSize == 4)
         {
             Emit("ST", "X+", "R24");
             Emit("ST", "X+", "R25");
             Emit("ST", "X+", "R22");
             Emit("ST", "X",  "R23");
         }
-        else if (srcSize == 2)
+        else if (accessSize == 2)
         {
             Emit("ST", "X+", "R24");
             Emit("ST", "X",  "R25");
