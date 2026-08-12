@@ -3286,6 +3286,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         var type = GetValType(aa.Target);
         var is16 = type.SizeOf() == 2;
         var is32 = type.SizeOf() == 4;
+
+        // The in-place fast paths below are 8/16-bit only: every immediate and
+        // register variant touches at most R24:R25, so a 4-byte target had its two
+        // high bytes silently dropped (`value -= 100000` on a uint32 emitted a lone
+        // SUBI of the low byte). Route 32-bit (and float, same size) through the
+        // general Binary lowering, which handles the full width.
+        if (is32)
+        {
+            CompileBinary(new Binary(aa.Op, aa.Target, aa.Operand, aa.Target));
+            return;
+        }
+
         LoadIntoReg(aa.Target, "R24", type);
 
         var usedImm = false;
