@@ -198,7 +198,8 @@ public static class AvrPeephole
         return int.TryParse(s.AsSpan(1), out int v) ? v : -1;
     }
 
-    public static List<AvrAsmLine> Optimize(List<AvrAsmLine> lines)
+    public static List<AvrAsmLine> Optimize(List<AvrAsmLine> lines,
+        HashSet<int>? noForwardAddrs = null, int ramStart = 0x100)
     {
         var result = new List<AvrAsmLine>(lines);
         var changed = true;
@@ -572,6 +573,21 @@ public static class AvrPeephole
                 result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         }
 
+        // --- Absolute STS/LDS store-to-load forwarding ---
+        // State-machine code parks values at absolute SRAM homes and reloads them
+        // immediately (self pointer into X/Z per field access). Same discipline as
+        // ForwardStores but for absolute addresses, with the extra hazards handled:
+        // MMIO (addr < RAMSTART) and ISR-shared globals are never forwarded, and any
+        // indirect/frame store, call, label or raw line clears all tracking.
+        var afChanged = true;
+        while (afChanged)
+        {
+            afChanged = false;
+            ForwardAbsoluteLoads(result, noForwardAddrs ?? new HashSet<int>(), ramStart, ref afChanged);
+            if (afChanged)
+                result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
+        }
+
         result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
 
         // --- PINx synchronizer hazard: NOP between PORT/DDR write and PIN read ---
@@ -635,6 +651,109 @@ public static class AvrPeephole
     // Conservatively over-approximates whether `line` may write register r. Used by the
     // redundant-reload pass to decide when a tracked value is still intact, so it MUST
     // err toward "yes" (anything unrecognised counts as a write, ending the scan).
+    // Basic-block store-to-load forwarding for ABSOLUTE SRAM addresses: after
+    // `STS addr, Rs`, a later `LDS Rd, addr` with Rs unmodified becomes `MOV Rd, Rs`
+    // (or vanishes when Rd == Rs); an LDS also establishes a mirror so repeated
+    // reloads of the same home collapse. Soundness rules:
+    //   - addr < ramStart is I/O or MMIO: reading is never equivalent to a register.
+    //   - noForward holds the SRAM homes of ISR-shared globals: an interrupt may
+    //     rewrite them between the store and the load (volatile semantics).
+    //   - ST/STD (indirect or frame) may alias any tracked home (large frames are
+    //     also reached via absolute LDS/STS): clear everything.
+    //   - Calls, labels, flow changes and raw asm clear everything.
+    //   - An instruction guarded by a skip (CPSE/SBRC/SBRS/SBIC/SBIS) is left
+    //     untouched: replacing a 2-word LDS with a 1-word MOV (or removing it)
+    //     under a skip would change which instruction gets skipped.
+    private static void ForwardAbsoluteLoads(List<AvrAsmLine> lines, HashSet<int> noForward,
+        int ramStart, ref bool changed)
+    {
+        var mirror = new Dictionary<int, int>();   // SRAM addr -> register holding its value
+
+        void KillReg(int r)
+        {
+            foreach (var k in mirror.Where(kv => kv.Value == r).Select(kv => kv.Key).ToList())
+                mirror.Remove(k);
+        }
+
+        bool prevIsSkip = false;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var l = lines[i];
+            if (l.Type is AvrAsmLine.LineType.Comment or AvrAsmLine.LineType.Empty
+                       or AvrAsmLine.LineType.DebugMarker)
+                continue;
+            if (l.Type != AvrAsmLine.LineType.Instruction)
+            {
+                mirror.Clear();                    // label (unknown entry) or raw asm
+                prevIsSkip = false;
+                continue;
+            }
+
+            string m = l.Mnemonic;
+            bool guarded = prevIsSkip;
+            prevIsSkip = m is "CPSE" or "SBRC" or "SBRS" or "SBIC" or "SBIS";
+
+            if (guarded)
+            {
+                // May or may not execute: drop whatever it could invalidate, touch nothing.
+                mirror.Clear();
+                continue;
+            }
+
+            if (m == "STS")
+            {
+                int addr = ParseIoAddr(l.Op1);
+                int rs = ParseReg(l.Op2);
+                mirror.Remove(addr);
+                if (addr >= ramStart && rs >= 0 && !noForward.Contains(addr))
+                    mirror[addr] = rs;
+                continue;
+            }
+
+            if (m == "LDS")
+            {
+                int addr = ParseIoAddr(l.Op2);
+                int rd = ParseReg(l.Op1);
+                if (rd >= 0 && mirror.TryGetValue(addr, out int rs) && rs != rd)
+                {
+                    lines[i] = AvrAsmLine.MakeInstruction("MOV", $"R{rd}", $"R{rs}");
+                    changed = true;
+                    KillReg(rd);
+                    continue;
+                }
+                if (rd >= 0 && mirror.TryGetValue(addr, out int rs2) && rs2 == rd)
+                {
+                    lines[i] = AvrAsmLine.MakeEmpty();
+                    changed = true;
+                    continue;
+                }
+                KillReg(rd);
+                if (addr >= ramStart && rd >= 0 && !noForward.Contains(addr))
+                    mirror[addr] = rd;
+                continue;
+            }
+
+            if (m is "ST" or "STD")
+            {
+                mirror.Clear();                    // may alias any tracked home
+                // ST with a post-inc pointer also writes the pair; WritesReg handles
+                // it below, but the map is already empty.
+                continue;
+            }
+
+            if (IsFlowTerminator(l) || m is "CALL" or "RCALL" or "ICALL" or "EICALL"
+                || m.StartsWith("BR"))
+            {
+                mirror.Clear();
+                continue;
+            }
+
+            foreach (var k in mirror.Keys.ToList())
+                if (WritesReg(l, mirror[k]))
+                    mirror.Remove(k);
+        }
+    }
+
     // The AVR PINx input synchronizer latches the physical pin with a 0.5-1.5 cycle
     // delay, so reading PINx on the instruction IMMEDIATELY after writing the same
     // port's PORTx (or DDRx) returns the PRE-write value on real silicon — the

@@ -976,7 +976,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (!cfg.EmitDebugComments)
             ApplySymbolShortening(program);
 
-        var optimized = AvrPeephole.Optimize(_assembly);
+        // Absolute-forwarding safety set: the SRAM homes of ISR-shared globals must
+        // never have a load forwarded from a register -- an interrupt may rewrite
+        // them between the store and the load. Cover up to 4 bytes per name (the
+        // peephole works on addresses; over-excluding is harmless).
+        var noForward = new HashSet<int>();
+        foreach (var g in program.IsrSharedGlobals)
+            if (_stackLayout.TryGetValue(g, out int isrOff))
+                for (int b = 0; b < 4; b++)
+                    noForward.Add(RamStart() + isrOff + b);
+
+        var optimized = AvrPeephole.Optimize(_assembly, noForward, RamStart());
         foreach (var line in optimized)
             output.WriteLine(line.ToString());
 
