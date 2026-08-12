@@ -573,6 +573,11 @@ public static class AvrPeephole
         }
 
         result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
+
+        // --- PINx synchronizer hazard: NOP between PORT/DDR write and PIN read ---
+        // Runs last so no elimination pass can drop the inserted NOP.
+        InsertPinSyncNops(result);
+
         return result;
     }
 
@@ -630,6 +635,58 @@ public static class AvrPeephole
     // Conservatively over-approximates whether `line` may write register r. Used by the
     // redundant-reload pass to decide when a tracked value is still intact, so it MUST
     // err toward "yes" (anything unrecognised counts as a write, ending the scan).
+    // The AVR PINx input synchronizer latches the physical pin with a 0.5-1.5 cycle
+    // delay, so reading PINx on the instruction IMMEDIATELY after writing the same
+    // port's PORTx (or DDRx) returns the PRE-write value on real silicon — the
+    // datasheet remedy is one NOP between them. Emulators that reflect PORT->PIN
+    // instantly hide this, so the suite can be green while the chip reads stale
+    // levels (found on an Arduino Uno: SBI PORTB,5 ; SBIS PINB,5 read 0).
+    // Classic-AVR port triplets are consecutive IO addresses (PINx, DDRx, PORTx),
+    // so the PIN address is writeAddr-2 (PORT write) or writeAddr-1 (DDR write).
+    // A false-positive NOP costs 1 cycle and 2 bytes but can never break semantics.
+    private static void InsertPinSyncNops(List<AvrAsmLine> lines)
+    {
+        static int WrittenIoAddr(AvrAsmLine l) => l.Mnemonic switch
+        {
+            "SBI" or "CBI" => ParseIoAddr(l.Op1),
+            "OUT"          => ParseIoAddr(l.Op1),
+            _ => -1,
+        };
+        static int ReadIoAddr(AvrAsmLine l) => l.Mnemonic switch
+        {
+            "SBIS" or "SBIC" => ParseIoAddr(l.Op1),
+            "IN"             => ParseIoAddr(l.Op2),
+            _ => -1,
+        };
+
+        for (int i = 0; i < lines.Count - 1; i++)
+        {
+            if (lines[i].Type != AvrAsmLine.LineType.Instruction) continue;
+            int w = WrittenIoAddr(lines[i]);
+            if (w < 2) continue;   // needs room for w-2 to be a PIN register
+
+            int j = i + 1;
+            while (j < lines.Count && lines[j].Type is AvrAsmLine.LineType.Comment
+                                                    or AvrAsmLine.LineType.Empty
+                                                    or AvrAsmLine.LineType.DebugMarker) j++;
+            if (j >= lines.Count || lines[j].Type != AvrAsmLine.LineType.Instruction) continue;
+
+            int rd = ReadIoAddr(lines[j]);
+            if (rd < 0 || (rd != w - 2 && rd != w - 1)) continue;
+
+            lines.Insert(j, AvrAsmLine.MakeInstruction("NOP"));
+            i = j;   // continue after the read; the pair is now separated
+        }
+    }
+
+    private static int ParseIoAddr(string? op)
+    {
+        if (string.IsNullOrEmpty(op)) return -1;
+        if (op.StartsWith("0x") || op.StartsWith("0X"))
+            return int.TryParse(op[2..], System.Globalization.NumberStyles.HexNumber, null, out int h) ? h : -1;
+        return int.TryParse(op, out int d) ? d : -1;
+    }
+
     private static bool WritesReg(AvrAsmLine line, int r)
     {
         switch (line.Type)
