@@ -645,6 +645,24 @@ public static class AvrPeephole
 
         string m = line.Mnemonic;
         if (m.StartsWith("BR")) return false;                       // conditional/relative branches
+        // LD/ST/LPM/ELPM with a post-increment/pre-decrement pointer operand ("X+", "-Y",
+        // "Z+") also WRITE the pointer pair (X=R26:27, Y=R28:29, Z=R30:31) — a multi-byte
+        // indirect access advances the pointer, so a reload of X after `LD R24, X+` is NOT
+        // redundant. LDD/STD use displacement syntax ("Y+q") and leave the pointer intact;
+        // they stay on the set-based paths below.
+        if (m is "LD" or "ST" or "LPM" or "ELPM")
+        {
+            string ptrOp = (m == "ST" ? line.Op1 : line.Op2) ?? "";
+            if (ptrOp.Contains('+') || ptrOp.StartsWith("-"))
+            {
+                int lo = ptrOp.Contains('X') ? 26 : ptrOp.Contains('Y') ? 28 : 30;
+                if (r == lo || r == lo + 1) return true;
+            }
+            if (m == "ST") return false;                            // memory-only besides the pointer
+            if (m is "LPM" or "ELPM" && string.IsNullOrEmpty(line.Op1))
+                return r == 0;                                      // implied-operand LPM writes R0
+            return ParseReg(line.Op1) == r;
+        }
         if (WritesNoReg.Contains(m)) return false;
         // Calls clobber the scratch/arg/return registers; R2-R15 (the globally-unique named-var
         // home pool), the Y pointer and the zero register survive (PyMCU never uses those as
