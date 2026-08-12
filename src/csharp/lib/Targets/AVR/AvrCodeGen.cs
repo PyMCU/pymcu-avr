@@ -2646,6 +2646,33 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             return;
         }
 
+        // `base + const` where base is a STATIC array's address folds at compile time:
+        // the array lives at a fixed SRAM offset, so the sum is a link-time constant.
+        // Slot field addressing (ArrayBase(slot) + fieldOffset) emits this on every
+        // boxed-instance access; loading the folded address is 2 LDIs instead of
+        // LDI/LDI + SUBI/SBCI.
+        if (b.Op == IrBinOp.Add
+            && b.Src1 is ArrayBase foldAb && b.Src2 is Constant foldC)
+        {
+            int abOff;
+            bool known = _stackLayout.TryGetValue(foldAb.ArrayName, out abOff)
+                      || _stackLayout.TryGetValue(foldAb.ArrayName + "__0", out abOff);
+            if (known)
+            {
+                int addr = RamStart() + abOff + foldC.Value;
+                Emit("LDI", "R24", $"lo8(0x{addr:X4})");
+                Emit("LDI", "R25", $"hi8(0x{addr:X4})");
+            }
+            else
+            {
+                string lbl = foldAb.ArrayName.Replace('.', '_');
+                Emit("LDI", "R24", $"lo8({lbl}+{foldC.Value})");
+                Emit("LDI", "R25", $"hi8({lbl}+{foldC.Value})");
+            }
+            StoreRegInto("R24", b.Dst, DataType.UINT16);
+            return;
+        }
+
         // Destination-targeted in-place fast path (8-bit reg-reg / immediate arithmetic):
         // compute the result directly in dst's home register, skipping the R24 stage and
         // the store-back (and the src1 load when dst == src1). Falls back to the staged
