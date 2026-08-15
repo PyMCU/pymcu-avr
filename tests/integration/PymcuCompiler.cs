@@ -52,6 +52,39 @@ public static class PymcuCompiler
         => Path.Combine(RepoRoot, "tests", "integration", "fixtures", name);
 
     /// <summary>
+    /// Compiles the fixture at <c>tests/integration/fixtures/{name}</c> with the IR
+    /// optimizer disabled (<c>PYMCU_NO_OPT=1</c>).
+    /// </summary>
+    /// <remarks>
+    /// The project is copied to a scratch directory first: <c>pymcu build</c> always
+    /// writes to <c>&lt;project&gt;/dist</c>, so building in place would overwrite the
+    /// optimized artifacts other fixtures read (e.g. <c>dist/debug/firmware.asm</c>).
+    /// </remarks>
+    public static string BuildFixtureUnoptimized(string name)
+        => Cache.GetOrAdd("fx-noopt:" + name,
+            _ => new Lazy<string>(() => CompileUnoptimized(
+                Path.Combine(RepoRoot, "tests", "integration", "fixtures", name), "fx", name))).Value;
+
+    /// <summary>
+    /// Compiles the showcase example at <c>examples/{name}</c> with the IR optimizer
+    /// disabled (<c>PYMCU_NO_OPT=1</c>). See <see cref="BuildFixtureUnoptimized"/>.
+    /// </summary>
+    public static string BuildUnoptimized(string name)
+        => Cache.GetOrAdd("ex-noopt:" + name,
+            _ => new Lazy<string>(() => CompileUnoptimized(
+                Path.Combine(RepoRoot, "examples", name), "ex", name))).Value;
+
+    /// <summary>
+    /// Absolute path of an example directory — the differential corpus enumerates
+    /// both example and fixture projects to read their target chip.
+    /// </summary>
+    public static string ExampleDir(string name)
+        => Path.Combine(RepoRoot, "examples", name);
+
+    /// <summary>Absolute path of the repository root.</summary>
+    public static string Root => RepoRoot;
+
+    /// <summary>
     /// Compiles an arbitrary generated <c>main.py</c> source (e.g. a property/differential
     /// test program for the register allocator). The program is materialized into a
     /// throwaway project under the system temp directory and built with <c>pymcu build</c>.
@@ -87,11 +120,42 @@ public static class PymcuCompiler
 
     // ── Internal ─────────────────────────────────────────────────────────────
 
-    private static string Compile(string exampleDir, string name)
+    private static string Compile(string exampleDir, string name,
+        IReadOnlyDictionary<string, string>? extraEnv = null)
     {
         BuildGate.Wait();
-        try { return CompileImpl(exampleDir, name); }
+        try { return CompileImpl(exampleDir, name, extraEnv); }
         finally { BuildGate.Release(); }
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> NoOptEnv =
+        new Dictionary<string, string> { ["PYMCU_NO_OPT"] = "1" };
+
+    private static string CompileUnoptimized(string projectDir, string kind, string name)
+    {
+        if (!Directory.Exists(projectDir))
+            throw new DirectoryNotFoundException($"Project directory not found: {projectDir}");
+
+        var scratch = Path.Combine(Path.GetTempPath(), "pymcu-noopt", kind + "-" + name);
+        if (Directory.Exists(scratch)) Directory.Delete(scratch, recursive: true);
+        CopyProject(new DirectoryInfo(projectDir), new DirectoryInfo(scratch));
+
+        return Compile(scratch, name + " (no-opt)", NoOptEnv);
+    }
+
+    // dist/ holds the previous build's artifacts and __pycache__ holds host bytecode;
+    // neither is an input, and copying dist/ would let a stale firmware.hex survive a
+    // failed build and be read as if it were fresh.
+    private static void CopyProject(DirectoryInfo src, DirectoryInfo dst)
+    {
+        dst.Create();
+        foreach (var file in src.EnumerateFiles())
+            file.CopyTo(Path.Combine(dst.FullName, file.Name), overwrite: true);
+        foreach (var dir in src.EnumerateDirectories())
+        {
+            if (dir.Name is "dist" or "__pycache__" or ".venv") continue;
+            CopyProject(dir, new DirectoryInfo(Path.Combine(dst.FullName, dir.Name)));
+        }
     }
 
     // Verbose when the test runner itself is in debug mode.
@@ -101,7 +165,8 @@ public static class PymcuCompiler
         Environment.GetEnvironmentVariable("PYMCU_VERBOSE") == "1" ||
         Environment.GetEnvironmentVariable("RUNNER_DEBUG")  == "1";
 
-    private static string CompileImpl(string exampleDir, string name)
+    private static string CompileImpl(string exampleDir, string name,
+        IReadOnlyDictionary<string, string>? extraEnv = null)
     {
         if (!Directory.Exists(exampleDir))
             throw new DirectoryNotFoundException(
@@ -122,6 +187,9 @@ public static class PymcuCompiler
         if (Verbose)
             psi.Environment["PYMCU_VERBOSE"] = "1";
         psi.Environment["PATH"] = venvBin + Path.PathSeparator + psi.Environment["PATH"];
+        if (extraEnv != null)
+            foreach (var (key, value) in extraEnv)
+                psi.Environment[key] = value;
 
         using var proc = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start pymcu process.");
