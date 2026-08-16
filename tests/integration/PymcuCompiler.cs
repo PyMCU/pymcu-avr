@@ -61,18 +61,30 @@ public static class PymcuCompiler
     /// optimized artifacts other fixtures read (e.g. <c>dist/debug/firmware.asm</c>).
     /// </remarks>
     public static string BuildFixtureUnoptimized(string name)
-        => Cache.GetOrAdd("fx-noopt:" + name,
-            _ => new Lazy<string>(() => CompileUnoptimized(
-                Path.Combine(RepoRoot, "tests", "integration", "fixtures", name), "fx", name))).Value;
+        => BuildVariant(NoOpt, "fx", name);
 
     /// <summary>
     /// Compiles the showcase example at <c>examples/{name}</c> with the IR optimizer
     /// disabled (<c>PYMCU_NO_OPT=1</c>). See <see cref="BuildFixtureUnoptimized"/>.
     /// </summary>
     public static string BuildUnoptimized(string name)
-        => Cache.GetOrAdd("ex-noopt:" + name,
-            _ => new Lazy<string>(() => CompileUnoptimized(
-                Path.Combine(RepoRoot, "examples", name), "ex", name))).Value;
+        => BuildVariant(NoOpt, "ex", name);
+
+    /// <summary>
+    /// Compiles the fixture at <c>tests/integration/fixtures/{name}</c> with the AVR
+    /// backend peephole disabled (<c>PYMCU_NO_PEEPHOLE=1</c>) and the IR optimizer
+    /// left on, which is what isolates the peephole in a differential comparison.
+    /// Built in a scratch copy for the same reason as <see cref="BuildFixtureUnoptimized"/>.
+    /// </summary>
+    public static string BuildFixtureNoPeephole(string name)
+        => BuildVariant(NoPeephole, "fx", name);
+
+    /// <summary>
+    /// Compiles the showcase example at <c>examples/{name}</c> with the AVR backend
+    /// peephole disabled (<c>PYMCU_NO_PEEPHOLE=1</c>). See <see cref="BuildFixtureNoPeephole"/>.
+    /// </summary>
+    public static string BuildNoPeephole(string name)
+        => BuildVariant(NoPeephole, "ex", name);
 
     /// <summary>
     /// Absolute path of an example directory — the differential corpus enumerates
@@ -128,19 +140,44 @@ public static class PymcuCompiler
         finally { BuildGate.Release(); }
     }
 
-    private static readonly IReadOnlyDictionary<string, string> NoOptEnv =
-        new Dictionary<string, string> { ["PYMCU_NO_OPT"] = "1" };
+    /// <summary>
+    /// A build of the same sources with one compiler stage switched off by an environment
+    /// variable. <paramref name="Tag"/> keeps each variant's build cache entries and scratch
+    /// copies apart from every other variant's, so the differential axes never read each
+    /// other's artifacts.
+    /// </summary>
+    private sealed record Variant(string Tag, IReadOnlyDictionary<string, string> Env);
 
-    private static string CompileUnoptimized(string projectDir, string kind, string name)
+    /// <summary>IR optimizer off; the AVR peephole still runs.</summary>
+    private static readonly Variant NoOpt = new("noopt",
+        new Dictionary<string, string> { ["PYMCU_NO_OPT"] = "1" });
+
+    /// <summary>
+    /// AVR backend peephole off, IR optimizer deliberately left on. Turning the optimizer
+    /// off as well would hand the backend un-outlined IR and put <c>AvrCodeGen</c>'s own
+    /// inline-expansion outliner in the picture — a different code path with its own known
+    /// divergences, which would be indistinguishable from a peephole bug.
+    /// </summary>
+    private static readonly Variant NoPeephole = new("nopeep",
+        new Dictionary<string, string> { ["PYMCU_NO_PEEPHOLE"] = "1" });
+
+    private static string BuildVariant(Variant variant, string kind, string name)
+        => Cache.GetOrAdd($"{kind}-{variant.Tag}:{name}",
+            _ => new Lazy<string>(() => CompileVariant(variant, kind, name))).Value;
+
+    private static string CompileVariant(Variant variant, string kind, string name)
     {
+        var projectDir = kind == "ex"
+            ? Path.Combine(RepoRoot, "examples", name)
+            : Path.Combine(RepoRoot, "tests", "integration", "fixtures", name);
         if (!Directory.Exists(projectDir))
             throw new DirectoryNotFoundException($"Project directory not found: {projectDir}");
 
-        var scratch = Path.Combine(Path.GetTempPath(), "pymcu-noopt", kind + "-" + name);
+        var scratch = Path.Combine(Path.GetTempPath(), "pymcu-" + variant.Tag, kind + "-" + name);
         if (Directory.Exists(scratch)) Directory.Delete(scratch, recursive: true);
         CopyProject(new DirectoryInfo(projectDir), new DirectoryInfo(scratch));
 
-        return Compile(scratch, name + " (no-opt)", NoOptEnv);
+        return Compile(scratch, $"{name} ({variant.Tag})", variant.Env);
     }
 
     // dist/ holds the previous build's artifacts and __pycache__ holds host bytecode;
