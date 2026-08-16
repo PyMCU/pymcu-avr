@@ -78,6 +78,16 @@ public class AvrAsmLine
 
 public static class AvrPeephole
 {
+    /// <summary>
+    /// <c>PYMCU_NO_PEEPHOLE=1</c> hands the assembly straight through, the same way
+    /// <c>PYMCU_NO_OPT=1</c> hands the raw IR straight to the backend: it lets a
+    /// miscompile be bisected to this file (assembly wrong only after the peephole)
+    /// vs <c>AvrCodeGen</c> (assembly already wrong before it), and it is the switch
+    /// the peephole differential harness flips.
+    /// </summary>
+    private static bool Bypassed =>
+        Environment.GetEnvironmentVariable("PYMCU_NO_PEEPHOLE") == "1";
+
     // Mnemonics that write exactly their first operand register and nothing else
     // relevant to slot tracking. (STD/LDD are handled separately; LD/ST and the
     // pointer/multi-register writers are deliberately excluded so they hit the
@@ -202,6 +212,17 @@ public static class AvrPeephole
         HashSet<int>? noForwardAddrs = null, int ramStart = 0x100)
     {
         var result = new List<AvrAsmLine>(lines);
+
+        if (Bypassed)
+        {
+            // InsertPinSyncNops is not one of the rewrites: it inserts the NOP the input
+            // synchronizer needs between a PORT/DDR write and a PIN read of the same port,
+            // a hardware hazard the codegen relies on this pass to cover. Skipping it would
+            // be a miscompile, not a missing optimization, so it runs on this path too.
+            InsertPinSyncNops(result);
+            return result;
+        }
+
         var changed = true;
 
         while (changed)
