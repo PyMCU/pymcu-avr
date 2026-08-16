@@ -16,6 +16,11 @@ public sealed record DiffProgram(ProgramKind Kind, string Name)
         ? PymcuCompiler.BuildUnoptimized(Name)
         : PymcuCompiler.BuildFixtureUnoptimized(Name);
 
+    /// <summary>Same IR as <see cref="Optimized"/>, with the AVR backend peephole switched off.</summary>
+    public string NoPeephole() => Kind == ProgramKind.Example
+        ? PymcuCompiler.BuildNoPeephole(Name)
+        : PymcuCompiler.BuildFixtureNoPeephole(Name);
+
     public override string ToString() => Kind == ProgramKind.Example ? $"examples/{Name}" : $"fixtures/{Name}";
 }
 
@@ -32,9 +37,10 @@ public static class DifferentialCorpus
 
     /// <summary>
     /// Programs whose observable behaviour legitimately depends on how fast the code runs,
-    /// so that optimized and unoptimized builds are *expected* to differ. Excluding them is
+    /// so that two builds of different speed are *expected* to differ. Excluding them is
     /// not a way to hide failures — a divergence here says nothing about correctness, and
-    /// leaving them in would drown a real finding in noise.
+    /// leaving them in would drown a real finding in noise. Applies to every axis: the
+    /// peephole changes instruction counts just as the IR optimizer does.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> TimingDependent = new Dictionary<string, string>
     {
@@ -52,7 +58,7 @@ public static class DifferentialCorpus
     };
 
     /// <summary>
-    /// Programs that diverge today, with the divergence each one shows. These are findings,
+    /// IR-optimizer axis. Programs that diverge today, with the divergence each one shows. These are findings,
     /// not exemptions: the harness still builds and compares them, prints the divergence, and
     /// reports the case as inconclusive rather than failing the suite — and it fails loudly if
     /// one of them stops diverging, so the entry gets deleted along with the fix.
@@ -94,6 +100,15 @@ public static class DifferentialCorpus
         ["fixtures/warning-decorator"]           = "prints V:01 instead of V:2A",
         ["fixtures/zca-array"]                   = "prints the wrong array bytes",
     };
+
+    /// <summary>
+    /// Peephole axis. Same contract as <see cref="KnownDivergences"/>, for the programs whose
+    /// behaviour changes when <c>PYMCU_NO_PEEPHOLE=1</c> switches the AVR backend peephole off
+    /// with the IR optimizer left on in both builds. Empty is the expected state: an entry here
+    /// is an open miscompile in <c>AvrPeephole</c>, since neither build's IR differs.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> KnownPeepholeDivergences =
+        new Dictionary<string, string>();
 
     /// <summary>Every atmega328p program in the repository, minus the timing-dependent ones.</summary>
     public static IEnumerable<DiffProgram> All()

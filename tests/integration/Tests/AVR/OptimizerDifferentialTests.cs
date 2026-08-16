@@ -19,8 +19,9 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// found by luck into something found by running the suite.
 ///
 /// Scope: this covers the IR optimizer (<c>Optimizer.Optimize</c>), which is what
-/// <c>PYMCU_NO_OPT</c> gates. The AVR peephole runs in both builds and so cancels out —
-/// see <c>AvrPeephole</c>, which has no equivalent bypass.
+/// <c>PYMCU_NO_OPT</c> gates. The AVR peephole runs in both builds and so cancels out here;
+/// it has its own axis in <see cref="PeepholeDifferentialTests"/>, gated by
+/// <c>PYMCU_NO_PEEPHOLE</c>.
 /// </summary>
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
