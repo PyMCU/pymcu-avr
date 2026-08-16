@@ -182,6 +182,7 @@ class AvrgasToolchain(ExternalToolchain):
 
     # Cached result of wheel usability check (None = not yet tested).
     _wheel_usable: "Optional[bool]" = None
+    _wheel_error: "Optional[BaseException]" = None
 
     def _find_bin_from_wheel(self, name: str) -> "Optional[str]":
         """
@@ -241,8 +242,34 @@ class AvrgasToolchain(ExternalToolchain):
                 capture_output=True, timeout=5,
             )
             return result.returncode == 0
+        except OSError as exc:
+            # On Apple Silicon the wheel fetches the x86_64 PlatformIO tarball on
+            # purpose and counts on Rosetta 2 to run it. Rosetta is an optional
+            # component: on a Mac that has never run an Intel binary it is simply
+            # not there, and the kernel refuses the exec ("bad CPU type"). Saying
+            # "toolchain not found" then is worse than useless -- it is installed,
+            # and reinstalling it changes nothing.
+            AvrgasToolchain._wheel_error = exc
+            return False
         except Exception:
             return False
+
+    @staticmethod
+    def _rosetta_hint() -> "Optional[str]":
+        """Message to show when the toolchain is there but cannot be executed."""
+        err = getattr(AvrgasToolchain, "_wheel_error", None)
+        if err is None:
+            return None
+        if sys.platform == "darwin" and platform.machine() in ("arm64", "aarch64"):
+            return (
+                "The AVR toolchain IS installed, but its binaries are x86_64 and this Mac "
+                "is Apple Silicon, so they cannot run without Rosetta 2.\n"
+                "Install it once and re-run the build:\n\n"
+                "  softwareupdate --install-rosetta --agree-to-license\n"
+            )
+        return (
+            f"The AVR toolchain is installed but its binaries could not be executed: {err}"
+        )
 
     def _find_bin(self, name: str) -> str:
         """
@@ -357,6 +384,12 @@ class AvrgasToolchain(ExternalToolchain):
                 "  brew tap osx-cross/avr\n"
                 "  brew install avr-gcc avr-binutils\n"
             )
+
+        hint = self._rosetta_hint()
+        if hint:
+            # Instalado pero inejecutable: ofrecer reinstalarlo seria mandar al
+            # usuario a repetir algo que ya hizo y que no arregla nada.
+            raise RuntimeError(hint)
 
         self.console.print(
             "The AVR toolchain (avr-gcc, avr-as, avr-objcopy) was not found.\n"
