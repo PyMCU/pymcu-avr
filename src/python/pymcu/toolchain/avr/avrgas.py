@@ -31,7 +31,8 @@ AvrgasToolchain -- AVR GNU AS + avr-gcc (linker) + avr-objcopy pipeline.
 This toolchain replaces avra for projects that require C/C++ interop via
 @extern().  It uses the standard GNU binutils for AVR:
 
-  Assemble:   avr-as -mmcu=<chip> firmware.asm -o firmware.o
+  Translate:  firmware.asm (pymcuc output) -> firmware.gas.asm (GNU AS syntax)
+  Assemble:   avr-as -mmcu=<chip> firmware.gas.asm -o firmware.o
   Compile C:  avr-gcc -mmcu=<chip> -Os -c mylib.c -o mylib.o
   Compile C++: avr-g++ -mmcu=<chip> -Os -fno-exceptions -fno-rtti -c lib.cpp -o lib.o
   Link:       avr-gcc -mmcu=<chip> -nostartfiles -T <linker-script> firmware.o [c_objs...] -o firmware.elf
@@ -295,6 +296,28 @@ class AvrgasToolchain(ExternalToolchain):
             f"{name} not found. Run 'pymcu build' to install the AVR toolchain."
         )
 
+    def _find_bin_for_ffi(self, name: str) -> str:
+        """
+        Resolve a binary that only the FFI path needs (avr-gcc, avr-g++).
+
+        The WASI toolchain compiles C and C++ too, so reaching here means it is
+        absent, disabled with PYMCU_AVR_WASI=0, or installed without the front
+        ends.  "avr-gcc not found" is then the wrong thing to say: what is
+        missing is the toolchain package, and naming it saves the user a search.
+        """
+        try:
+            return self._find_bin(name)
+        except RuntimeError as exc:
+            if self._wasi_pipeline() is None:
+                raise
+            raise RuntimeError(
+                f"{name} not found.\n"
+                "This project uses C/C++ interop (@extern or [tool.pymcu.ffi] sources). "
+                "The bundled WebAssembly toolchain can compile it, but this installation "
+                "has no C front end (cc1/cc1plus).\n\n"
+                "  pip install --upgrade pymcu-avr-toolchain-wasi\n"
+            ) from exc
+
     def _find_avr_libc_lib_dir(self, avr_gcc: str) -> "Optional[Path]":
         """
         Return the avr/lib directory that contains libm.a (avr-libc).
@@ -349,12 +372,65 @@ class AvrgasToolchain(ExternalToolchain):
     def is_cached(self) -> bool:
         """
         Returns True if all required binaries are available via:
-          0. pymcu-avr-toolchain wheel (installed via pip, self-contained)
-          1. System PATH (Homebrew, apt, WinAVR, etc.)
+          0. the WASI toolchain (architecture-independent wheel), for projects
+             without C/C++ interop
+          1. pymcu-avr-toolchain wheel (installed via pip, self-contained)
+          2. System PATH (Homebrew, apt, WinAVR, etc.)
         """
+        if self._wasi_pipeline() is not None:
+            return True
         if all(self._find_bin_from_wheel(b) is not None for b in _REQUIRED_BINS):
             return True
         return all(shutil.which(b) is not None for b in _REQUIRED_BINS)
+
+    # ------------------------------------------------------------------
+    # WASI backend
+    # ------------------------------------------------------------------
+
+    # Shared across instances: compiling the wasm modules is the expensive part.
+    _wasi_tools = None
+    _wasi_checked = False
+    _wasi_ffi: dict = {}
+
+    def _wasi_pipeline(self):
+        """Return a WasiAvrPipeline, or None when the WASI toolchain is not
+        usable here.  PYMCU_AVR_WASI=0 forces the native path."""
+        if os.environ.get("PYMCU_AVR_WASI") == "0":
+            return None
+        from pymcu.toolchain.avr import wasi as _wasi  # noqa: PLC0415
+
+        if not AvrgasToolchain._wasi_checked:
+            AvrgasToolchain._wasi_checked = True
+            root = _wasi.find_wasi_root()
+            if root is not None:
+                try:
+                    AvrgasToolchain._wasi_tools = _wasi.WasiAvrTools(root)
+                except _wasi.WasiUnavailable as exc:
+                    if _VERBOSE:
+                        self.console.print(f"[debug] WASI unavailable: {exc}", style="dim")
+        if AvrgasToolchain._wasi_tools is None:
+            return None
+
+        # The C compiler lives in the [ffi] extra and is loaded per chip, since
+        # the cc1 flags are chip-specific. Absent extra is not an error: it just
+        # means C sources go through the native avr-gcc.
+        if self.chip not in AvrgasToolchain._wasi_ffi:
+            ffi = None
+            root = _wasi.find_ffi_root()
+            if root is not None:
+                try:
+                    ffi = _wasi.WasiFfiCompiler(root, self.chip)
+                except _wasi.WasiUnavailable as exc:
+                    if _VERBOSE:
+                        self.console.print(f"[debug] WASI ffi unavailable: {exc}", style="dim")
+            AvrgasToolchain._wasi_ffi[self.chip] = ffi
+
+        return _wasi.WasiAvrPipeline(
+            AvrgasToolchain._wasi_tools,
+            self.chip,
+            0x800000 + self._chip_ramstart(),
+            ffi=AvrgasToolchain._wasi_ffi[self.chip],
+        )
 
     # ------------------------------------------------------------------
     # Install: prompt user to pip-install the toolchain wheel
@@ -525,20 +601,35 @@ class AvrgasToolchain(ExternalToolchain):
         """
         Translate AVRA output to GNU AS syntax, then assemble to ELF .o using avr-as.
         Returns the path to the object file.
+
+        The translation is written to a *separate* file, firmware.gas.asm, and the
+        compiler's own output is left untouched.  _preprocess_asm cannot be made
+        idempotent -- it turns word addresses into byte addresses by multiplying
+        .org operands by two, and doubling is not idempotent by construction -- so
+        the only safe rule is to never feed it its own output.  Overwriting the
+        input in place made that a matter of convention (nothing may run the step
+        twice); writing elsewhere makes it impossible.  It also keeps the raw
+        pymcuc output around, which is what you want to read when a firmware comes
+        out wrong.
         """
         obj_out = asm_file.with_suffix(".o")
-        avr_as = self._find_bin("avr-as")
+        gas_file = asm_file.with_name(f"{asm_file.stem}.gas{asm_file.suffix}")
 
         # Translate AVRA-specific syntax to GNU AS before assembling
         src = asm_file.read_text()
         translated = self._preprocess_asm(src, has_jmp=self._has_jmp())
-        asm_file.write_text(translated)
+        gas_file.write_text(translated)
 
+        wasi = self._wasi_pipeline()
+        if wasi is not None:
+            return wasi.assemble(gas_file, obj_out)
+
+        avr_as = self._find_bin("avr-as")
         cmd = [
             avr_as,
             f"-mmcu={self.chip}",
             "-mno-skip-bug",      # suppress skip-instruction warnings
-            str(asm_file),
+            str(gas_file),
             "-o", str(obj_out),
         ]
         if _VERBOSE:
@@ -566,13 +657,25 @@ class AvrgasToolchain(ExternalToolchain):
 
         Returns a list of .o paths.
         """
-        avr_gcc = self._find_bin("avr-gcc")
+        wasi = self._wasi_pipeline()
+        if wasi is not None:
+            try:
+                return wasi.compile_c(c_files, include_dirs, cflags, output_dir)
+            except Exception as exc:  # noqa: BLE001
+                from pymcu.toolchain.avr.wasi import WasiUnavailable  # noqa: PLC0415
+
+                if not isinstance(exc, WasiUnavailable):
+                    raise
+                if _VERBOSE:
+                    self.console.print(f"[debug] WASI compile_c unavailable: {exc}", style="dim")
+
+        avr_gcc = self._find_bin_for_ffi("avr-gcc")
 
         objects: list[Path] = []
         for src in c_files:
             is_cpp = src.suffix in _CPP_EXTENSIONS
             if is_cpp:
-                compiler = self._find_bin("avr-g++")
+                compiler = self._find_bin_for_ffi("avr-g++")
                 # Disable C++ runtime features that don't belong on a bare-metal AVR:
                 # -fno-exceptions: no try/catch overhead or exception tables
                 # -fno-rtti:       no dynamic_cast / typeid; saves flash and SRAM
@@ -633,7 +736,6 @@ class AvrgasToolchain(ExternalToolchain):
 
         Returns the ELF file path.
         """
-        avr_gcc = self._find_bin("avr-gcc")
         elf_out = output_dir / "firmware.elf"
 
         # Write chip-specific linker script if none provided
@@ -641,6 +743,15 @@ class AvrgasToolchain(ExternalToolchain):
             ld_script_path = output_dir / "_pymcu.ld"
             ld_script_path.write_text(self._default_ld_script())
             linker_script = ld_script_path
+
+        # With the [ffi] extra the WASI path covers C objects too; without it,
+        # a build that has any falls back to the native avr-gcc driver.
+        wasi = self._wasi_pipeline()
+        if wasi is not None and (not c_objects or wasi.ffi is not None):
+            return wasi.link(firmware_obj, output_dir, linker_script,
+                             extra_objects=c_objects)
+
+        avr_gcc = self._find_bin_for_ffi("avr-gcc")
 
         _gcc_bin_path = Path(avr_gcc).parent
         _avr_lib_path = self._find_avr_libc_lib_dir(avr_gcc)
@@ -688,6 +799,10 @@ class AvrgasToolchain(ExternalToolchain):
 
     def elf_to_hex(self, elf_file: Path) -> Path:
         """Convert firmware.elf -> firmware.hex using avr-objcopy."""
+        wasi = self._wasi_pipeline()
+        if wasi is not None:
+            return wasi.elf_to_hex(elf_file)
+
         avr_objcopy = self._find_bin("avr-objcopy")
 
         hex_out = elf_file.with_suffix(".hex")
