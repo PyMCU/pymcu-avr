@@ -90,6 +90,7 @@ def _run(cmd: list, **kwargs) -> subprocess.CompletedProcess:
         break
     return result
 _WHEEL_PKG = "pymcu-avr-toolchain"
+_WASI_PKG = "pymcu-avr-toolchain-wasi"
 
 
 class AvrgasToolchain(ExternalToolchain):
@@ -285,15 +286,10 @@ class AvrgasToolchain(ExternalToolchain):
         found = shutil.which(name)
         if found:
             return found
-        if sys.platform == "darwin" and platform.machine() == "x86_64":
-            raise RuntimeError(
-                f"{name} not found.\n"
-                "Install the AVR toolchain via Homebrew:\n\n"
-                "  brew tap osx-cross/avr\n"
-                "  brew install avr-gcc avr-binutils\n"
-            )
         raise RuntimeError(
-            f"{name} not found. Run 'pymcu build' to install the AVR toolchain."
+            f"{name} not found. Install the toolchain with\n"
+            f"  pip install {_WASI_PKG}\n"
+            "or put an AVR toolchain on PATH."
         )
 
     def _find_bin_for_ffi(self, name: str) -> str:
@@ -441,28 +437,18 @@ class AvrgasToolchain(ExternalToolchain):
 
     def install(self) -> None:
         """
-        Prompt the user to install pymcu-avr-toolchain from PyPI.
+        Prompt the user to install the toolchain from PyPI.
 
         If the wheel is already installed (or binaries are on PATH), returns
         immediately.  In non-interactive mode (CI=true / PYMCU_NO_INTERACTIVE=1)
         the install runs without prompting.
 
-        On macOS x86_64 (Intel Mac) no pip wheel is published; the user is
-        directed to install via Homebrew instead.
         """
         from pymcu.toolchain.sdk import _is_non_interactive
         if self.is_cached():
             return
 
         self.console.print("[bold cyan]PyMCU Toolchain Manager[/bold cyan]")
-
-        if sys.platform == "darwin" and platform.machine() == "x86_64":
-            raise RuntimeError(
-                "The AVR toolchain pip wheel is not available for macOS Intel (x86_64).\n"
-                "Install via Homebrew and re-run:\n\n"
-                "  brew tap osx-cross/avr\n"
-                "  brew install avr-gcc avr-binutils\n"
-            )
 
         hint = self._rosetta_hint()
         if hint:
@@ -471,12 +457,12 @@ class AvrgasToolchain(ExternalToolchain):
             raise RuntimeError(hint)
 
         self.console.print(
-            "The AVR toolchain (avr-gcc, avr-as, avr-objcopy) was not found.\n"
-            f"Install [bold]{_WHEEL_PKG}[/bold] from PyPI to continue.\n"
-            f"  [dim]pip install {_WHEEL_PKG}[/dim]"
+            "The AVR toolchain was not found.\n"
+            f"Install [bold]{_WASI_PKG}[/bold] from PyPI to continue.\n"
+            f"  [dim]pip install {_WASI_PKG}[/dim]"
         )
         if not _is_non_interactive():
-            if not Confirm.ask(f"Run: pip install {_WHEEL_PKG}?", default=True):
+            if not Confirm.ask(f"Run: pip install {_WASI_PKG}?", default=True):
                 raise RuntimeError("AVR toolchain installation aborted by user.")
 
         result = subprocess.run(
