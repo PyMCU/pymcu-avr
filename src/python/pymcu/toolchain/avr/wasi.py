@@ -91,6 +91,24 @@ _DEFAULT = ("avr5", "avr5")
 
 _TOOLS = ("avr-as", "avr-ld", "avr-objcopy")
 
+_warmed = False
+
+
+def _announce_warmup() -> None:
+    """Say that the first run is preparing the toolchain, once.
+
+    Compiling the wasm modules to native code takes a few seconds and happens
+    only the first time on a machine. Without a word it reads as the tool
+    hanging, which is exactly how it was reported from a live demo.
+    """
+    global _warmed
+    if _warmed:
+        return
+    _warmed = True
+    import sys as _sys  # noqa: PLC0415
+    print("Preparing the AVR toolchain for this machine (first run only)...",
+          file=_sys.stderr, flush=True)
+
 
 def emulation_for(chip: str) -> str:
     """The BFD emulation passed to avr-ld as -m<emulation>."""
@@ -165,6 +183,7 @@ class WasiAvrTools:
                     # A stale or foreign cache entry is not an error: recompile.
                     module = None
             if module is None:
+                _announce_warmup()
                 module = Module.from_file(self._engine, str(wasm))
                 if cached is not None:
                     try:
@@ -323,6 +342,7 @@ class WasiFfiCompiler:
                 except Exception:
                     module = None
             if module is None:
+                _announce_warmup()
                 module = Module.from_file(self._engine, str(wasm))
                 if cached is not None:
                     try:
@@ -422,9 +442,15 @@ class WasiAvrPipeline:
     """
 
     def __init__(self, tools: WasiAvrTools, chip: str, data_origin: int,
-                 ffi: "Optional[WasiFfiCompiler]" = None) -> None:
+                 ffi_factory=None) -> None:
         self.tools = tools
-        self.ffi = ffi
+        # Built on the first compile_c, never before. Constructing it compiles
+        # cc1 and cc1plus, which are 48 of the 50 MB of modules, and a project
+        # with no C sources never calls them: doing it eagerly added ~3 s of
+        # silence to every first build and 100 MB of cache for nothing.
+        self._ffi_factory = ffi_factory
+        self._ffi = None
+        self._ffi_built = False
         self.chip = chip
         self.emulation = emulation_for(chip)
         self.multilib = multilib_for(chip)
@@ -436,6 +462,13 @@ class WasiAvrPipeline:
                 f"{chip} is not in the verified chip table; "
                 "add it with gen_cc1_table.py or build with PYMCU_AVR_WASI=0"
             )
+
+    @property
+    def ffi(self):
+        if not self._ffi_built:
+            self._ffi_built = True
+            self._ffi = self._ffi_factory() if self._ffi_factory is not None else None
+        return self._ffi
 
     def _sysroot(self) -> Path:
         sysroot = sysroot_dir(self.tools.root, self.multilib)

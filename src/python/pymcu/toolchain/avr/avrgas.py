@@ -411,25 +411,28 @@ class AvrgasToolchain(ExternalToolchain):
         if AvrgasToolchain._wasi_tools is None:
             return None
 
-        # The C compiler lives in the [ffi] extra and is loaded per chip, since
-        # the cc1 flags are chip-specific. Absent extra is not an error: it just
-        # means C sources go through the native avr-gcc.
-        if self.chip not in AvrgasToolchain._wasi_ffi:
-            ffi = None
-            root = _wasi.find_ffi_root()
-            if root is not None:
-                try:
-                    ffi = _wasi.WasiFfiCompiler(root, self.chip)
-                except _wasi.WasiUnavailable as exc:
-                    if _VERBOSE:
-                        self.console.print(f"[debug] WASI ffi unavailable: {exc}", style="dim")
-            AvrgasToolchain._wasi_ffi[self.chip] = ffi
+        # The C compiler is built on demand, not here: its constructor compiles
+        # cc1 and cc1plus, and a project without C sources never uses them. The
+        # flags are chip-specific, so it is cached per chip. A missing front end
+        # is not an error -- C sources fall back to the native avr-gcc.
+        def _make_ffi():
+            if self.chip not in AvrgasToolchain._wasi_ffi:
+                ffi = None
+                root = _wasi.find_ffi_root()
+                if root is not None:
+                    try:
+                        ffi = _wasi.WasiFfiCompiler(root, self.chip)
+                    except _wasi.WasiUnavailable as exc:
+                        if _VERBOSE:
+                            self.console.print(f"[debug] WASI ffi unavailable: {exc}", style="dim")
+                AvrgasToolchain._wasi_ffi[self.chip] = ffi
+            return AvrgasToolchain._wasi_ffi[self.chip]
 
         return _wasi.WasiAvrPipeline(
             AvrgasToolchain._wasi_tools,
             self.chip,
             0x800000 + self._chip_ramstart(),
-            ffi=AvrgasToolchain._wasi_ffi[self.chip],
+            ffi_factory=_make_ffi,
         )
 
     # ------------------------------------------------------------------

@@ -118,7 +118,7 @@ def test_compile_c_without_a_front_end_falls_back(monkeypatch, tmp_path):
 
     tc = AvrgasToolchain(Console(), chip="atmega328p")
     pipeline = wasi.WasiAvrPipeline(object.__new__(wasi.WasiAvrTools),
-                                    "atmega328p", 0x800100, ffi=None)
+                                    "atmega328p", 0x800100, ffi_factory=None)
     monkeypatch.setattr(tc, "_wasi_pipeline", lambda: pipeline)
 
     called = {}
@@ -135,6 +135,6 @@ def test_compile_c_without_a_front_end_falls_back(monkeypatch, tmp_path):
 
 def test_pipeline_without_ffi_refuses_to_compile():
     pipeline = wasi.WasiAvrPipeline(object.__new__(wasi.WasiAvrTools),
-                                    "atmega328p", 0x800100, ffi=None)
+                                    "atmega328p", 0x800100, ffi_factory=None)
     with pytest.raises(wasi.WasiUnavailable, match="cc1/cc1plus"):
         pipeline.compile_c([], [], [], Path("."))
