@@ -1691,6 +1691,28 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
     }
 
+    private void EmitCompareOperands(bool is16, bool is32)
+    {
+        Emit("CP", "R24", "R18");
+        if (is16 || is32) Emit("CPC", "R25", "R19");
+        if (is32)
+        {
+            Emit("CPC", "R22", "R20");
+            Emit("CPC", "R23", "R21");
+        }
+    }
+
+    private void EmitBoolWiden(DataType dstType)
+    {
+        int size = dstType.SizeOf();
+        if (size >= 2) Emit("LDI", "R25", "0");
+        if (size == 4)
+        {
+            Emit("LDI", "R22", "0");
+            Emit("LDI", "R23", "0");
+        }
+    }
+
     private void CompileCompareJump(Val src1, Val src2, string branch, string target)
     {
         var type = GetValType(src1);
@@ -2678,12 +2700,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // the store-back (and the src1 load when dst == src1). Falls back to the staged
         // path below when AVR register classes or the operand shape don't permit it.
         if (TryCompileBinaryInPlace(b)) return;
-        // For Div/Mod and shift ops the source may be wider than the destination
-        // (e.g. uint16 >> 8 → uint8 must operate as 16-bit to read the high byte).
+        // For Div/Mod, shift and comparison ops the source may be wider than the
+        // destination (e.g. uint16 >> 8 → uint8 must operate as 16-bit to read the
+        // high byte; int32 < int32 → uint8 must compare all four bytes).
         var src1Type = GetValType(b.Src1);
         var opType = (b.Op is IrBinOp.Div or IrBinOp.FloorDiv or IrBinOp.Mod
                              or IrBinOp.RShift or IrBinOp.LShift or IrBinOp.BitAnd
-                             or IrBinOp.BitOr or IrBinOp.BitXor)
+                             or IrBinOp.BitOr or IrBinOp.BitXor
+                             or IrBinOp.Equal or IrBinOp.NotEqual
+                             or IrBinOp.LessThan or IrBinOp.LessEqual
+                             or IrBinOp.GreaterThan or IrBinOp.GreaterEqual)
                      && src1Type.SizeOf() > type.SizeOf()
             ? src1Type
             : type;
@@ -3043,8 +3069,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             {
                 if (!usedImm)
                 {
-                    Emit("CP", "R24", "R18");
-                    if (is16) Emit("CPC", "R25", "R19");
+                    EmitCompareOperands(is16, is32);
                 }
 
                 var sk = MakeLabel("L_SKIP");
@@ -3052,15 +3077,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 EmitBranch("BREQ", sk);
                 Emit("LDI", "R24", "0");
                 EmitLabel(sk);
-                if (is16) Emit("LDI", "R25", "0");
+                EmitBoolWiden(type);
                 break;
             }
             case IrBinOp.NotEqual:
             {
                 if (!usedImm)
                 {
-                    Emit("CP", "R24", "R18");
-                    if (is16) Emit("CPC", "R25", "R19");
+                    EmitCompareOperands(is16, is32);
                 }
 
                 var sk = MakeLabel("L_SKIP");
@@ -3068,15 +3092,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 EmitBranch("BRNE", sk);
                 Emit("LDI", "R24", "0");
                 EmitLabel(sk);
-                if (is16) Emit("LDI", "R25", "0");
+                EmitBoolWiden(type);
                 break;
             }
             case IrBinOp.LessThan:
             {
                 if (!usedImm)
                 {
-                    Emit("CP", "R24", "R18");
-                    if (is16) Emit("CPC", "R25", "R19");
+                    EmitCompareOperands(is16, is32);
                 }
 
                 var sk = MakeLabel("L_SKIP");
@@ -3084,15 +3107,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 EmitBranch(IsSignedComparison(b.Src1, b.Src2) ? "BRLT" : "BRLO", sk);
                 Emit("LDI", "R24", "0");
                 EmitLabel(sk);
-                if (is16) Emit("LDI", "R25", "0");
+                EmitBoolWiden(type);
                 break;
             }
             case IrBinOp.GreaterEqual:
             {
                 if (!usedImm)
                 {
-                    Emit("CP", "R24", "R18");
-                    if (is16) Emit("CPC", "R25", "R19");
+                    EmitCompareOperands(is16, is32);
                 }
 
                 var sk = MakeLabel("L_SKIP");
@@ -3100,15 +3122,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 EmitBranch(IsSignedComparison(b.Src1, b.Src2) ? "BRGE" : "BRSH", sk);
                 Emit("LDI", "R24", "0");
                 EmitLabel(sk);
-                if (is16) Emit("LDI", "R25", "0");
+                EmitBoolWiden(type);
                 break;
             }
             case IrBinOp.GreaterThan:
             {
                 if (!usedImm)
                 {
-                    Emit("CP", "R24", "R18");
-                    if (is16) Emit("CPC", "R25", "R19");
+                    EmitCompareOperands(is16, is32);
                 }
 
                 var lt = MakeLabel("L_TRUE");
@@ -3122,15 +3143,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 EmitLabel(lt);
                 Emit("LDI", "R24", "1");
                 EmitLabel(lf);
-                if (is16) Emit("LDI", "R25", "0");
+                EmitBoolWiden(type);
                 break;
             }
             case IrBinOp.LessEqual:
             {
                 if (!usedImm)
                 {
-                    Emit("CP", "R24", "R18");
-                    if (is16) Emit("CPC", "R25", "R19");
+                    EmitCompareOperands(is16, is32);
                 }
 
                 var lt = MakeLabel("L_TRUE");
@@ -3142,7 +3162,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 EmitLabel(lt);
                 Emit("LDI", "R24", "1");
                 EmitLabel(lf);
-                if (is16) Emit("LDI", "R25", "0");
+                EmitBoolWiden(type);
                 break;
             }
         }
