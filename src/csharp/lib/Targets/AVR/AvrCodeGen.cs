@@ -97,9 +97,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (_tmpRegLayout.TryGetValue(name, out var r2)) return r2;
         return null;
     }
-    private void Emit(string m) => _assembly.Add(AvrAsmLine.MakeInstruction(m));
-    private void Emit(string m, string o1) => _assembly.Add(AvrAsmLine.MakeInstruction(m, o1));
-    private void Emit(string m, string o1, string o2) => _assembly.Add(AvrAsmLine.MakeInstruction(m, o1, o2));
+    private string Mnemonic(string m)
+        => (m is "CALL" or "JMP") && !HasJmpCall() ? "R" + m : m;
+
+    private void Emit(string m) => _assembly.Add(AvrAsmLine.MakeInstruction(Mnemonic(m)));
+    private void Emit(string m, string o1) => _assembly.Add(AvrAsmLine.MakeInstruction(Mnemonic(m), o1));
+    private void Emit(string m, string o1, string o2) => _assembly.Add(AvrAsmLine.MakeInstruction(Mnemonic(m), o1, o2));
     private void EmitLabel(string l) => _assembly.Add(AvrAsmLine.MakeLabel(l));
     private void EmitComment(string c) => _assembly.Add(AvrAsmLine.MakeComment(c));
     private void EmitRaw(string t) => _assembly.Add(AvrAsmLine.MakeRaw(t));
@@ -891,11 +894,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         //   AVRA .org 0x0012 → avr-as .org 0x0024 (byte).
         // To place RJMP at byte 0x0024, we need AVRA .org = 0x0012 = vec*2.
         // This matches overflowInterrupt = vec*2 (the byte address on real hardware).
-        // Vector-table slot size depends on the core. avr5/avr6 (ATmega) use 2-word (4-byte)
-        // slots — an RJMP placed every 2 words (AVRA word .org = vec*2). Reduced-core avr25
-        // (ATtiny) parts have 1-word (2-byte) slots, so the table is half as wide (.org = vec).
+        // Vector-table slot size depends on the core. Parts with JMP/CALL (avr5/avr6) use
+        // 2-word (4-byte) slots — an RJMP placed every 2 words (AVRA word .org = vec*2).
+        // Parts without them (avr4 ATmega48/88, avr25 ATtiny) have 1-word (2-byte) slots,
+        // so the table is half as wide (.org = vec).
         // _avra_to_gnuas() doubles the word .org to a byte .org either way.
-        var vecWordStride = IsReducedCore() ? 1 : 2;
+        var vecWordStride = HasJmpCall() ? 2 : 1;
         for (var vec = 1; vec <= 25; vec++)
         {
             EmitRaw($".org 0x{vec * vecWordStride:X4}");
@@ -1090,9 +1094,26 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
     private bool IsReducedCore() => LayoutChip().StartsWith("attiny");
 
-    // First SRAM byte in the data space. ATtiny parts start at 0x60; ATmega at 0x100.
-    // Mirrors the toolchain's _RAMSTART table (avrgas.py) so the codegen and linker agree.
-    private int RamStart() => IsReducedCore() ? 0x60 : 0x100;
+    private AvrDevice? _device;
+
+    private AvrDevice Device()
+    {
+        if (_device is { } cached) return cached;
+        var chip = LayoutChip();
+        if (!AvrDevices.TryGet(chip, out var device))
+            throw new Exception(
+                $"unknown AVR chip '{chip}': no SRAM layout for it in the backend catalog. " +
+                "Add its RAM start, RAM size and JMP/CALL support to AvrDevices.");
+        _device = device;
+        return device;
+    }
+
+    // First SRAM byte in the data space (0x60 on ATtiny, 0x100 on most ATmega, 0x200 on the
+    // parts with extended I/O). Mirrors the toolchain's _RAMSTART table (avrgas.py) so the
+    // codegen and the linker agree.
+    private int RamStart() => Device().RamStart;
+
+    private bool HasJmpCall() => Device().HasJmpCall;
 
     // Frame-slot access. LDD/STD Y+q encodes a 6-bit displacement (q = 0..63); a program
     // whose static frame layout grows past that (deep call overlays, many wide locals)
@@ -1111,28 +1132,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         else Emit("STS", $"0x{RamStart() + offset:X4}", reg);
     }
 
-    // SRAM size (bytes) for reduced-core ATtiny parts, whose RAMEND differs sharply from the
-    // ATmega328P fallback. Without this the stack would initialise at 0x08FF — far outside a
-    // 64–512 byte ATtiny SRAM — and corrupt I/O space on the first PUSH/CALL.
-    private static readonly Dictionary<string, int> AttinyRamSize = new()
-    {
-        ["attiny13"] = 64,   ["attiny13a"] = 64,
-        ["attiny24"] = 128,  ["attiny44"]  = 256, ["attiny84"] = 512,
-        ["attiny25"] = 128,  ["attiny45"]  = 256, ["attiny85"] = 512,
-        ["attiny2313"] = 128, ["attiny4313"] = 256,
-    };
-
     // Last usable SRAM byte = where the hardware stack pointer is initialised.
-    // Prefer the device's RAM size from the IR; else a known-ATtiny lookup; else the historical
-    // ATmega328P value (0x08FF), which is correct for the ATmegaX8 family in simulation.
-    private int RamEnd()
-    {
-        if (AttinyRamSize.TryGetValue(LayoutChip(), out var size))
-            return RamStart() + size - 1;
-        if (cfg.RamSize > 0)
-            return RamStart() + cfg.RamSize - 1;
-        return 0x08FF;
-    }
+    private int RamEnd() => Device().RamEnd;
 
     // Parts with > 64 KB flash (e.g. atmega2560) need RAMPZ + ELPM to reach tables the linker
     // places above byte address 0xFFFF; plain LPM only uses the 16-bit Z. RAMPZ is IO 0x3B.
@@ -4256,7 +4257,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     }
 
     // Emit the gc_runtime.S content (embedded resource) into the output .asm file.
-    private static void EmitGcRuntime(TextWriter os)
+    private void EmitGcRuntime(TextWriter os)
     {
         os.WriteLine();
         os.WriteLine("; --- PyMCU GC Runtime (gc_runtime.S) ---");
@@ -4264,7 +4265,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         using var stream = asm.GetManifestResourceStream("gc_runtime.S")
             ?? throw new Exception("gc_runtime.S embedded resource not found in assembly");
         using var reader = new System.IO.StreamReader(stream);
-        os.Write(reader.ReadToEnd());
+        var text = reader.ReadToEnd();
+        if (!HasJmpCall())
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text, @"^(\s*)(CALL|JMP)\b", "$1R$2",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+        os.Write(text);
     }
 
     // GcRoot: push the SRAM address of the GC_REF variable onto the shadow stack.
@@ -4505,9 +4511,6 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             ? 2u : 1u;
     }
 
-    // SRAM base address on AVR (ATmega328P and compatible): data space starts at 0x0100.
-    private const int SramBase = 0x0100;
-
     private void WriteVarMapIfRequested(ProgramIR program)
     {
         if (string.IsNullOrEmpty(EmitVarMapPath)) return;
@@ -4539,7 +4542,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 }
                 else if (_stackLayout.TryGetValue(pname, out int pOff))
                 {
-                    stackVars.TryAdd(pname, SramBase + pOff);
+                    stackVars.TryAdd(pname, RamStart() + pOff);
                     stackVarLines.TryAdd(pname, firstDebug.Line);
                 }
             }
@@ -4576,7 +4579,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     }
                     else if (_stackLayout.TryGetValue(vv.Name, out int off))
                     {
-                        stackVars.TryAdd(vv.Name, SramBase + off);
+                        stackVars.TryAdd(vv.Name, RamStart() + off);
                         stackVarLines.TryAdd(vv.Name, curLine);
                     }
                 }

@@ -113,6 +113,7 @@ class AvrgasToolchain(ExternalToolchain):
         "attiny44":   0x60, "attiny45":   0x60,
         "attiny84":   0x60, "attiny85":   0x60,
         "attiny2313": 0x60, "attiny4313": 0x60,
+        "atmega2560": 0x200,
     }
     _DEFAULT_RAMSTART = 0x100  # ATmega48/88/168/328(P) and similar
 
@@ -147,14 +148,17 @@ class AvrgasToolchain(ExternalToolchain):
         "attiny2313": 128, "attiny4313": 256,
     }
 
-    # Reduced-core parts (avr25 and below) lack the 2-word JMP/CALL instructions; only the
-    # PC-relative RJMP/RCALL exist. The atmega-oriented "emit JMP/CALL, let -mrelax shrink"
-    # strategy fails for these — avr-as rejects JMP/CALL outright. Their flash is ≤8 KB, well
-    # within RJMP/RCALL's ±2 K-word reach, so keeping the relative forms is always safe.
-    _NO_JMP_CHIPS: frozenset[str] = frozenset(_RAMSTART)  # the ATtiny family above
+    # Cores that lack the 2-word JMP/CALL instructions; only the PC-relative RJMP/RCALL exist.
+    # The atmega-oriented "emit JMP/CALL, let -mrelax shrink" strategy fails for these — avr-as
+    # rejects JMP/CALL outright. Their flash is ≤8 KB, well within RJMP/RCALL's ±2 K-word reach,
+    # so keeping the relative forms is always safe. The core is not the family name: the
+    # ATmega48/88 parts are avr4 and have no JMP/CALL, while the 168/328 parts are avr5 and do.
+    _NO_JMP_CORES: frozenset[str] = frozenset({"avr1", "avr2", "avr25", "avr4"})
 
     def _has_jmp(self) -> bool:
-        return self.chip.lower() not in self._NO_JMP_CHIPS
+        from pymcu.toolchain.avr import wasi  # noqa: PLC0415
+
+        return wasi.emulation_for(self.chip) not in self._NO_JMP_CORES
 
     def _chip_ramstart(self) -> int:
         return self._RAMSTART.get(self.chip.lower(), self._DEFAULT_RAMSTART)
@@ -176,7 +180,7 @@ class AvrgasToolchain(ExternalToolchain):
                 "MEMORY\n"
                 "{\n"
                 f"  flash (rx)   : ORIGIN = 0x000000, LENGTH = {flash_len}\n"
-                f"  sram  (rw!x) : ORIGIN = 0x{data_org:06X}, LENGTH = {sram_len - self._chip_ramstart()}\n"
+                f"  sram  (rw!x) : ORIGIN = 0x{data_org:06X}, LENGTH = {sram_len}\n"
                 "}\n"
             )
             text_at, data_at = " :", " :"
