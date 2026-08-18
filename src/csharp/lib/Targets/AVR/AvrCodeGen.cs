@@ -1338,28 +1338,21 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // all occurrences (including the first) are replaced with RCALL.
         var inlineGroups = new Dictionary<string, List<(int start, int end)>>();
         {
-            int depth = 0;
-            int scanStart = -1;
-            string? scanFunc = null;
+            var openRegions = new Stack<(string FuncName, int Start)>();
             for (int k = 0; k < func.Body.Count; k++)
             {
                 if (func.Body[k] is InlineExpansionMarker km)
                 {
                     if (!km.IsEnd)
                     {
-                        if (depth == 0) { scanStart = k; scanFunc = km.FuncName; }
-                        depth++;
+                        openRegions.Push((km.FuncName, k));
                     }
-                    else
+                    else if (openRegions.Count > 0)
                     {
-                        depth--;
-                        if (depth == 0 && scanFunc != null)
-                        {
-                            if (!inlineGroups.ContainsKey(scanFunc))
-                                inlineGroups[scanFunc] = new();
-                            inlineGroups[scanFunc].Add((scanStart, k));
-                            scanFunc = null;
-                        }
+                        var (fn, start) = openRegions.Pop();
+                        if (!inlineGroups.ContainsKey(fn))
+                            inlineGroups[fn] = new();
+                        inlineGroups[fn].Add((start, k));
                     }
                 }
             }

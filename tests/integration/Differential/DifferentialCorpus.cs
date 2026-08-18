@@ -72,33 +72,16 @@ public static class DifferentialCorpus
     /// </remarks>
     public static readonly IReadOnlyDictionary<string, string> KnownDivergences = new Dictionary<string, string>
     {
-        ["examples/adc-read"]                    = "banner newline arrives as 0x00",
+        ["examples/bmp280"]                      = "hex digits print as ED: write_hex shares digit-offset constants across sites",
         ["examples/inheritance-zca"]             = "prints C:0034 instead of C:1234",
-        ["examples/interrupt-counter"]           = "banner newline arrives as 0x00",
-        ["examples/pcint-counter"]               = "banner is skipped; prints COUNT: first",
-        ["examples/pin-irq"]                     = "banner newline arrives as 0x00",
-        ["examples/softspi"]                     = "banner is skipped; prints D: with no value",
-        ["examples/spi-shift-register"]          = "banner newline arrives as 0x00",
-        ["examples/uart-command"]                = "banner and help text are replaced by LED=",
-        ["examples/uart-echo"]                   = "banner newline arrives as 0x00",
-        ["examples/uart-rx-interrupt"]           = "banner newline arrives as 0x00",
-        ["examples/uart-str"]                    = "prints the first string twice",
         ["fixtures/break-edges"]                 = "checkpoint 4 keeps checkpoint 2's GPIOR0 value",
         ["fixtures/builtin-ops"]                 = "prints V:01, its own fixture expects V:00",
         ["fixtures/compat-cp-microcontroller"]   = "writes 0x00 where the NVM byte should be",
         ["fixtures/fixeddict"]                   = "prints D:257, its own fixture expects D:99",
-        ["fixtures/fstring-value"]               = "banner is skipped",
         ["fixtures/instance-array"]              = "prints NUL bytes instead of the array contents",
-        ["fixtures/map-range"]                   = "reprints the banner instead of each label",
-        ["fixtures/new-builtins"]                = "banner is replaced by a value",
         ["fixtures/print-integers"]              = "prints 210/12/64 instead of 1234/-500/123456",
-        ["fixtures/ptr-runtime"]                 = "banner newline arrives as 0x00",
-        ["fixtures/random-prng"]                 = "reprints the banner instead of each label",
-        ["fixtures/read-blocking"]               = "banner newline arrives as 0x00",
         ["fixtures/static-method"]               = "checkpoint 2 keeps checkpoint 1's GPIOR0 value",
-        ["fixtures/tuple-args"]                  = "prints newlines instead of the tuple members",
         ["fixtures/warning-decorator"]           = "prints V:01 instead of V:2A",
-        ["fixtures/zca-array"]                   = "prints the wrong array bytes",
     };
 
     /// <summary>
