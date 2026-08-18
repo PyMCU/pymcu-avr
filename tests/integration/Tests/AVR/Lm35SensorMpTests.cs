@@ -10,7 +10,8 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 ///
 /// MicroPython-style LM35 driver using machine.ADC on channel A0.
 /// Conversion: Temp_C = ADC_raw * 0.4882813  (5 V ref, 10-bit)
-/// Printed via uart_write_float: one decimal place, e.g. "24.9".
+/// Printed via uart_write_float: two rounded decimals, trailing zero
+/// trimmed, e.g. "24.9" or "99.61".
 ///
 /// Boot banner: "LM35 ready\n"
 /// Loop output: "T: &lt;temp&gt; C\n"  (sep="", so no extra spaces)
@@ -68,17 +69,17 @@ public class Lm35SensorMpTests
     }
 
     [Test]
-    public void Raw204_Prints99Point6Celsius()
+    public void Raw204_Prints99Point61Celsius()
     {
-        // raw = 204 => 204 * 0.4882813 = 99.60... => uart_write_float => "99.6"
+        // raw = 204 => 204 * 0.4882813 = 99.609... => uart_write_float => "99.61"
         var uno = Sim();
         uno.AddAdc(AvrAdc.AdcConfig, out var adc);
         adc.ChannelValues[0] = 204.0 / 1024.0 * 5.0;
 
         uno.RunUntilSerial(uno.Serial, "LM35 ready\n", maxMs: 500);
-        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 99.6 C"), maxMs: 500);
+        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 99.61 C"), maxMs: 500);
 
-        uno.Serial.Text.Should().Contain("T: 99.6 C");
+        uno.Serial.Text.Should().Contain("T: 99.61 C");
     }
 
     [Test]
