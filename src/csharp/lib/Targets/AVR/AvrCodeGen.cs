@@ -34,6 +34,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private Dictionary<string, string> _regLayout = new();
     private Dictionary<string, string> _tmpRegLayout = new();
     private readonly HashSet<string> _allTmpRegNames = [];
+    // Labels of the subroutines the inline-expansion outliner carved out of a function body.
+    // Such a subroutine is a continuation of its caller, not a function: it may leave its
+    // result in ANY register the allocator picked, so the peephole's calling-convention
+    // assumptions (nothing scratch is live across a RET) do not hold at its RET.
+    private readonly HashSet<string> _outlinedSubroutines = [];
     private readonly HashSet<int> _usedExnCodes = [];
     private HashSet<string> _varIsFloat = new();
     private readonly Dictionary<string, List<int>> _flashArrayPool = new();
@@ -122,6 +127,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Temporary t => t.Type,
         MemoryAddress m => m.Type.SizeOf() > 1 ? m.Type : DataType.UINT8,
         FunctionRef => DataType.UINT16,  // Function word address is 2 bytes
+        Constant { Value: > 65535 } => DataType.UINT32,
+        Constant { Value: < -32768 } => DataType.INT32,
         Constant { Value: > 255 or < -128 } => DataType.UINT16,
         _ => DataType.UINT8,
     };
@@ -986,7 +993,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 for (int b = 0; b < 4; b++)
                     noForward.Add(RamStart() + isrOff + b);
 
-        var optimized = AvrPeephole.Optimize(_assembly, noForward, RamStart());
+        var optimized = AvrPeephole.Optimize(_assembly, noForward, RamStart(), _outlinedSubroutines);
         foreach (var line in optimized)
             output.WriteLine(line.ToString());
 
@@ -1410,6 +1417,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             if (!RangesIdentical(ranges)) continue;                                  // keep inline
             var label = MakeLabel("_pymcu_outline");
             outlinedLabels[fname] = label;
+            _outlinedSubroutines.Add(label);
             // Body range: [ranges[0].start + 1, ranges[0].end) (exclusive of markers)
             pendingSubroutines.Add((label, ranges[0].start + 1, ranges[0].end));
         }
