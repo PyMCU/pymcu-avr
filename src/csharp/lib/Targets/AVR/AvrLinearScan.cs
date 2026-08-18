@@ -173,6 +173,50 @@ public static class AvrLinearScan
             }
         }
 
+        var labelIndex = new Dictionary<string, int>();
+        for (int i = 0; i < func.Body.Count; ++i)
+            if (func.Body[i] is Label lb)
+                labelIndex[lb.Name] = i;
+
+        var backEdges = new List<(int Target, int Jump)>();
+        for (int i = 0; i < func.Body.Count; ++i)
+        {
+            string? tgt = func.Body[i] switch
+            {
+                Jump j => j.Target,
+                JumpIfZero j => j.Target,
+                JumpIfNotZero j => j.Target,
+                JumpIfEqual j => j.Target,
+                JumpIfNotEqual j => j.Target,
+                JumpIfLessThan j => j.Target,
+                JumpIfLessOrEqual j => j.Target,
+                JumpIfGreaterThan j => j.Target,
+                JumpIfGreaterOrEqual j => j.Target,
+                JumpIfBitSet j => j.Target,
+                JumpIfBitClear j => j.Target,
+                _ => null,
+            };
+            if (tgt != null && labelIndex.TryGetValue(tgt, out int li) && li < i)
+                backEdges.Add((li, i));
+        }
+
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var iv in intervals.Values)
+            {
+                foreach (var (target, jump) in backEdges)
+                {
+                    if (iv.Def < target && iv.LastUse >= target && iv.LastUse < jump)
+                    {
+                        iv.LastUse = jump;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
         // Mark intervals that strictly span a Call
         foreach (var iv in intervals.Values)
         {
