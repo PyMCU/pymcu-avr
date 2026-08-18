@@ -107,3 +107,13 @@ def test_the_linker_data_base_matches_the_backend_ram_start(chip):
     assert linker == BACKEND[chip]["RamStart"], \
         (f"{chip}: the linker script starts .data at 0x{linker:04X}, "
          f"the backend addresses from 0x{BACKEND[chip]['RamStart']:04X}")
+
+
+@needs_binary
+@pytest.mark.parametrize("chip", chips())
+def test_the_linker_flash_matches_the_backend_flash_size(chip):
+    ours = FLASH.get(chip)
+    assert ours is not None, f"_FLASH_BYTES has no entry for {chip}"
+    assert ours == BACKEND[chip]["FlashSize"], \
+        (f"{chip}: the linker script sizes flash at {ours} bytes, "
+         f"the backend at {BACKEND[chip]['FlashSize']}")

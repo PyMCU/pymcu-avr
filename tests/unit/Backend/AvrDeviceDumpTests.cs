@@ -9,7 +9,7 @@ namespace PyMCU.UnitTests;
 
 public class AvrDeviceDumpTests
 {
-    public record Row(string Chip, int RamStart, int RamSize, int RamEnd, bool HasJmpCall);
+    public record Row(string Chip, int RamStart, int RamSize, int RamEnd, int FlashSize, bool HasJmpCall);
 
     private static List<Row> Dump()
     {
@@ -21,6 +21,7 @@ public class AvrDeviceDumpTests
                 e.GetProperty("RamStart").GetInt32(),
                 e.GetProperty("RamSize").GetInt32(),
                 e.GetProperty("RamEnd").GetInt32(),
+                e.GetProperty("FlashSize").GetInt32(),
                 e.GetProperty("HasJmpCall").GetBoolean()));
         return rows;
     }
@@ -45,6 +46,26 @@ public class AvrDeviceDumpTests
 
     public static IEnumerable<object[]> Rows()
         => Dump().Select(r => new object[] { r.Chip, r.RamStart, r.RamEnd, r.HasJmpCall });
+
+    public static IEnumerable<object[]> FlashRows()
+        => Dump().Select(r => new object[] { r.Chip, r.FlashSize });
+
+    private static string ReadsAFlashTable(string chip)
+        => Compile(chip, new ArrayLoadFlash("table", new Constant(0), new Variable("x")));
+
+    // Reaching a table above byte address 0xFFFF needs RAMPZ + ELPM; below it, plain LPM.
+    // The chip's flash size decides, and the catalog is where that size now lives.
+    [Theory]
+    [MemberData(nameof(FlashRows))]
+    public void TheDumpDecidesHowFarTheCodegenCanReachIntoFlash(string chip, int flashSize)
+    {
+        var asm = ReadsAFlashTable(chip);
+        var far = flashSize > 0x10000;
+
+        Assert.Equal(far, asm.Contains("\tELPM\t"));
+        Assert.Equal(far, asm.Contains("OUT\t0x3B"));
+        Assert.Equal(!far, asm.Contains("\tLPM\t"));
+    }
 
     [Fact]
     public void TheDumpIsNotEmpty()

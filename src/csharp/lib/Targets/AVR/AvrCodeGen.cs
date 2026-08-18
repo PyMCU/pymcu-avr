@@ -1137,16 +1137,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
     // Parts with > 64 KB flash (e.g. atmega2560) need RAMPZ + ELPM to reach tables the linker
     // places above byte address 0xFFFF; plain LPM only uses the 16-bit Z. RAMPZ is IO 0x3B.
-    // FlashSize is often unset on the backend CLI path, so fall back to a known-chip list.
-    private bool LargeFlash
-    {
-        get
-        {
-            if (cfg.FlashSize > 0x10000) return true;
-            return ChipName().ToLowerInvariant() is "atmega2560" or "atmega2561" or "atmega1280"
-                or "atmega1281" or "atmega1284" or "atmega1284p" or "atmega128" or "atmega128a";
-        }
-    }
+    private bool LargeFlash => Device().FlashSize > 0x10000;
 
     // Parse "R12" -> 12; pointer tokens "X"/"Y"/"Z" (and their +/- forms) -> the pair's low reg
     // (26/28/30); else -1. Used by the ISR-save trimmer to learn which registers a body touches.
