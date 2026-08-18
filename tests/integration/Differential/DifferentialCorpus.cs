@@ -44,6 +44,10 @@ public static class DifferentialCorpus
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> TimingDependent = new Dictionary<string, string>
     {
+        ["fixtures/pwm-dual-channel"] =
+            "six free-running hardware PWM channels at two periods; which output edge lands " +
+            "first after init depends on exact init-code timing, so the GPIO change order " +
+            "differs between builds while every register value is identical",
         ["examples/rtos-multitask"] =
             "preemptive scheduler — how many pin writes each task gets in between timer ticks " +
             "is a function of how fast the code is",
