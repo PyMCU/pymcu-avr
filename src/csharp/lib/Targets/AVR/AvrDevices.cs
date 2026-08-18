@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: MIT
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace PyMCU.Backend.Targets.AVR;
 
 internal readonly record struct AvrDevice(int RamStart, int RamSize, bool HasJmpCall)
@@ -6,7 +9,13 @@ internal readonly record struct AvrDevice(int RamStart, int RamSize, bool HasJmp
     public int RamEnd => RamStart + RamSize - 1;
 }
 
-internal static class AvrDevices
+/// <summary>One row of the catalog as published by <c>pymcuc-avr devices</c>.</summary>
+public record DeviceEntry(string Chip, int RamStart, int RamSize, int RamEnd, bool HasJmpCall);
+
+[JsonSerializable(typeof(List<DeviceEntry>))]
+internal partial class AvrDevicesJsonContext : JsonSerializerContext { }
+
+public static class AvrDevices
 {
     private static readonly Dictionary<string, AvrDevice> Catalog = new()
     {
@@ -32,8 +41,21 @@ internal static class AvrDevices
         ["attiny85"]   = new(0x60,  512,  false),
     };
 
-    public static IEnumerable<string> Chips => Catalog.Keys;
+    internal static IEnumerable<string> Chips => Catalog.Keys;
 
-    public static bool TryGet(string chip, out AvrDevice device)
+    internal static bool TryGet(string chip, out AvrDevice device)
         => Catalog.TryGetValue(chip.ToLowerInvariant(), out device);
+
+    // Read back through TryGet, the same accessor the codegen calls, so the published
+    // catalog cannot drift from the one the compiler consults.
+    public static string ToJson()
+    {
+        var entries = new List<DeviceEntry>();
+        foreach (var chip in Chips.OrderBy(c => c, StringComparer.Ordinal))
+        {
+            if (!TryGet(chip, out var d)) continue;
+            entries.Add(new DeviceEntry(chip, d.RamStart, d.RamSize, d.RamEnd, d.HasJmpCall));
+        }
+        return JsonSerializer.Serialize(entries, AvrDevicesJsonContext.Default.ListDeviceEntry);
+    }
 }

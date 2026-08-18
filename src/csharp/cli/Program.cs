@@ -234,4 +234,19 @@ debugCmd.SetAction(pr =>
 
 rootCmd.Subcommands.Add(debugCmd);
 
+// ── devices subcommand — publish the chip catalog the codegen reads ─────────
+//
+// A subcommand rather than a --dump-devices flag because the root command takes a
+// required ir-file argument: an option there could not run without one.
+
+var devicesCmd = new Command("devices",
+    "Print the AVR device catalog (SRAM layout and core capabilities) as JSON");
+
+devicesCmd.SetAction(_ =>
+{
+    Console.WriteLine(AvrDevices.ToJson());
+});
+
+rootCmd.Subcommands.Add(devicesCmd);
+
 rootCmd.Parse(args).Invoke();
