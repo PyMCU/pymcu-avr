@@ -67,12 +67,20 @@ public class PwmMultiTests
     [Test]
     public void ChannelC_Timer1_FastPwm8bit_Configured()
     {
-        // TCCR1A COM1A1=1 (bit 7), WGM10=1 (bit 0) -> 0x82 for Fast PWM 8-bit with OC1A
+        // TCCR1A COM1A1=1 (bit 7), WGM10=1 (bit 0) -> 0x81 for Fast PWM 8-bit with OC1A.
+        // The WGM bits are asserted exactly: the stdlib shipped 0x82 (WGM11 instead of
+        // WGM10), which is mode 6 (9-bit, TOP=511) — the period doubles and a uint8 duty
+        // can never exceed 50%. The pulse WIDTH stays identical (the tick is still 0.5 us
+        // at prescaler 8), so only the period/mode reveals it; a logic analyser caught it
+        // on real silicon at 256 us instead of 128 us.
         var uno = Sim();
         uno.RunUntilSerial(uno.Serial, "PWM3");
         uno.RunMilliseconds(10);
         var tccr1a = uno.Data[TCCR1A];
         (tccr1a & 0x80).Should().Be(0x80, "Timer1 COM1A1=1 (non-inverted OC1A)");
+        (tccr1a & 0x03).Should().Be(0x01, "Timer1 WGM11:10=01 (mode 5: Fast PWM 8-bit, TOP=0xFF)");
+        var tccr1b = uno.Data[TCCR1B];
+        (tccr1b & 0x08).Should().Be(0x08, "Timer1 WGM12=1 (mode 5 upper bit)");
     }
 
     [Test]
