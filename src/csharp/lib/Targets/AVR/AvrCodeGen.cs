@@ -2288,9 +2288,54 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
     }
 
+    // Unary ops on a float. The integer path is wrong twice over here: it loads through the
+    // integer register layout (R24 low) instead of the GCC float one (R22 low), and negation
+    // in IEEE754 is the sign bit alone, not a two's-complement carry chain -- `-2.25` came out
+    // as whatever the previous float had left in the registers.
+    private void CompileFloatUnary(Unary u)
+    {
+        switch (u.Op)
+        {
+            case IrUnOp.Neg:
+                LoadFloatIntoRegs(u.Src);
+                Emit("LDI", "R18", "0x80");
+                Emit("EOR", "R25", "R18");     // R25 is the MSB, so bit 7 is the sign
+                StoreFloatFromRegs(u.Dst);
+                return;
+            case IrUnOp.Not:
+            {
+                // `not x` is true when x is zero -- and -0.0 IS zero, so the sign bit is
+                // masked off before folding the bytes together.
+                LoadFloatIntoRegs(u.Src);
+                Emit("ANDI", "R25", "0x7F");
+                Emit("OR", "R22", "R23");
+                Emit("OR", "R22", "R24");
+                Emit("OR", "R22", "R25");
+                var lTrue = MakeLabel("L_FNOT_TRUE");
+                var lDone = MakeLabel("L_FNOT_DONE");
+                Emit("BREQ", lTrue);
+                Emit("LDI", "R24", "0");
+                Emit("RJMP", lDone);
+                EmitLabel(lTrue);
+                Emit("LDI", "R24", "1");
+                EmitLabel(lDone);
+                StoreRegInto("R24", u.Dst, DataType.UINT8);
+                return;
+            }
+            default:
+                throw new NotSupportedException($"Unary {u.Op} is not defined for a float value");
+        }
+    }
+
     private void CompileUnary(Unary u)
     {
         DataType type = GetValType(u.Dst);
+        if (type == DataType.FLOAT || GetValType(u.Src) == DataType.FLOAT)
+        {
+            CompileFloatUnary(u);
+            return;
+        }
+
         LoadIntoReg(u.Src, "R24", type);
         bool is16 = type.SizeOf() == 2;
         bool is32 = type.SizeOf() == 4;
