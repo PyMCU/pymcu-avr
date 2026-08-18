@@ -10,8 +10,8 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// Verifies that machine.PWM(pin, freq=...) selects the correct Timer0
 /// prescaler via CS bits in TCCR0B, and that pwm.freq() updates it.
 ///
-/// Fixture: PWM("PD6", freq=1000).init() → CS=0x02 (prescaler/8)
-///          then pwm.freq(100)          → CS=0x04 (prescaler/256)
+/// Fixture: PWM("PD6", freq=1000).init() → CS=0x03 (prescaler/64, nearest bucket)
+///          then pwm.freq(100)          → CS=0x05 (prescaler/1024, nearest bucket)
 /// After setup the firmware sends 0x46 ('F') via machine.UART.
 /// </summary>
 [TestFixture]
@@ -54,13 +54,13 @@ public class CompatMpPwmFreqTests
     }
 
     [Test]
-    public void FreqMethod_SelectsPrescalerDiv256_CS0x04()
+    public void FreqMethod_SelectsNearestBucket_CS0x05()
     {
-        // After pwm.freq(100): freq > 61 and <= 244 => CS bits = 0x04 (prescaler /256)
+        // After pwm.freq(100): 61 Hz is the nearest achievable (1.6x below vs 2.4x above)
         var uno = Sim();
         uno.RunUntilSerialBytes(uno.Serial, 1, maxMs: 50);
         var tccr0b = uno.Data[TCCR0B];
-        (tccr0b & 0x07).Should().Be(0x04, "CS bits == 0x04 after freq(100): prescaler /256 = 244 Hz");
+        (tccr0b & 0x07).Should().Be(0x05, "CS bits == 0x05 after freq(100): prescaler /1024 = 61 Hz is nearest");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

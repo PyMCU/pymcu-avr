@@ -1,8 +1,11 @@
 # MicroPython machine.PWM integration test fixture — freq parameter
 #
 # Verifies that:
-#   1. machine.PWM(pin, freq=1000) selects prescaler/8 (CS=0x02) for Timer0
-#   2. pwm.freq(100) re-selects prescaler/256 (CS=0x04) for Timer0
+#   1. machine.PWM(pin, freq=1000) selects prescaler/64 (CS=0x03) for Timer0
+#      (nearest achievable: 976 Hz at 2.4% error; the old above-the-request
+#      policy returned 7812 Hz, 7.8x off)
+#   2. pwm.freq(100) re-selects prescaler/1024 (CS=0x05): 61 Hz is nearer
+#      to 100 than 244 Hz is
 #
 # ATmega328P Timer0 fast-PWM freq = 16MHz / (prescaler * 256):
 #   CS=0x01: /1   = 62500 Hz
@@ -18,9 +21,9 @@ from machine import Pin, PWM, UART
 
 def main():
     uart = UART(0, 9600)
-    pwm = PWM(Pin("PD6"), freq=1000)  # PD6; freq > 976 -> CS=0x02 (prescaler /8)
+    pwm = PWM(Pin("PD6"), freq=1000)  # nearest bucket 976 Hz -> CS=0x03 (prescaler /64)
     pwm.init()
-    pwm.freq(100)                  # freq > 61, <= 244 -> CS=0x04 (prescaler /256)
+    pwm.freq(100)                  # nearest bucket 61 Hz -> CS=0x05 (prescaler /1024)
     uart.write(0x46)               # 'F' done marker
     while True:
         pass
