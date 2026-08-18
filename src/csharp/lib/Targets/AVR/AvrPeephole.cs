@@ -209,7 +209,8 @@ public static class AvrPeephole
     }
 
     public static List<AvrAsmLine> Optimize(List<AvrAsmLine> lines,
-        HashSet<int>? noForwardAddrs = null, int ramStart = 0x100)
+        HashSet<int>? noForwardAddrs = null, int ramStart = 0x100,
+        IReadOnlySet<string>? outlinedSubroutines = null)
     {
         var result = new List<AvrAsmLine>(lines);
 
@@ -528,7 +529,7 @@ public static class AvrPeephole
         }
 
         // --- Dead temporary-register move elimination (R16/R17) ---
-        EliminateDeadTempMoves(result);
+        EliminateDeadTempMoves(result, outlinedSubroutines ?? new HashSet<string>());
 
         // --- Fuse adjacent immediate ORI/ANDI on the same register ---
         // The @inline driver composition emits split constant masks (e.g.
@@ -1382,8 +1383,17 @@ public static class AvrPeephole
     /// mnemonics, raw inline asm and calls are treated as reading the temps, keeping
     /// them live) while writes are under-approximated (only an unambiguous pure write
     /// kills liveness). The pass bails entirely on computed jumps it cannot resolve.
+    ///
+    /// <paramref name="outlinedSubroutines"/> names the bodies the inline-expansion
+    /// outliner lifted out of a function. Those are NOT functions: the region's result
+    /// lives in whatever register the allocator gave it, so the temps can be live across
+    /// their RET (and their RCALL). Treating such a RET as a plain exit deleted the
+    /// `MOV R16,R24` that hands the region's value back, and the caller then read
+    /// whatever R16 happened to hold — a UART-ready flag, in the bmp280 example, so a
+    /// 16-bit sensor reading printed as 0x0001.
     /// </summary>
-    private static void EliminateDeadTempMoves(List<AvrAsmLine> lines)
+    private static void EliminateDeadTempMoves(List<AvrAsmLine> lines,
+        IReadOnlySet<string> outlinedSubroutines)
     {
         int n = lines.Count;
         if (n == 0) return;
@@ -1392,6 +1402,27 @@ public static class AvrPeephole
         for (int i = 0; i < n; i++)
             if (lines[i].Type == AvrAsmLine.LineType.Label)
                 labelIndex[lines[i].LabelText] = i;
+
+        // The RETs that end an outlined body: the temps are live-out there, not dead.
+        // An outlined body is `<label>: <region> RET`, so its terminating RET is the
+        // first one after the label.
+        var outlineRet = new bool[n];
+        if (outlinedSubroutines.Count > 0)
+        {
+            bool inOutline = false;
+            for (int i = 0; i < n; i++)
+            {
+                if (lines[i].Type == AvrAsmLine.LineType.Label
+                    && outlinedSubroutines.Contains(lines[i].LabelText))
+                    inOutline = true;
+                else if (inOutline && lines[i].Type == AvrAsmLine.LineType.Instruction
+                         && lines[i].Mnemonic is "RET" or "RETI")
+                {
+                    outlineRet[i] = true;
+                    inOutline = false;
+                }
+            }
+        }
 
         // Successors per line. null entry => bail (unresolved control flow).
         var succ = new List<int>[n];
@@ -1453,7 +1484,10 @@ public static class AvrPeephole
             // CALL/RCALL/ICALL do NOT read the temp registers: PyMCU passes arguments in
             // R24/R22/R20/R18 (never R16/R17), and callees that use a temp internally
             // (e.g. __div8) push/pop it rather than taking it as input. The operand of a
-            // call is a label, so it reads no register here either way.
+            // call is a label, so it reads no register here either way. An OUTLINED body is
+            // the exception: it is a lifted piece of the caller, so it may consume a temp
+            // the caller left in place.
+            if (m is "CALL" or "RCALL" && outlinedSubroutines.Contains(line.Op1)) return true;
             if (PureWriteOp1.Contains(m)) return ParseReg(line.Op2) == r; // Op1 is the destination
             return ParseReg(line.Op1) == r || ParseReg(line.Op2) == r;
         }
@@ -1480,7 +1514,8 @@ public static class AvrPeephole
                     int r = TempRegs[ti];
                     bool outLive = false;
                     foreach (int s in succ[i]) outLive |= liveIn[s, ti];
-                    bool inLive = Reads(lines[i], r) || (!PureWrites(lines[i], r) && outLive);
+                    bool inLive = outlineRet[i] || Reads(lines[i], r)
+                                  || (!PureWrites(lines[i], r) && outLive);
                     if (inLive != liveIn[i, ti]) { liveIn[i, ti] = inLive; changed = true; }
                 }
             }

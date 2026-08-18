@@ -72,16 +72,7 @@ public static class DifferentialCorpus
     /// </remarks>
     public static readonly IReadOnlyDictionary<string, string> KnownDivergences = new Dictionary<string, string>
     {
-        ["examples/bmp280"]                      = "hex digits print as ED: write_hex shares digit-offset constants across sites",
-        ["examples/inheritance-zca"]             = "prints C:0034 instead of C:1234",
-        ["fixtures/break-edges"]                 = "checkpoint 4 keeps checkpoint 2's GPIOR0 value",
-        ["fixtures/builtin-ops"]                 = "prints V:01, its own fixture expects V:00",
-        ["fixtures/compat-cp-microcontroller"]   = "writes 0x00 where the NVM byte should be",
-        ["fixtures/fixeddict"]                   = "prints D:257, its own fixture expects D:99",
-        ["fixtures/instance-array"]              = "prints NUL bytes instead of the array contents",
         ["fixtures/print-integers"]              = "prints 210/12/64 instead of 1234/-500/123456",
-        ["fixtures/static-method"]               = "checkpoint 2 keeps checkpoint 1's GPIOR0 value",
-        ["fixtures/warning-decorator"]           = "prints V:01 instead of V:2A",
     };
 
     /// <summary>
