@@ -323,9 +323,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             else
             {
                 // Result is float in R22:R25; __fixsfsi converts to int32 (R22=LSB).
+                // The integer store layout is R24=b0,R25=b1,R22=b2,R23=b3: swap the
+                // pairs via MOVW without clobbering - the old MOV pair overwrote the
+                // high half before reading it, so a 32-bit destination received the
+                // low word duplicated (uint32(3.25*100) stored 0x01450145).
                 Emit("CALL", "__fixsfsi");
-                Emit("MOV", "R24", "R22");
-                Emit("MOV", "R25", "R23");
+                Emit("MOVW", "R18", "R24");
+                Emit("MOVW", "R24", "R22");
+                Emit("MOVW", "R22", "R18");
                 StoreRegInto("R24", b.Dst, dstType);
             }
         }
@@ -2188,8 +2193,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             // Float → integer: load float into R22:R25, __fixsfsi converts to int32 (R22=LSB).
             LoadFloatIntoRegs(cp.Src);
             Emit("CALL", "__fixsfsi");
-            Emit("MOV", "R24", "R22");
-            Emit("MOV", "R25", "R23");
+            Emit("MOVW", "R18", "R24");
+            Emit("MOVW", "R24", "R22");
+            Emit("MOVW", "R22", "R18");
             StoreRegInto("R24", cp.Dst, dstType);
             return;
         }
