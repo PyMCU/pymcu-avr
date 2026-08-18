@@ -738,6 +738,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         var (offsets, maxStack) = allocator.Allocate(program);
         _stackLayout = offsets;
         _maxStaticUsage = maxStack;
+        // Static SRAM lives as .equ offsets from _stack_base, invisible to the
+        // linker's MEMORY regions, so this is the only place overflow can be
+        // caught. The hardware call stack grows down from RAMEND into the same
+        // space; a 64-byte floor keeps the check from passing a program with
+        // no room left to call anything.
+        int sramAvailable = RamEnd() - RamStart() + 1;
+        if (maxStack + 64 > sramAvailable)
+            throw new InvalidOperationException(
+                $"static data needs {maxStack} bytes but {LayoutChip()} has {sramAvailable} bytes of SRAM " +
+                $"(and the call stack needs room on top). Reduce array sizes or pick a chip with more RAM.");
         _needsGc = program.NeedsGc;
         _varSizes = allocator.VariableSizes;
         _bssSize = program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum();
