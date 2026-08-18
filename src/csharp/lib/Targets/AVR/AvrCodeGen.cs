@@ -1714,49 +1714,75 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
     }
 
+    // True when either side of a comparison is a float, so it must go through the soft-float
+    // runtime. Both sides matter: `0.0 < x` puts the float on the right, and the integer
+    // ordering of a float's bits is not the ordering of the values it stands for -- IEEE754
+    // negatives compare ABOVE positives as unsigned, so a raw CP/CPC answers backwards.
+    private static bool IsFloatCompare(Val src1, Val src2)
+        => GetValType(src1) == DataType.FLOAT || GetValType(src2) == DataType.FLOAT;
+
+    // Compare two floats through libgcc's __cmpsf2 and branch on the result. `cond` is the
+    // relation being tested (lt/le/gt/ge/eq/ne), not an AVR mnemonic: the answer arrives as
+    // a value in R24 (0xFF less, 0x00 equal, 0x01 greater), so the branch is chosen from
+    // that byte rather than from the flags an integer compare would have set.
+    private void EmitFloatCompareJump(Val src1, Val src2, string cond, string target)
+    {
+        // GCC AVR float ABI: arg0 in R25:R22, arg1 in R21:R18. Load arg0 first and park it on
+        // the stack -- both loads land in R22:R25, and the routine clobbers R18:R21 as scratch.
+        LoadFloatIntoRegs(src1);
+        Emit("PUSH", "R25");
+        Emit("PUSH", "R24");
+        Emit("PUSH", "R23");
+        Emit("PUSH", "R22");
+        LoadFloatIntoRegs(src2);
+        Emit("MOV", "R18", "R22");
+        Emit("MOV", "R19", "R23");
+        Emit("MOV", "R20", "R24");
+        Emit("MOV", "R21", "R25");
+        Emit("POP", "R22");
+        Emit("POP", "R23");
+        Emit("POP", "R24");
+        Emit("POP", "R25");
+        Emit("CALL", "__cmpsf2");
+        switch (cond)
+        {
+            case "eq": Emit("CPI", "R24", "0x00"); EmitBranch("BREQ", target); break;
+            case "ne": Emit("CPI", "R24", "0x00"); EmitBranch("BRNE", target); break;
+            case "lt": Emit("CPI", "R24", "0xFF"); EmitBranch("BREQ", target); break;
+            case "ge": Emit("CPI", "R24", "0xFF"); EmitBranch("BRNE", target); break;
+            case "gt": Emit("CPI", "R24", "0x01"); EmitBranch("BREQ", target); break;
+            case "le": Emit("CPI", "R24", "0x01"); EmitBranch("BRNE", target); break;
+            default: throw new NotSupportedException($"Float comparison '{cond}' not supported");
+        }
+    }
+
     private void CompileCompareJump(Val src1, Val src2, string branch, string target)
     {
-        var type = GetValType(src1);
-        if (type == DataType.FLOAT)
+        if (IsFloatCompare(src1, src2))
         {
-            // __fp_cmp(arg0=R22:R25, arg1=R18:R21): returns 0xFF if <, 0x00 if =, 0x01 if >
-            LoadFloatIntoRegs(src1);
-            Emit("PUSH", "R25");
-            Emit("PUSH", "R24");
-            Emit("PUSH", "R23");
-            Emit("PUSH", "R22");
-            LoadFloatIntoRegs(src2);
-            Emit("MOV", "R18", "R22");
-            Emit("MOV", "R19", "R23");
-            Emit("MOV", "R20", "R24");
-            Emit("MOV", "R21", "R25");
-            Emit("POP", "R22");
-            Emit("POP", "R23");
-            Emit("POP", "R24");
-            Emit("POP", "R25");
-            Emit("CALL", "__cmpsf2");
-            // Map branch to __cmpsf2 result: 0xFF=lt, 0x00=eq, 0x01=gt
-            switch (branch)
+            string cond = branch switch
             {
-                case "BRGE": case "BRSH":
-                    Emit("CPI", "R24", "0xFF"); EmitBranch("BRNE", target); break;
-                case "BRLT": case "BRLO":
-                    Emit("CPI", "R24", "0xFF"); EmitBranch("BREQ", target); break;
-                case "BREQ":
-                    Emit("CPI", "R24", "0x00"); EmitBranch("BREQ", target); break;
-                case "BRNE":
-                    Emit("CPI", "R24", "0x00"); EmitBranch("BRNE", target); break;
-                default:
-                    Emit("CPI", "R24", "0xFF"); EmitBranch("BRNE", target); break;
-            }
+                "BRGE" or "BRSH" => "ge",
+                "BRLT" or "BRLO" => "lt",
+                "BREQ"           => "eq",
+                "BRNE"           => "ne",
+                _                => "ge",
+            };
+            EmitFloatCompareJump(src1, src2, cond, target);
             return;
         }
-        EmitCompare(src1, src2, type);
+        EmitCompare(src1, src2, GetValType(src1));
         EmitBranch(branch, target);
     }
 
     private void CompileLessOrEqual(JumpIfLessOrEqual jle)
     {
+        if (IsFloatCompare(jle.Src1, jle.Src2))
+        {
+            EmitFloatCompareJump(jle.Src1, jle.Src2, "le", jle.Target);
+            return;
+        }
+
         var type = GetValType(jle.Src1);
         bool signed = IsSignedComparison(jle.Src1, jle.Src2);
         string brLo = signed ? "BRLT" : "BRLO";
@@ -1798,6 +1824,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
     private void CompileGreaterThan(JumpIfGreaterThan jgt)
     {
+        if (IsFloatCompare(jgt.Src1, jgt.Src2))
+        {
+            EmitFloatCompareJump(jgt.Src1, jgt.Src2, "gt", jgt.Target);
+            return;
+        }
+
         var type = GetValType(jgt.Src1);
         bool signed = IsSignedComparison(jgt.Src1, jgt.Src2);
         LoadIntoReg(jgt.Src1, "R24", type);
