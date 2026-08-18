@@ -116,6 +116,37 @@ class AvrgasToolchain(ExternalToolchain):
     }
     _DEFAULT_RAMSTART = 0x100  # ATmega48/88/168/328(P) and similar
 
+    # Flash and SRAM capacities per chip, for the linker MEMORY regions. With no
+    # MEMORY declaration ld never errors on overflow: a 33 KB image for a 32 KB
+    # part linked "successfully" and 100%-of-storage builds sailed through to a
+    # mysterious flash-time failure. SRAM overflow (statics + arrays past the
+    # chip's RAM) was equally silent. Unknown chips fall back to no MEMORY
+    # regions, preserving the old permissive behavior.
+    _FLASH_BYTES: dict[str, int] = {
+        "atmega328p": 32768, "atmega328": 32768,
+        "atmega168p": 16384, "atmega168": 16384,
+        "atmega88p":  8192,  "atmega88":  8192,
+        "atmega48p":  4096,  "atmega48":  4096,
+        "atmega2560": 262144,
+        "atmega32u4": 32768,
+        "attiny85": 8192,  "attiny45": 4096,  "attiny25": 2048,
+        "attiny84": 8192,  "attiny44": 4096,  "attiny24": 2048,
+        "attiny13": 1024,  "attiny13a": 1024,
+        "attiny2313": 2048, "attiny4313": 4096,
+    }
+    _SRAM_BYTES: dict[str, int] = {
+        "atmega328p": 2048, "atmega328": 2048,
+        "atmega168p": 1024, "atmega168": 1024,
+        "atmega88p":  1024, "atmega88":  1024,
+        "atmega48p":  512,  "atmega48":  512,
+        "atmega2560": 8192,
+        "atmega32u4": 2560,
+        "attiny85": 512,  "attiny45": 256,  "attiny25": 128,
+        "attiny84": 512,  "attiny44": 256,  "attiny24": 128,
+        "attiny13": 64,   "attiny13a": 64,
+        "attiny2313": 128, "attiny4313": 256,
+    }
+
     # Reduced-core parts (avr25 and below) lack the 2-word JMP/CALL instructions; only the
     # PC-relative RJMP/RCALL exist. The atmega-oriented "emit JMP/CALL, let -mrelax shrink"
     # strategy fails for these — avr-as rejects JMP/CALL outright. Their flash is ≤8 KB, well
@@ -137,25 +168,43 @@ class AvrgasToolchain(ExternalToolchain):
         avr-gcc sets the correct BFD emulation via -mmcu=<chip>.
         """
         data_org = 0x800000 + self._chip_ramstart()
+        chip = self.chip.lower()
+        flash_len = self._FLASH_BYTES.get(chip)
+        sram_len = self._SRAM_BYTES.get(chip)
+        if flash_len and sram_len:
+            memory = (
+                "MEMORY\n"
+                "{\n"
+                f"  flash (rx)   : ORIGIN = 0x000000, LENGTH = {flash_len}\n"
+                f"  sram  (rw!x) : ORIGIN = 0x{data_org:06X}, LENGTH = {sram_len - self._chip_ramstart()}\n"
+                "}\n"
+            )
+            text_at, data_at = " :", " :"
+            text_region, data_region = " > flash", " > sram"
+        else:
+            memory = ""
+            text_at, data_at = " 0x000000 :", f" 0x{data_org:06X} :"
+            text_region, data_region = "", ""
         return (
             'OUTPUT_FORMAT("elf32-avr","elf32-avr","elf32-avr")\n'
             "ENTRY(main)\n"
+            + memory +
             "SECTIONS\n"
             "{\n"
-            "  .text 0x000000 :\n"
+            f"  .text{text_at}\n"
             "  {\n"
             "    *(.vectors)\n"
             "    *(.text*)\n"
             "    *(.rodata*)\n"
             "    . = ALIGN(2);\n"
-            "  }\n"
-            f"  .data 0x{data_org:06X} :\n"
+            f"  }}{text_region}\n"
+            f"  .data{data_at}\n"
             "  {\n"
             "    *(.data*)\n"
             "    *(.bss*)\n"
             "    *(COMMON)\n"
             "    . = ALIGN(1);\n"
-            "  }\n"
+            f"  }}{data_region}\n"
             "}\n"
         )
 
