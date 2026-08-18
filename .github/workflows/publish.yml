@@ -115,3 +115,21 @@ jobs:
       - name: Publish to PyPI
         run: uv publish dist/*
 
+
+  # Same hook as PyMCU/pymcu: the playground links this backend's C# library
+  # into its WASM worker, so a backend release should rebuild it too.
+  notify-playground:
+    name: Notify playground
+    needs: [publish-pypi]
+    if: success()
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Dispatch pymcu-release to PyMCU/pymcu-playground
+        env:
+          GH_TOKEN: ${{ secrets.PLAYGROUND_DISPATCH_TOKEN }}
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "no PLAYGROUND_DISPATCH_TOKEN; skipping"; exit 0; }
+          gh api repos/PyMCU/pymcu-playground/dispatches \
+            -f event_type=pymcu-release \
+            -F 'client_payload[pymcu_avr_ref]='"${GITHUB_REF_NAME}"
