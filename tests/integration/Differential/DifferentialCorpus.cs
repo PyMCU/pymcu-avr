@@ -21,6 +21,11 @@ public sealed record DiffProgram(ProgramKind Kind, string Name)
         ? PymcuCompiler.BuildNoPeephole(Name)
         : PymcuCompiler.BuildFixtureNoPeephole(Name);
 
+    /// <summary>The same program parsed by CPython instead of the C# parser.</summary>
+    public string PyFrontend() => Kind == ProgramKind.Example
+        ? PymcuCompiler.BuildPyParser(Name)
+        : PymcuCompiler.BuildFixturePyParser(Name);
+
     public override string ToString() => Kind == ProgramKind.Example ? $"examples/{Name}" : $"fixtures/{Name}";
 }
 
@@ -89,6 +94,15 @@ public static class DifferentialCorpus
     /// is an open miscompile in <c>AvrPeephole</c>, since neither build's IR differs.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> KnownPeepholeDivergences =
+        new Dictionary<string, string>();
+
+    /// <summary>
+    /// Python-front-end axis. The AST is the contract, so the image must be identical, byte
+    /// for byte -- empty is the only acceptable state here. An entry means the translator
+    /// builds a different tree than the C# parser for that program, which is a bug in the
+    /// translator, not a tolerated difference.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> KnownPyParserDivergences =
         new Dictionary<string, string>();
 
     /// <summary>Every atmega328p program in the repository, minus the timing-dependent ones.</summary>

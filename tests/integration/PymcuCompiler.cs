@@ -153,6 +153,19 @@ public static class PymcuCompiler
         new Dictionary<string, string> { ["PYMCU_NO_OPT"] = "1" });
 
     /// <summary>
+    /// The Python front end: CPython's parser builds the AST instead of the C# one, with
+    /// everything after it unchanged. The claim is equality, so this axis compares images.
+    /// </summary>
+    private static readonly Variant PyParser = new("pyparser",
+        new Dictionary<string, string> { ["PYMCU_PY_PARSER"] = "1" });
+
+    /// <summary>Same sources through the Python front end. See <see cref="PyParser"/>.</summary>
+    public static string BuildFixturePyParser(string name) => BuildVariant(PyParser, "fx", name);
+
+    /// <summary>Same example through the Python front end.</summary>
+    public static string BuildPyParser(string name) => BuildVariant(PyParser, "ex", name);
+
+    /// <summary>
     /// AVR backend peephole off, IR optimizer deliberately left on. Turning the optimizer
     /// off as well would hand the backend un-outlined IR and put <c>AvrCodeGen</c>'s own
     /// inline-expansion outliner in the picture — a different code path with its own known
