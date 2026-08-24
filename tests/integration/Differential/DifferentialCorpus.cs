@@ -77,6 +77,9 @@ public static class DifferentialCorpus
     public static readonly IReadOnlyDictionary<string, string> KnownDivergences = new Dictionary<string, string>
     {
         ["fixtures/print-integers"]              = "prints 210/12/64 instead of 1234/-500/123456",
+        ["fixtures/literal-width-module"]        = "prints 44/251/112 instead of 300/-5/70000: the " +
+            "unoptimized build clears the high byte (CLR R25) before passing a widened global to " +
+            "the outlined writer",
     };
 
     /// <summary>
