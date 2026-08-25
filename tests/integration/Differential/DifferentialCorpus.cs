@@ -86,13 +86,6 @@ public static class DifferentialCorpus
         ["fixtures/literal-width-module"]        = "prints 44/251/112 instead of 300/-5/70000: the " +
             "unoptimized build clears the high byte (CLR R25) before passing a widened global to " +
             "the outlined writer",
-        ["fixtures/float-print-large"]           = "prints 3.0/0.55/0.11 instead of 3.5/0.75/0.01 " +
-            "(pymcu-avr#10): uart_write_float ends in d1 = frac // 10 and d2 = frac % 10, which " +
-            "DetectDivModFusions pairs into one __div8. In the unoptimized build the allocator " +
-            "gives both destinations the same register, so EmitFusedDivMod stores the quotient " +
-            "and then overwrites it with the remainder, and every fraction prints its own last " +
-            "digit twice. Nothing to do with the float path: an 8-line program that divides and " +
-            "mods the same uint8 by the same constant reproduces it",
     };
 
     /// <summary>

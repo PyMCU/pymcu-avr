@@ -2578,7 +2578,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 if (inst is Binary s && Fusable(s)
                     && ((IsMod(p.Op) && IsDiv(s.Op)) || (IsDiv(p.Op) && IsMod(s.Op)))
                     && Equals(s.Src1, p.Src1) && Equals(s.Src2, p.Src2)
-                    && !Equals(p.Dst, s.Dst))
+                    && !Equals(p.Dst, s.Dst)
+                    // Two DIFFERENT IR values can share one register: the allocator gives a
+                    // temporary a home another temporary already has when their live ranges do
+                    // not overlap. A fused divmod writes both destinations from one routine, so
+                    // if they share a register the second store clobbers the first and BOTH
+                    // reads answer the remainder. Comparing the IR values cannot see that; the
+                    // allocation is already available here, so compare the homes too.
+                    && !SameRegisterHome(p.Dst, s.Dst))
                 {
                     // Verify the second op's destination is untouched in the window; its
                     // value is stored at the primary, so a read/write between would diverge.
@@ -2662,6 +2669,26 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // R21:R20 (the divisor R18:R19 is dead) so storing the quotient (which may use X=R26:R27)
     // cannot clobber it. 8-bit (__div8): quotient in R24, remainder in R25 — stash the
     // remainder in R19 (divisor hi byte, unused for 8-bit) before storing the quotient.
+
+    /// <summary>
+    /// True when two values were allocated the same register. Only meaningful after
+    /// AvrLinearScan has run, which it has by the time the fusion detectors are called.
+    /// </summary>
+    private bool SameRegisterHome(Val a, Val b)
+    {
+        static string NameOf(Val v) => v switch
+        {
+            Variable var1 => var1.Name,
+            Temporary tmp1 => tmp1.Name,
+            _ => "",
+        };
+
+        string na = NameOf(a), nb = NameOf(b);
+        if (string.IsNullOrEmpty(na) || string.IsNullOrEmpty(nb)) return false;
+        return _tmpRegLayout.TryGetValue(na, out var ra)
+               && _tmpRegLayout.TryGetValue(nb, out var rb)
+               && ra == rb;
+    }
     private void EmitFusedDivMod(Binary primary, Val quotDst, Val remDst)
     {
         var opType = DivModOpType(primary);     // unsigned, gated to 8- or 16-bit in DetectDivModFusions
