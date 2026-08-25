@@ -247,7 +247,13 @@ public static class PymcuCompiler
         var stdoutTask = Task.Run(() => proc.StandardOutput.ReadToEnd());
         var stderrTask = Task.Run(() => proc.StandardError.ReadToEnd());
 
-        var finished = proc.WaitForExit(60_000);
+        // 60 s was measured against one build at a time. The suite runs up to
+        // ProcessorCount of them at once, each spawning pymcuc, pymcuc-avr and the AVR
+        // toolchain -- and the pyparser axis spawns a translator per imported module on top
+        // of that -- so a cold build on a loaded machine can pass 60 s without anything
+        // being wrong with it. A build that really takes three minutes is a finding worth
+        // failing on; one that takes ninety seconds because seven others are running is not.
+        var finished = proc.WaitForExit(180_000);
         var stdout   = stdoutTask.GetAwaiter().GetResult();
         var stderr   = stderrTask.GetAwaiter().GetResult();
 
@@ -269,9 +275,16 @@ public static class PymcuCompiler
 
         if (!finished)
         {
-            proc.Kill();
+            // The whole tree, not just the python parent. `pymcu build` spawns pymcuc,
+            // pymcuc-avr and the AVR toolchain, and a bare Kill() reaps only the parent it
+            // was given -- so abandoning a build can leave a grandchild still writing into
+            // this project's dist/. Whatever reads that directory next would then see a
+            // half-written build and blame a program that was never the problem. Killing
+            // what you spawned is the correct thing to do when you give up on it, whether
+            // or not a survivor has ever been caught in the act.
+            proc.Kill(entireProcessTree: true);
             throw new TimeoutException(
-                $"pymcu build timed out after 60 s for '{name}'.\n{stdout}\n{stderr}");
+                $"pymcu build timed out after 180 s for '{name}', and was killed.\n{stdout}\n{stderr}");
         }
         if (proc.ExitCode != 0)
             throw new InvalidOperationException(
