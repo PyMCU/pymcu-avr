@@ -314,7 +314,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Emit("POP", "R25");
 
         bool isArith = b.Op is IrBinOp.Add or IrBinOp.Sub or IrBinOp.Mul
-                       or IrBinOp.Div or IrBinOp.FloorDiv;
+                       or IrBinOp.Div or IrBinOp.FloorDiv or IrBinOp.Mod;
         if (isArith)
         {
             string routine = b.Op switch
@@ -323,14 +323,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 IrBinOp.Sub                     => "__subsf3",
                 IrBinOp.Mul                     => "__mulsf3",
                 IrBinOp.Div or IrBinOp.FloorDiv => "__divsf3",
+                IrBinOp.Mod                     => "fmodf",
                 _ => throw new NotSupportedException($"Float arith op {b.Op} not supported")
             };
+            // fmodf clobbers its second argument's registers, and the floored correction
+            // below needs the divisor back, so stack it across the call.
+            if (b.Op == IrBinOp.Mod)
+                foreach (var r in new[] { "R21", "R20", "R19", "R18" }) Emit("PUSH", r);
             Emit("CALL", routine);
             // Python float `//` floors the quotient (toward -inf), not truncates. __divsf3 gives
             // true division; apply floorf() (avr-libc single-precision; the double-named `floor`
             // is not provided). This must happen before any float->int narrowing so e.g.
             // int(-7.0 // 2.0) == -4, not -3.
             if (b.Op == IrBinOp.FloorDiv) Emit("CALL", "floorf");
+            if (b.Op == IrBinOp.Mod) EmitFlooredRemainderFixup();
             var dstType = GetValType(b.Dst);
             if (dstType == DataType.FLOAT)
                 StoreFloatFromRegs(b.Dst);
@@ -381,6 +387,41 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     }
 
     private static bool IsSignedType(DataType t) => t.IsSigned();
+
+    // Turns fmodf's truncated remainder into Python's floored one, with the remainder in
+    // R22:R25 and the divisor restored into R18:R21.
+    //
+    // Python's float `%` matches its `//`: the result takes the sign of the DIVISOR, so
+    // -3.5 % 2.0 is 0.5 and 3.5 % -2.0 is -0.5. fmodf is truncated and takes the sign of
+    // the dividend, giving -1.5 and 1.5 for those two. One correction closes the gap: when
+    // the remainder is non-zero and its sign differs from the divisor's, add the divisor.
+    //
+    // Both tests are on the bit pattern, so no float comparison is needed. The sign is bit 7
+    // of the high byte, and an EOR of the two high bytes leaves that bit set exactly when the
+    // signs differ. The zero test has to ignore that bit, since -0.0 and +0.0 are both zero
+    // and neither may be corrected; shifting it out and OR-ing the remaining three bytes
+    // tests all 31 non-sign bits, subnormals included.
+    //
+    // R0 is the scratch: it is the AVR temporary register, and it is already in the list this
+    // backend saves around an ISR. It cannot be R1, which every libgcc routine reads as zero.
+    private void EmitFlooredRemainderFixup()
+    {
+        foreach (var r in new[] { "R18", "R19", "R20", "R21" }) Emit("POP", r);
+
+        string done = MakeLabel("L_FMOD_D");
+        Emit("MOV", "R0", "R25");
+        Emit("EOR", "R0", "R21");       // bit 7 set <=> remainder and divisor disagree in sign
+        Emit("SBRS", "R0", "7");
+        Emit("RJMP", done);             // same sign: fmodf already floored
+        Emit("MOV", "R0", "R25");
+        Emit("LSL", "R0");              // drop the sign bit
+        Emit("OR", "R0", "R24");
+        Emit("OR", "R0", "R23");
+        Emit("OR", "R0", "R22");
+        Emit("BREQ", done);             // remainder is +-0.0: no correction, and no -0.0 result
+        Emit("CALL", "__addsf3");       // R22:R25 += R18:R21, both already in place
+        EmitLabel(done);
+    }
 
     // Float -> integer, with the float already staged in R22:R25.
     //
