@@ -176,6 +176,15 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     Emit("CLR", "R25");
                 }
             }
+            else if (srcType.SizeOf() == 4)
+            {
+                // 32-bit: all four bytes ARE the argument, R22 (LSB) through R25. This case was
+                // missing, so a uint32 fell through to the 16-bit path and its top half was
+                // CLRed away: float(100000) came back as 34464.0, the low 16 bits, on a clean
+                // build. An unsigned source also needs the unsigned helper, or every value
+                // above 2^31 converts to a negative float.
+                LoadIntoReg(val, "R22", DataType.UINT32);
+            }
             else
             {
                 // uint16 or int16: load into R22 (lo) : R23 (hi), sign/zero-extend R24:R25.
@@ -193,7 +202,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     Emit("CLR", "R25");
                 }
             }
-            Emit("CALL", "__floatsisf");
+            Emit("CALL", srcType.SizeOf() == 4 && !IsSignedType(srcType)
+                ? "__floatunsisf"
+                : "__floatsisf");
             return;
         }
 
