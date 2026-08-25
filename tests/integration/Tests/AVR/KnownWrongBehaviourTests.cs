@@ -54,12 +54,16 @@ public class KnownWrongBehaviourTests
     ///      message, but on the field READ rather than on a construction that never happened
     ///   3. after the import work that hoists __module_init ahead of the functions that read
     ///      what it binds: "Parameter 'mode' is declared as const[uint8] and requires a
-    ///      compile-time constant". The Pin is constructed now; what does not resolve is
-    ///      OUTPUT, a constant IMPORTED INTO the imported module, which does not survive as a
-    ///      compile-time constant across that second hop.
+    ///      compile-time constant"
+    ///   4. after PyMCU#158, at the import itself and naming the real problem: "cannot import
+    ///      'OUTPUT' from 'pymcu.hal.gpio'". OUTPUT does not exist anywhere in the stdlib, so
+    ///      this fixture was never valid Python against it. Every message before this one was
+    ///      a nonexistent name surfacing several steps from the import that should have
+    ///      rejected it.
     ///
-    /// So what is left under #117 is a different defect from the one it was filed for, and the
-    /// message is at least about something the program contains.
+    /// So what is left under #117 is not a defect at all in this fixture: it is the fixture
+    /// asking for a name that is not there, now reported where it is written. The supported
+    /// spelling is Pin("PD5", Pin.OUT).
     ///
     /// WHEN THIS FAILS: the build succeeded. Close #117 and replace this with a run that
     /// expects "IMP\nEND\n" on the serial line.
@@ -73,6 +77,6 @@ public class KnownWrongBehaviourTests
                 "#117 is open: a Pin declared at module level in an imported module fails to "
                 + "build. If no exception was thrown, the fix landed -- close #117 and turn "
                 + "this into a run that expects IMP/END.")
-            .WithMessage("*is declared as const[uint8] and requires a compile-time*");
+            .WithMessage("*cannot import 'OUTPUT' from 'pymcu.hal.gpio'*");
     }
 }
