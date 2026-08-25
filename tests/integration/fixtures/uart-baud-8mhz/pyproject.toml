@@ -1,0 +1,9 @@
+[project]
+name = "uart-baud-8mhz"
+version = "0.1.0"
+
+[tool.pymcu]
+target = "atmega328p"
+frequency = 8000000
+sources = "src"
+entry = "main.py"
