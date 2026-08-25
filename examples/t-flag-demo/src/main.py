@@ -27,7 +27,7 @@ def safe_sub(a: uint8, b: uint8) -> uint8:
 
 
 def main():
-    uart = UART("USART0", 9600)
+    uart = UART(9600)
     r1 = safe_div(20, 4)
     uart.write(r1)
     r2 = safe_sub(10, 3)

@@ -27,7 +27,7 @@ def add_two(x: uint8) -> uint8:
 
 
 def main():
-    uart = UART(0, 9600)
+    uart = UART(9600)
     uart.write_str("FUNCPTR\n")
 
     # Assign function to Callable variable — no explicit funcref() needed
