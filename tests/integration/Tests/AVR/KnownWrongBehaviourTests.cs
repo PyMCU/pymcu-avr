@@ -46,8 +46,20 @@ public class KnownWrongBehaviourTests
     /// not build. The same declaration in the entry file is fine, and so is a plain user
     /// class in the same position, so it takes both halves.
     ///
-    /// The message names a bit-indexing operation the program does not perform, at a line
-    /// the file does not have.
+    /// The failure has MOVED TWICE, and each move is progress rather than a new bug:
+    ///
+    ///   1. originally: a bit-indexing operation the program does not perform, at a line the
+    ///      file does not have
+    ///   2. after PyMCU accc7aab (an imported module runs its own module level): the same
+    ///      message, but on the field READ rather than on a construction that never happened
+    ///   3. after the import work that hoists __module_init ahead of the functions that read
+    ///      what it binds: "Parameter 'mode' is declared as const[uint8] and requires a
+    ///      compile-time constant". The Pin is constructed now; what does not resolve is
+    ///      OUTPUT, a constant IMPORTED INTO the imported module, which does not survive as a
+    ///      compile-time constant across that second hop.
+    ///
+    /// So what is left under #117 is a different defect from the one it was filed for, and the
+    /// message is at least about something the program contains.
     ///
     /// WHEN THIS FAILS: the build succeeded. Close #117 and replace this with a run that
     /// expects "IMP\nEND\n" on the serial line.
@@ -61,6 +73,6 @@ public class KnownWrongBehaviourTests
                 "#117 is open: a Pin declared at module level in an imported module fails to "
                 + "build. If no exception was thrown, the fix landed -- close #117 and turn "
                 + "this into a run that expects IMP/END.")
-            .WithMessage("*runtime bit index is only supported on a chip register*");
+            .WithMessage("*is declared as const[uint8] and requires a compile-time*");
     }
 }
