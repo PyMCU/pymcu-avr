@@ -42,6 +42,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private readonly HashSet<int> _usedExnCodes = [];
     private HashSet<string> _varIsFloat = new();
     private readonly Dictionary<string, List<int>> _flashArrayPool = new();
+
+    // Byte length of each flash table, collected before any function is compiled. A load can
+    // be emitted in a function that is compiled before the FlashData instruction is seen, so
+    // the pool itself is not a reliable size oracle at that point.
+    private readonly Dictionary<string, int> _flashArraySizes = new();
     // Maps function name → list of parameter sizes (in bytes) for correct call-site arg loading.
     private Dictionary<string, List<int>> _functionParamSizes = new();
     private int _labelCounter;
@@ -803,6 +808,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     {
         _assembly.Clear();
         _flashArrayPool.Clear();
+        _flashArraySizes.Clear();
         _allTmpRegNames.Clear();
         _labelCounter = 0;
 
@@ -875,6 +881,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 sizes.Add(_varSizes.TryGetValue(p, out int sz) ? sz : 1);
             _functionParamSizes[func.Name] = sizes;
         }
+
+        // Record how long each flash table is, before any function is compiled: a load of a
+        // table larger than 256 bytes needs a 16-bit index, and the FlashData instruction that
+        // carries the table may be compiled after the function that reads it.
+        foreach (var func in program.Functions)
+            foreach (var instr in func.Body)
+                if (instr is FlashData fdSize)
+                    _flashArraySizes[fdSize.Name] = fdSize.Bytes.Count;
 
         // Size the SRAM overflow region: the most bytes any direct call passes beyond R16..R25.
         _argSpillBytes = 0;
@@ -4057,11 +4071,28 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // Load one byte from a flash-resident const[uint8[N]] table via LPM Z.
         // Table label in flash byte-address space (same as string pool labels).
         var label = "__flash_" + alf.ArrayName.Replace('.', '_');
-        LoadIntoReg(alf.Index, "R24");            // index -> R24
-        Emit("LDI", "R30", $"lo8({label})");      // ZL = base byte address
-        Emit("LDI", "R31", $"hi8({label})");      // ZH = base byte address
-        Emit("ADD", "R30", "R24");                // Z += index (8-bit index, no overflow for small tables)
-        Emit("ADC", "R31", "R1");                 // propagate carry (R1 = 0 after MUL clears)
+        bool wideIndex = _flashArraySizes.TryGetValue(alf.ArrayName, out int tableBytes)
+            && tableBytes > 256;
+        if (wideIndex)
+        {
+            // The table does not fit in eight bits of offset, so the index has to be carried as
+            // a PAIR. Loading it as one byte and adding the carry against R1 (which is zero)
+            // discarded the high half: every element past the first 256 bytes aliased back into
+            // them, with a clean build and plausible values read from the wrong offsets.
+            LoadIntoReg(alf.Index, "R24", DataType.UINT16);
+            Emit("LDI", "R30", $"lo8({label})");
+            Emit("LDI", "R31", $"hi8({label})");
+            Emit("ADD", "R30", "R24");
+            Emit("ADC", "R31", "R25");
+        }
+        else
+        {
+            LoadIntoReg(alf.Index, "R24");            // index -> R24
+            Emit("LDI", "R30", $"lo8({label})");      // ZL = base byte address
+            Emit("LDI", "R31", $"hi8({label})");      // ZH = base byte address
+            Emit("ADD", "R30", "R24");                // Z += index (8-bit index, table <= 256 bytes)
+            Emit("ADC", "R31", "R1");                 // propagate carry (R1 = 0 after MUL clears)
+        }
         if (LargeFlash)
         {
             // > 64 KB flash: the table may sit above 0xFFFF, so address it via RAMPZ:Z + ELPM.
