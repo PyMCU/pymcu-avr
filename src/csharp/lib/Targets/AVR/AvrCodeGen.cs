@@ -336,12 +336,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 StoreFloatFromRegs(b.Dst);
             else
             {
-                // Result is float in R22:R25; __fixsfsi converts to int32 (R22=LSB).
+                // Result is float in R22:R25; the fix helper converts to int32 (R22=LSB).
                 // The integer store layout is R24=b0,R25=b1,R22=b2,R23=b3: swap the
                 // pairs via MOVW without clobbering - the old MOV pair overwrote the
                 // high half before reading it, so a 32-bit destination received the
                 // low word duplicated (uint32(3.25*100) stored 0x01450145).
-                Emit("CALL", "__fixsfsi");
+                EmitFloatToIntCall(dstType);
                 Emit("MOVW", "R18", "R24");
                 Emit("MOVW", "R24", "R22");
                 Emit("MOVW", "R22", "R18");
@@ -381,6 +381,23 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     }
 
     private static bool IsSignedType(DataType t) => t.IsSigned();
+
+    // Float -> integer, with the float already staged in R22:R25.
+    //
+    // __fixsfsi reads the result back as SIGNED int32, so it saturates at 0x80000000 for
+    // anything from 2^31 up: uint32(3000000000.0) came back as 2147483648. The unsigned
+    // helper is the one that covers the top half of the uint32 range, and it is chosen on
+    // exactly the same condition as __floatunsisf on the way in (pymcu-avr#7).
+    //
+    // Only a 32-bit unsigned destination switches. A narrower unsigned destination keeps
+    // __fixsfsi on purpose: the value is truncated from the int32 afterwards, and that is
+    // what makes uint8(-3.5) come out as 253 rather than 0.
+    private void EmitFloatToIntCall(DataType dstType)
+    {
+        Emit("CALL", dstType.SizeOf() == 4 && !IsSignedType(dstType)
+            ? "__fixunssfsi"
+            : "__fixsfsi");
+    }
 
     // Returns true if the comparison should use signed branches (BRLT/BRGE).
     // Negative constants indicate a signed context even when type info is lost by folding.
@@ -2193,9 +2210,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         var dstType = GetValType(cp.Dst);
         if (srcType == DataType.FLOAT && dstType != DataType.FLOAT)
         {
-            // Float → integer: load float into R22:R25, __fixsfsi converts to int32 (R22=LSB).
+            // Float → integer: load float into R22:R25, the fix helper converts (R22=LSB).
             LoadFloatIntoRegs(cp.Src);
-            Emit("CALL", "__fixsfsi");
+            EmitFloatToIntCall(dstType);
             Emit("MOVW", "R18", "R24");
             Emit("MOVW", "R24", "R22");
             Emit("MOVW", "R22", "R18");
