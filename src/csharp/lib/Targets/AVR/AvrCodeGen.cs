@@ -3719,6 +3719,15 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         StoreRegInto("R24", aa.Target, type);
     }
 
+
+    /// <summary>
+    /// True when the byte offset of the last element does not fit in eight bits, so the index
+    /// has to be carried as a register pair. Below that an 8-bit index reaches every element
+    /// and the carry into Z's high byte is the only widening needed, which is the cheap path
+    /// every small array keeps.
+    /// </summary>
+    private static bool NeedsWideIndex(int count, int elemSize) => count * elemSize > 256;
+
     private void CompileArrayLoad(ArrayLoad al)
     {
         var elemSize = al.ElemType.SizeOf();
@@ -3747,13 +3756,30 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         else
         {
             EmitComment("ArrayLoad variable index via Z");
-            LoadIntoReg(al.Index, "R24");
-            if (elemSize == 2) Emit("LSL", "R24");
             var absBase = 0x0100 + baseOffset;
-            Emit("LDI", "R30", $"low({absBase})");
-            Emit("LDI", "R31", $"high({absBase})");
-            Emit("ADD", "R30", "R24"); // Add offset to Z low byte (Generates carry if overflow)
-            Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
+            if (NeedsWideIndex(al.Count, elemSize))
+            {
+                // The byte offset does not fit in eight bits, so the index has to be carried
+                // as a PAIR. Loading it as one byte and adding the carry against R1 (which is
+                // zero) discarded the high half: every element past the first 256 bytes
+                // aliased back into them, silently. A uint16 array wrapped at index 128,
+                // because the doubling overflowed too.
+                LoadIntoReg(al.Index, "R24", DataType.UINT16);
+                if (elemSize == 2) { Emit("LSL", "R24"); Emit("ROL", "R25"); }
+                Emit("LDI", "R30", $"low({absBase})");
+                Emit("LDI", "R31", $"high({absBase})");
+                Emit("ADD", "R30", "R24");
+                Emit("ADC", "R31", "R25");
+            }
+            else
+            {
+                LoadIntoReg(al.Index, "R24");
+                if (elemSize == 2) Emit("LSL", "R24");
+                Emit("LDI", "R30", $"low({absBase})");
+                Emit("LDI", "R31", $"high({absBase})");
+                Emit("ADD", "R30", "R24"); // Add offset to Z low byte (Generates carry if overflow)
+                Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
+            }
             Emit("LD", "R24", "Z");
             if (is16) Emit("LDD", "R25", "Z+1");
         }
@@ -3793,13 +3819,27 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("MOV", "R18", "R24");
             if (is16) Emit("MOV", "R19", "R25");
             EmitComment("ArrayStore variable index via Z");
-            LoadIntoReg(ast.Index, "R24");
-            if (elemSize == 2) Emit("LSL", "R24");
             var absBase = 0x0100 + baseOffset;
-            Emit("LDI", "R30", $"low({absBase})");
-            Emit("LDI", "R31", $"high({absBase})");
-            Emit("ADD", "R30", "R24"); // Z_low = Z_low + offset (Sets Carry if overflow)
-            Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
+            if (NeedsWideIndex(ast.Count, elemSize))
+            {
+                // Same as the load side: past 256 bytes the index must be carried as a pair,
+                // or every store past the first 256 bytes lands back inside them.
+                LoadIntoReg(ast.Index, "R24", DataType.UINT16);
+                if (elemSize == 2) { Emit("LSL", "R24"); Emit("ROL", "R25"); }
+                Emit("LDI", "R30", $"low({absBase})");
+                Emit("LDI", "R31", $"high({absBase})");
+                Emit("ADD", "R30", "R24");
+                Emit("ADC", "R31", "R25");
+            }
+            else
+            {
+                LoadIntoReg(ast.Index, "R24");
+                if (elemSize == 2) Emit("LSL", "R24");
+                Emit("LDI", "R30", $"low({absBase})");
+                Emit("LDI", "R31", $"high({absBase})");
+                Emit("ADD", "R30", "R24"); // Z_low = Z_low + offset (Sets Carry if overflow)
+                Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
+            }
             Emit("ST", "Z", "R18");
             if (is16) Emit("STD", "Z+1", "R19");
         }
