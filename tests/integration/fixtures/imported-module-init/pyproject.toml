@@ -1,0 +1,10 @@
+[project]
+name = "imported-module-init"
+version = "0.1.0"
+
+[tool.pymcu]
+target = "atmega328p"
+frequency = 16000000
+sources = "src"
+entry = "main.py"
+default_uart = "uart0"
