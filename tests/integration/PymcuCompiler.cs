@@ -12,6 +12,29 @@ namespace PyMCU.IntegrationTests;
 public static class PymcuCompiler
 {
     private static readonly string RepoRoot = FindRepoRoot();
+
+    /// <summary>
+    /// Scratch root for this test RUN, not for this machine.
+    ///
+    /// Every variant build used to land in Path.GetTempPath()/pymcu-{tag}/{kind}-{name}, a
+    /// fixed machine-wide path, and CompileVariant deletes that directory recursively before
+    /// copying into it. Two suite runs at once, which is ordinary when more than one clone of
+    /// this repo is being worked on, therefore deleted each other's scratch MID-BUILD.
+    ///
+    /// The symptoms were indistinguishable from real compiler failures and cost several people
+    /// several hours: "InternalCompilerError: Unable to find the specified file",
+    /// "avr-ld: cannot open linker script dist/_pymcu.ld", "Backend codegen failed", an
+    /// unstable failure count on an unchanged tree, and a set of failures that moved every run.
+    /// Measured: same tree, same commit, same fixtures, 71 failures against a shared temp and 0
+    /// against a private one.
+    ///
+    /// Keyed by process id and start time so two runs on this machine cannot collide, and so a
+    /// run's directories are still there to inspect after it ends.
+    /// </summary>
+    private static readonly string ScratchRoot = Path.Combine(
+        Path.GetTempPath(),
+        "pymcu-run-" + Environment.ProcessId + "-"
+            + System.Diagnostics.Process.GetCurrentProcess().StartTime.Ticks.ToString("x"));
     private static readonly string PymcuExe = Path.Combine(RepoRoot, ".venv", "bin", "pymcu");
 
     // Bound only the compile step. NUnit runs fixtures in parallel (= ProcessorCount
@@ -113,7 +136,7 @@ public static class PymcuCompiler
 
     private static string CompileSource(string mainPy)
     {
-        var dir = Path.Combine(Path.GetTempPath(), "pymcu-gen", Sha(mainPy)[..16]);
+        var dir = Path.Combine(ScratchRoot, "pymcu-gen", Sha(mainPy)[..16]);
         Directory.CreateDirectory(Path.Combine(dir, "src"));
         File.WriteAllText(Path.Combine(dir, "pyproject.toml"),
             "[project]\n" +
@@ -186,7 +209,7 @@ public static class PymcuCompiler
         if (!Directory.Exists(projectDir))
             throw new DirectoryNotFoundException($"Project directory not found: {projectDir}");
 
-        var scratch = Path.Combine(Path.GetTempPath(), "pymcu-" + variant.Tag, kind + "-" + name);
+        var scratch = Path.Combine(ScratchRoot, "pymcu-" + variant.Tag, kind + "-" + name);
         if (Directory.Exists(scratch)) Directory.Delete(scratch, recursive: true);
         CopyProject(new DirectoryInfo(projectDir), new DirectoryInfo(scratch));
 
