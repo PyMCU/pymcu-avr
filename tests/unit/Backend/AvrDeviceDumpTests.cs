@@ -9,7 +9,7 @@ namespace PyMCU.UnitTests;
 
 public class AvrDeviceDumpTests
 {
-    public record Row(string Chip, int RamStart, int RamSize, int RamEnd, int FlashSize, bool HasJmpCall);
+    public record Row(string Chip, int RamStart, bool HasJmpCall);
 
     private static List<Row> Dump()
     {
@@ -19,16 +19,13 @@ public class AvrDeviceDumpTests
             rows.Add(new Row(
                 e.GetProperty("Chip").GetString()!,
                 e.GetProperty("RamStart").GetInt32(),
-                e.GetProperty("RamSize").GetInt32(),
-                e.GetProperty("RamEnd").GetInt32(),
-                e.GetProperty("FlashSize").GetInt32(),
                 e.GetProperty("HasJmpCall").GetBoolean()));
         return rows;
     }
 
     private static string Compile(string chip, params Instruction[] body)
     {
-        var prog = new ProgramIR();
+        var prog = new ProgramIR().WithGeometry(chip);
         prog.Functions.Add(new Function { Name = "main", Body = body.ToList() });
         var sw = new StringWriter();
         new AvrCodeGen(new DeviceConfig { TargetChip = chip, Arch = "avr" }).Compile(prog, sw);
@@ -45,27 +42,7 @@ public class AvrDeviceDumpTests
             new Variable("c", DataType.UINT16)));
 
     public static IEnumerable<object[]> Rows()
-        => Dump().Select(r => new object[] { r.Chip, r.RamStart, r.RamEnd, r.HasJmpCall });
-
-    public static IEnumerable<object[]> FlashRows()
-        => Dump().Select(r => new object[] { r.Chip, r.FlashSize });
-
-    private static string ReadsAFlashTable(string chip)
-        => Compile(chip, new ArrayLoadFlash("table", new Constant(0), new Variable("x")));
-
-    // Reaching a table above byte address 0xFFFF needs RAMPZ + ELPM; below it, plain LPM.
-    // The chip's flash size decides, and the catalog is where that size now lives.
-    [Theory]
-    [MemberData(nameof(FlashRows))]
-    public void TheDumpDecidesHowFarTheCodegenCanReachIntoFlash(string chip, int flashSize)
-    {
-        var asm = ReadsAFlashTable(chip);
-        var far = flashSize > 0x10000;
-
-        Assert.Equal(far, asm.Contains("\tELPM\t"));
-        Assert.Equal(far, asm.Contains("OUT\t0x3B"));
-        Assert.Equal(!far, asm.Contains("\tLPM\t"));
-    }
+        => Dump().Select(r => new object[] { r.Chip, r.RamStart, r.HasJmpCall });
 
     [Fact]
     public void TheDumpIsNotEmpty()
@@ -73,19 +50,32 @@ public class AvrDeviceDumpTests
         Assert.True(Dump().Count >= 15, $"the published catalog has only {Dump().Count} chips");
     }
 
-    [Theory]
-    [MemberData(nameof(Rows))]
-    public void TheDumpMatchesTheSramTheCodegenEmits(string chip, int ramStart, int ramEnd, bool _)
+    // The catalog carries what device_info() does NOT declare, and nothing else. RamSize
+    // and FlashSize used to be columns here; the .mir carries them now, and a second copy
+    // in the catalog is how the ATmega2560 came to choose LPM over ELPM from a list of
+    // chip names in the first place.
+    [Fact]
+    public void TheDumpPublishesNoGeometry()
     {
-        var asm = Blink(chip);
+        using var doc = JsonDocument.Parse(AvrDevices.ToJson());
+        var first = doc.RootElement.EnumerateArray().First();
 
-        Assert.Contains($".equ RAMSTART, 0x{ramStart:X4}", asm);
-        Assert.Contains($".equ RAMEND, 0x{ramEnd:X4}", asm);
+        Assert.False(first.TryGetProperty("RamSize", out _),
+            "SRAM size belongs to the chip file and travels in the .mir, not in this catalog");
+        Assert.False(first.TryGetProperty("FlashSize", out _),
+            "flash size belongs to the chip file and travels in the .mir, not in this catalog");
     }
 
     [Theory]
     [MemberData(nameof(Rows))]
-    public void TheDumpMatchesTheVectorSlotsTheCodegenEmits(string chip, int _, int __, bool hasJmpCall)
+    public void TheDumpMatchesTheSramBaseTheCodegenEmits(string chip, int ramStart, bool _)
+    {
+        Assert.Contains($".equ RAMSTART, 0x{ramStart:X4}", Blink(chip));
+    }
+
+    [Theory]
+    [MemberData(nameof(Rows))]
+    public void TheDumpMatchesTheVectorSlotsTheCodegenEmits(string chip, int _, bool hasJmpCall)
     {
         var asm = Blink(chip).Replace("\r\n", "\n");
 
@@ -99,7 +89,7 @@ public class AvrDeviceDumpTests
 
     [Theory]
     [MemberData(nameof(Rows))]
-    public void TheDumpMatchesTheCallFormTheCodegenEmits(string chip, int _, int __, bool hasJmpCall)
+    public void TheDumpMatchesTheCallFormTheCodegenEmits(string chip, int _, bool hasJmpCall)
     {
         if (NoRoomForATemporary.Contains(chip))
         {
@@ -112,19 +102,28 @@ public class AvrDeviceDumpTests
     }
 
     [Fact]
-    public void TheDumpIsInternallyConsistent()
-    {
-        foreach (var r in Dump())
-            Assert.Equal(r.RamStart + r.RamSize - 1, r.RamEnd);
-    }
-
-    [Fact]
     public void TheDumpListsEveryChipTheBackendAccepts()
     {
         foreach (var r in Dump())
             Blink(r.Chip);
 
-        var ex = Assert.Throws<Exception>(() => Blink("atmega1284p"));
+        var prog = new ProgramIR { Device = new DeviceGeometry { Chip = "atmega1284p", RamSize = 16384, FlashSize = 131072 } };
+        prog.Functions.Add(new Function { Name = "main", Body = [] });
+        var ex = Assert.Throws<Exception>(
+            () => new AvrCodeGen(new DeviceConfig { TargetChip = "atmega1284p", Arch = "avr" })
+                .Compile(prog, new StringWriter()));
         Assert.Contains("atmega1284p", ex.Message);
+    }
+
+    // Every chip the backend accepts must have a chip file declaring both sizes, or the
+    // .mir has nothing to carry and the build fails on the first flash table it meets.
+    [Theory]
+    [MemberData(nameof(Rows))]
+    public void EveryChipInTheCatalogHasAChipFileDeclaringBothSizes(string chip, int _, bool __)
+    {
+        var geo = ChipCatalog.For(chip);
+
+        Assert.NotNull(geo.RamSize);
+        Assert.NotNull(geo.FlashSize);
     }
 }

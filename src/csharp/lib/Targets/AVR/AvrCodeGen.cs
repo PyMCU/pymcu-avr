@@ -806,6 +806,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
     public override void Compile(ProgramIR program, TextWriter output)
     {
+        // First thing, before any pass can ask for a size: a .mir from a compiler that
+        // predates the geometry contract is refused here rather than compiled against
+        // zeros. That silence is the defect this contract exists to end.
+        _geometry = program.RequireDevice();
+
         _assembly.Clear();
         _flashArrayPool.Clear();
         _flashArraySizes.Clear();
@@ -1186,10 +1191,22 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (!AvrDevices.TryGet(chip, out var device))
             throw new Exception(
                 $"unknown AVR chip '{chip}': no SRAM layout for it in the backend catalog. " +
-                "Add its RAM start, RAM size and JMP/CALL support to AvrDevices.");
+                "Add its RAM start and JMP/CALL support to AvrDevices.");
         _device = device;
         return device;
     }
+
+    // The chip's SRAM and flash sizes, carried in the .mir from the device_info() call in
+    // the chip file. The catalog above holds only what device_info does not declare: where
+    // SRAM begins and whether the core has JMP/CALL. It used to hold the two sizes as well,
+    // because cfg.FlashSize was never filled and LargeFlash therefore fell back to a
+    // hardcoded list of chip names -- two sources of truth for one number, which is what
+    // this field replaces.
+    private DeviceGeometry? _geometry;
+
+    private DeviceGeometry Geometry =>
+        _geometry ?? throw new InvalidOperationException(
+            "AVR codegen read the device geometry before Compile() set it (internal error).");
 
     // First SRAM byte in the data space (0x60 on ATtiny, 0x100 on most ATmega, 0x200 on the
     // parts with extended I/O). Mirrors the toolchain's _RAMSTART table (avrgas.py) so the
@@ -1216,11 +1233,13 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     }
 
     // Last usable SRAM byte = where the hardware stack pointer is initialised.
-    private int RamEnd() => Device().RamEnd;
+    private int RamEnd()
+        => RamStart() + Geometry.RequireRamSize("set the stack pointer and RAMEND") - 1;
 
     // Parts with > 64 KB flash (e.g. atmega2560) need RAMPZ + ELPM to reach tables the linker
     // places above byte address 0xFFFF; plain LPM only uses the 16-bit Z. RAMPZ is IO 0x3B.
-    private bool LargeFlash => Device().FlashSize > 0x10000;
+    private bool LargeFlash
+        => Geometry.RequireFlashSize("choose between LPM and ELPM for flash tables") > 0x10000;
 
     // Parse "R12" -> 12; pointer tokens "X"/"Y"/"Z" (and their +/- forms) -> the pair's low reg
     // (26/28/30); else -1. Used by the ISR-save trimmer to learn which registers a body touches.

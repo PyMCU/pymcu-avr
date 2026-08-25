@@ -13,7 +13,12 @@ public class AVRCodeGenTests
 
     private static string Compile(ProgramIR program, DeviceConfig? config = null)
     {
-        var codegen = new AvrCodeGen(config ?? Atmega328p);
+        var cfg = config ?? Atmega328p;
+        // A real build receives the geometry in the .mir; these programs are hand-built,
+        // so stand in for the frontend and read it from the same chip file it would.
+        program.Device ??= ChipCatalog.For(
+            !string.IsNullOrEmpty(cfg.Chip) ? cfg.Chip : cfg.TargetChip);
+        var codegen = new AvrCodeGen(cfg);
         var sw = new StringWriter();
         codegen.Compile(program, sw);
         return sw.ToString();

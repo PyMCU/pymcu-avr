@@ -11,7 +11,7 @@ public class AvrDeviceLayoutTests
 {
     private static string Compile(string chip, params Instruction[] body)
     {
-        var prog = new ProgramIR();
+        var prog = new ProgramIR().WithGeometry(chip);
         prog.Functions.Add(new Function { Name = "main", Body = body.ToList() });
         var codegen = new AvrCodeGen(new DeviceConfig { TargetChip = chip, Arch = "avr" });
         var sw = new StringWriter();
@@ -22,36 +22,8 @@ public class AvrDeviceLayoutTests
     private static string Blink(string chip)
         => Compile(chip, new Copy(new Constant(1), new MemoryAddress(0x25)));
 
-    private static string CatalogDir()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir != null && !File.Exists(Path.Combine(dir, "hatch_build.py")))
-            dir = Path.GetDirectoryName(dir);
-        Assert.NotNull(dir);
-        var chips = Path.Combine(Path.GetDirectoryName(dir)!, "pymcu",
-                                 "lib", "src", "pymcu", "chips");
-        Assert.True(Directory.Exists(chips), $"chip catalog not found at {chips}");
-        return chips;
-    }
-
     public static IEnumerable<object[]> AvrChips()
-    {
-        foreach (var file in Directory.GetFiles(CatalogDir(), "*.py").OrderBy(f => f))
-        {
-            var text = File.ReadAllText(file);
-            if (!Regex.IsMatch(text, @"device_info\([^)]*arch\s*=\s*""avr""")) continue;
-            var start = Regex.Match(text, @"^RAM_START\s*=\s*(0x[0-9A-Fa-f]+|\d+)", RegexOptions.Multiline);
-            var size = Regex.Match(text, @"^RAM_SIZE\s*=\s*(0x[0-9A-Fa-f]+|\d+)", RegexOptions.Multiline);
-            Assert.True(start.Success && size.Success,
-                $"{Path.GetFileName(file)} declares no RAM_START/RAM_SIZE");
-            yield return new object[]
-            {
-                Path.GetFileNameWithoutExtension(file),
-                Convert.ToInt32(start.Groups[1].Value, start.Groups[1].Value.StartsWith("0x") ? 16 : 10),
-                Convert.ToInt32(size.Groups[1].Value, size.Groups[1].Value.StartsWith("0x") ? 16 : 10),
-            };
-        }
-    }
+        => ChipCatalog.AvrChips().Select(c => new object[] { c.Chip, c.RamStart, c.RamSize });
 
     [Theory]
     [MemberData(nameof(AvrChips))]
@@ -121,7 +93,24 @@ public class AvrDeviceLayoutTests
     [Fact]
     public void UnknownChip_IsRejected_InsteadOfGuessed()
     {
-        var ex = Assert.Throws<Exception>(() => Blink("atmega1284p"));
+        // Geometry supplied, so what is under test is the backend catalog's refusal to
+        // guess a RAMSTART, not the absence of a chip file.
+        var prog = new ProgramIR
+        {
+            Device = new DeviceGeometry
+            {
+                Chip = "atmega1284p", RamSize = 16384, FlashSize = 131072,
+            },
+        };
+        prog.Functions.Add(new Function
+        {
+            Name = "main",
+            Body = [new Copy(new Constant(1), new MemoryAddress(0x25))],
+        });
+
+        var ex = Assert.Throws<Exception>(
+            () => new AvrCodeGen(new DeviceConfig { TargetChip = "atmega1284p", Arch = "avr" })
+                .Compile(prog, new StringWriter()));
 
         Assert.Contains("atmega1284p", ex.Message);
     }
