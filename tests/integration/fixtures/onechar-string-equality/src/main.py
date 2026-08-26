@@ -20,6 +20,10 @@
 #   ne2      x != "ab" with x = "ab"    control, always correct
 #   diff     x == "b"  with x = "a"     control, correctly false before and after
 #   num      "A" == 65                  control, the character-code reading is unchanged
+#   in1      c in ("a", "b")            discriminator, folded FALSE before the fix
+#   in2      c in ("aa", "bb")          control, always correct
+#   mt1      match c: case "a"          discriminator, fell to the wildcard before the fix
+#   mt2      match cc: case "aa"        control, always correct
 from pymcu.hal.console import print
 
 
@@ -53,3 +57,27 @@ def main():
         print("num")
     else:
         print("num-BROKEN")
+
+    # `in` and `match` compare the same way and failed the same way: the character code on one
+    # side, the interned id on the other. Two more sites, one mechanism.
+    if a in ("a", "b"):
+        print("in1")
+    else:
+        print("in1-BROKEN")
+
+    if ab in ("ab", "cd"):
+        print("in2")
+    else:
+        print("in2-BROKEN")
+
+    match a:
+        case "a":
+            print("mt1")
+        case _:
+            print("mt1-BROKEN")
+
+    match ab:
+        case "ab":
+            print("mt2")
+        case _:
+            print("mt2-BROKEN")

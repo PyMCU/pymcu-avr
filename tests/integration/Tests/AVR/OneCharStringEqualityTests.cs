@@ -28,7 +28,7 @@ public class OneCharStringEqualityTests
     private static string Output()
     {
         var uno = _session.Reset();
-        uno.RunUntilSerial(uno.Serial, "num\n", maxMs: 800);
+        uno.RunUntilSerial(uno.Serial, "mt2\n", maxMs: 800);
         return uno.Serial.Text.Replace("\r\n", "\n");
     }
 
@@ -57,6 +57,34 @@ public class OneCharStringEqualityTests
     [Test]
     public void TwoDifferentOneCharacterStringsAreStillUnequal()
         => Output().Should().Contain("diff\n").And.NotContain("diff-BROKEN");
+
+    // DISCRIMINATOR. `in` compares the same way and failed the same way: the character code on
+    // one side, the interned id on the other, so the membership test answered false.
+    [Test]
+    public void AOneCharacterStringIsFoundInATupleOfStrings()
+    {
+        var text = Output();
+
+        text.Should().Contain("in1\n", "\"a\" is in (\"a\", \"b\") whichever path each side arrived by");
+        text.Should().NotContain("in1-BROKEN");
+    }
+
+    // DISCRIMINATOR. match/case fell through to the wildcard for the same reason.
+    [Test]
+    public void AOneCharacterStringMatchesItsCase()
+    {
+        var text = Output();
+
+        text.Should().Contain("mt1\n", "case \"a\" matches a subject holding \"a\"");
+        text.Should().NotContain("mt1-BROKEN");
+    }
+
+    // CONTROLS for both, at two characters: they always worked, which is what shows the defect
+    // was about length rather than about `in` or `match`.
+    [Test]
+    public void MultiCharacterMembershipAndMatchStillWork()
+        => Output().Should().Contain("in2\n").And.Contain("mt2\n")
+            .And.NotContain("in2-BROKEN").And.NotContain("mt2-BROKEN");
 
     // CONTROL, and the one that matters most. A one-character literal is still its character
     // code where a number is what is meant -- which is what `uart.write('\n')` depends on, and
