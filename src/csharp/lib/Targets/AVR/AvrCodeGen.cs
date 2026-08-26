@@ -39,6 +39,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // result in ANY register the allocator picked, so the peephole's calling-convention
     // assumptions (nothing scratch is live across a RET) do not hold at its RET.
     private readonly HashSet<string> _outlinedSubroutines = [];
+
+    // Last non-inline source position seen while walking the IR, for backend refusals.
+    private string _lastSourceFile = "";
+    private int _lastSourceLine;
+
+    /// <summary>
+    /// A backend refusal, carrying the source position if one has been seen. The CLI prints
+    /// only the message unless -v is given, so anything the reader needs has to be in it.
+    /// </summary>
+    private NotSupportedException Unsupported(string message)
+        => new(string.IsNullOrEmpty(_lastSourceFile)
+                   ? message
+                   : $"{_lastSourceFile}:{_lastSourceLine}: {message}");
     private readonly HashSet<int> _usedExnCodes = [];
     private HashSet<string> _varIsFloat = new();
     private readonly Dictionary<string, List<int>> _flashArrayPool = new();
@@ -329,7 +342,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 IrBinOp.Mul                     => "__mulsf3",
                 IrBinOp.Div or IrBinOp.FloorDiv => "__divsf3",
                 IrBinOp.Mod                     => "fmodf",
-                _ => throw new NotSupportedException($"Float arith op {b.Op} not supported")
+                _ => throw Unsupported($"the AVR backend has no float lowering for {b.Op}")
             };
             // fmodf clobbers its second argument's registers, and the floored correction
             // below needs the divisor back, so stack it across the call.
@@ -380,7 +393,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     Emit("CPI", "R24", "0x01"); Emit("BREQ", trueLabel); break;
                 case IrBinOp.GreaterEqual: // true when R24 != 0xFF (covers 0x00 and 0x01)
                     Emit("CPI", "R24", "0xFF"); Emit("BRNE", trueLabel); break;
-                default: throw new NotSupportedException($"Float comparison op {b.Op} not supported");
+                default: throw Unsupported($"the AVR backend has no float lowering for {b.Op}. "
+                    + "Reaching here with an arithmetic or bitwise operator means an earlier pass "
+                    + "rewrote a float operation into one, which is a bug in that pass");
             }
             Emit("CLR", "R24");
             Emit("RJMP", doneLabel);
@@ -1651,7 +1666,15 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                         ? $"Line {d.Line}: {d.Text}"
                         : $"{d.SourceFile}:{d.Line}: {d.Text}");
                 if (!string.IsNullOrEmpty(d.SourceFile) && !d.IsInline)
+                {
                     _assembly.Add(AvrAsmLine.MakeDebugMarker(d.SourceFile, d.Line));
+                    // Kept for diagnostics: a backend refusal reaches the user as bare text,
+                    // and "not supported" with no file and no line is not actionable. The
+                    // non-inline position is the one the reader can find, an inline one points
+                    // into the stdlib.
+                    _lastSourceFile = d.SourceFile;
+                    _lastSourceLine = d.Line;
+                }
                 break;
             case JumpIfEqual je: CompileCompareJump(je.Src1, je.Src2, "BREQ", je.Target); break;
             case JumpIfNotEqual jne: CompileCompareJump(jne.Src1, jne.Src2, "BRNE", jne.Target); break;
@@ -1702,7 +1725,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             // Every IR instruction must be handled explicitly (or consumed earlier, like
             // InlineExpansionMarker in CompileFunction). A silent fall-through here miscompiles.
             default:
-                throw new NotSupportedException(
+                throw Unsupported(
                     $"AVR backend: unhandled IR instruction '{instr.GetType().Name}'. " +
                     "Add an explicit case (or a documented no-op) for it.");
         }
@@ -1876,7 +1899,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case "ge": Emit("CPI", "R24", "0xFF"); EmitBranch("BRNE", target); break;
             case "gt": Emit("CPI", "R24", "0x01"); EmitBranch("BREQ", target); break;
             case "le": Emit("CPI", "R24", "0x01"); EmitBranch("BRNE", target); break;
-            default: throw new NotSupportedException($"Float comparison '{cond}' not supported");
+            default: throw Unsupported($"the AVR backend has no float comparison '{cond}'");
         }
     }
 
@@ -2448,7 +2471,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 return;
             }
             default:
-                throw new NotSupportedException($"Unary {u.Op} is not defined for a float value");
+                throw Unsupported($"unary {u.Op} is not defined for a float value");
         }
     }
 
