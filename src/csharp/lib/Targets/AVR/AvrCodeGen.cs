@@ -651,12 +651,27 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
             case MemoryAddress mem:
             {
+                // A register operand carries its OWN width, and `size` is the width the
+                // DESTINATION wants. Reading `size` bytes from the address made an 8-bit
+                // register in a 16-bit context load the register ONE BYTE ABOVE as its high
+                // half: `d: uint16 = GPIOR1.value` emitted `IN R24, 0x2A` then
+                // `LDS R25, 0x004B`, so d came back with GPIOR2 in the top byte, and the
+                // same shape on GPIOR0 read SREG. Load the source's real bytes and widen,
+                // which is what every other source kind in this method already does.
+                // A genuinely 16-bit register (TCNT1 as ptr[uint16]) has SizeOf() == 2 and
+                // still loads both bytes.
+                DataType memType = GetValType(val);
+                int memSize = memType.SizeOf();
+                bool memSignExt = size > memSize && IsSignedType(memType);
+                bool memZeroExt = size > memSize && !IsSignedType(memType);
+
                 if (mem.Address is >= 0x20 and <= 0x5F)
                     Emit("IN", reg, $"0x{mem.Address - 0x20:X2}");
                 else
                     Emit("LDS", reg, $"0x{mem.Address:X4}");
-                if (size >= 2) Emit("LDS", regH,  $"0x{mem.Address + 1:X4}");
-                if (size == 4) { Emit("LDS", regB2, $"0x{mem.Address + 2:X4}"); Emit("LDS", regB3, $"0x{mem.Address + 3:X4}"); }
+                if (size >= 2 && memSize >= 2) Emit("LDS", regH,  $"0x{mem.Address + 1:X4}");
+                if (size == 4 && memSize >= 4) { Emit("LDS", regB2, $"0x{mem.Address + 2:X4}"); Emit("LDS", regB3, $"0x{mem.Address + 3:X4}"); }
+                EmitWidenFill(memSignExt, memZeroExt, memSize, size, reg, regH, regB2, regB3);
                 return;
             }
         }
