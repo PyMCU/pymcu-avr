@@ -73,20 +73,15 @@ public static class DifferentialCorpus
     /// one of them stops diverging, so the entry gets deleted along with the fix.
     /// </summary>
     /// <remarks>
-    /// Every entry here is the unoptimized build behaving wrongly while the optimized build
-    /// behaves as its own test fixture expects. The first two are compiled with
-    /// <c>AvrCodeGen</c>'s inline-expansion outliner active — a code path that no optimized
-    /// build in this repository reaches, because the IR optimizer's outliner has already run.
-    /// See the harness report for the analysis. The third has a different root, recorded with
-    /// its entry.
+    /// Empty, and worth keeping empty. The two entries that lived here (print-integers and
+    /// literal-width-module, "prints 210/12/64" and "prints 44/251/112") were one bug with two
+    /// sets of numbers, and it was not in this repository: a module-level global read through
+    /// an @inline expansion carried UINT8 in the IR while its write carried the widened type,
+    /// so the backend zero-extended a value that was already 16 or 32 bits wide. Fixed in
+    /// PyMCU (pymcu-avr#6), which is why both came out together.
     /// </remarks>
-    public static readonly IReadOnlyDictionary<string, string> KnownDivergences = new Dictionary<string, string>
-    {
-        ["fixtures/print-integers"]              = "prints 210/12/64 instead of 1234/-500/123456",
-        ["fixtures/literal-width-module"]        = "prints 44/251/112 instead of 300/-5/70000: the " +
-            "unoptimized build clears the high byte (CLR R25) before passing a widened global to " +
-            "the outlined writer",
-    };
+    public static readonly IReadOnlyDictionary<string, string> KnownDivergences =
+        new Dictionary<string, string>();
 
     /// <summary>
     /// Peephole axis. Same contract as <see cref="KnownDivergences"/>, for the programs whose
