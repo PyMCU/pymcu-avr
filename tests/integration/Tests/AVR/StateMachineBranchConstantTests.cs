@@ -7,38 +7,45 @@ using Avr8Sharp.TestKit;
 namespace PyMCU.IntegrationTests.Tests.AVR;
 
 /// <summary>
-/// PyMCU/PyMCU#108, pinned by what the compiler does TODAY so the suite stays green while it
-/// stands and turns red the moment it is fixed. Same contract as
-/// <see cref="Differential.DifferentialCorpus.KnownDivergences"/>: the entry is the record and
-/// it invalidates itself.
+/// PyMCU/PyMCU#108 and #122, which turned out to be one bug: a constant a branch assigned was
+/// still believed while a SIBLING branch read it, so the read folded. In a state machine the
+/// second arm's `self._n = self._n + 1` became a store of the constant 1, the field never
+/// accumulated, and the machine could not leave that arm.
 ///
-/// A field a branch assigns a constant to is still believed when a SIBLING branch reads it, so
-/// `self._n = self._n + 1` in the second arm folds into a store of the constant 1 and the field
-/// never accumulates. It needs the `for` in arm 0 as well, which is what makes poll() flatten
-/// into the caller rather than be outlined.
-///
-/// There is no async here. It is the shape the coroutine desugar emits for every `await`, which
-/// is why an `async def` with an await-free `for` loses everything after its first await.
+/// The first fixture has no async in it at all, which is the point: it is the shape the
+/// coroutine desugar emits for every `await`. It needs the `for` in arm 0 only because that is
+/// what makes poll() flatten into the caller rather than be outlined, and a flattened field is
+/// a plain name the constant folder tracks.
 /// </summary>
 [TestFixture]
 public class StateMachineBranchConstantTests
 {
     /// <summary>
-    /// WHEN THIS FAILS: the fix landed. Expect "F\n1\n2\n3\nZ\n" and close #108.
+    /// The discriminating assertion is 1 then 2: the field has to ACCUMULATE. Asserting only
+    /// that "Z" arrives would also pass for a machine that skipped its second arm entirely.
     /// </summary>
     [Test]
-    public void Issue108_AConstantAssignedInOneArmIsBelievedWhileASiblingArmReadsIt()
+    public void Issue108_AFieldAssignedInOneArmAccumulatesWhenAnotherArmIncrementsIt()
     {
         var uno = new SimSession(
             PymcuCompiler.BuildFixture("state-machine-branch-constant")).Reset();
-        try { uno.RunUntilSerial(uno.Serial, "Z\n", maxMs: 200); } catch { /* it never gets there */ }
+        uno.RunUntilSerial(uno.Serial, "Z\n", maxMs: 300);
 
-        // The discriminating assertion: the field reports 1 twice running. Correct behaviour
-        // prints 1 then 2. Asserting only that "Z" is missing would also pass for a program
-        // that crashed, which is a different bug.
-        uno.Serial.Text.Should().Contain("F\n1\n1\n",
-            "#108 is open: the increment folds to a store of the constant 1, so the field never "
-            + "accumulates and the machine stays in its second arm. If this failed, check "
-            + "whether the output is now F/1/2/3/Z, and if so close #108 and assert that.");
+        uno.Serial.Text.Should().Contain("F\n1\n2\n3\nZ\n");
+    }
+
+    /// <summary>
+    /// #122. The discriminating parts are `99`, which prints only if the await completed, and
+    /// the trailing `1`, which is the global read back after run() returns: a program that
+    /// woke but lost the write would print 0 there.
+    /// </summary>
+    [Test]
+    public void Issue122_ACoroutineThatAssignsAGlobalWakesFromItsNextAwait()
+    {
+        var uno = new SimSession(
+            PymcuCompiler.BuildFixture("async-global-then-await")).Reset();
+        uno.RunUntilSerial(uno.Serial, "Z\n", maxMs: 300);
+
+        uno.Serial.Text.Should().Contain("CT\n98\n99\n1\nZ\n");
     }
 }
