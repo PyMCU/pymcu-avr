@@ -16,14 +16,22 @@
 #   GPIOR0 = 0x3E, GPIOR1 = 0x4A, GPIOR2 = 0x4B
 #   TCCR0B = 0x45, TIMSK0 = 0x6E
 #
-from pymcu.types import uint8, uint16, interrupt, asm
+from pymcu.types import uint8, uint16, interrupt, inline, asm
 from pymcu.chips.atmega328p import GPIOR0, GPIOR1, GPIOR2, TCCR0B, TIMSK0
 
 
+# @inline because both main() and the ISR call these. An outlined body has one set of
+# statically allocated parameters and temporaries, not one per call, so the ISR entering
+# split_lo while main is inside it overwrites main's argument and main reads back the ISR's
+# answer. The compiler refuses the outlined form for exactly this shape (PyMCU#125); inlining
+# gives each caller its own copy and leaves what this fixture measures untouched, since the
+# R24/R25 pressure it is about comes from the uint16 arithmetic inside the ISR.
+@inline
 def split_lo(v: uint16) -> uint8:
     return v & 0xFF
 
 
+@inline
 def split_hi(v: uint16) -> uint8:
     return (v >> 8) & 0xFF
 
