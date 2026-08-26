@@ -108,15 +108,13 @@ public static class DifferentialCorpus
     /// <see cref="TimingDependent"/>, an entry here is not a tolerated difference: it is an
     /// open miscompile with a test of its own asserting today's failure, and the day that test
     /// goes red the entry comes out with it.
+    ///
+    /// Empty is the expected state. The one entry it has held, fixtures/imported-module-pin
+    /// for #117, came out when that turned out to be a fixture asking for a name the stdlib
+    /// does not export rather than a defect.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> ExpectedBuildFailures =
-        new Dictionary<string, string>
-        {
-            ["fixtures/imported-module-pin"] =
-                "PyMCU/PyMCU#117: a peripheral declared at module level in an imported module " +
-                "fails with a bit-indexing error at a line the file does not have. Pinned by " +
-                "KnownWrongBehaviourTests.Issue117_APinAtModuleLevelInAnImportedModuleDoesNotBuild",
-        };
+        new Dictionary<string, string>();
 
     /// <summary>
     /// Every atmega328p program in the repository, minus the timing-dependent ones and the ones
