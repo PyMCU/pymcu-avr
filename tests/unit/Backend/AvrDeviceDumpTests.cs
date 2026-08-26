@@ -82,10 +82,12 @@ public class AvrDeviceDumpTests
         Assert.Contains(hasJmpCall ? ".org 0x0002\n\tRJMP" : ".org 0x0001\n\tRJMP", asm);
     }
 
-    // The 64-byte call-stack floor is the whole SRAM of an ATtiny13, so no program
-    // with a temporary compiles for it at all. Asserting the refusal keeps the hole
-    // visible: the day the floor is fixed, this test says so instead of staying green.
-    private static readonly string[] NoRoomForATemporary = ["attiny13", "attiny13a"];
+    // The call-stack floor used to be a flat 64 bytes, which is the whole SRAM of an
+    // ATtiny13, so no program with a temporary compiled for it and this test asserted the
+    // refusal to keep the hole visible. The floor is min(64, SRAM / 2) now, so the two
+    // 64-byte parts compile like every other part without JMP/CALL. The list is kept, empty,
+    // as the place a part that genuinely cannot fit would go.
+    private static readonly string[] NoRoomForATemporary = [];
 
     [Theory]
     [MemberData(nameof(Rows))]
