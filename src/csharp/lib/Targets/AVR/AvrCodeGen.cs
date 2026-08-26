@@ -859,13 +859,27 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // Static SRAM lives as .equ offsets from _stack_base, invisible to the
         // linker's MEMORY regions, so this is the only place overflow can be
         // caught. The hardware call stack grows down from RAMEND into the same
-        // space; a 64-byte floor keeps the check from passing a program with
-        // no room left to call anything.
+        // space, so the check has to leave room for it.
+        //
+        // The reservation used to be a flat 64 bytes. On the ATtiny13 and 13a that is the
+        // ENTIRE SRAM, so the check reserved the whole chip and no program with any static
+        // data compiled at all: a program needing 4 bytes was refused on a part with 64.
+        // Half the chip is a defensible split on the smallest parts and leaves real room --
+        // a call frame on a 2-byte-PC part is 2 bytes, so 32 bytes is a dozen frames deep --
+        // while every AVR part with 128 bytes or more keeps the exact 64 it had, because
+        // half of 128 is already 64. Only the two 64-byte parts see any change.
+        //
+        // A reservation derived from the actual call depth would be better still, and this
+        // is deliberately not that: IndirectCall and VirtualCall make the depth unknowable
+        // for any program that uses a callback or a vtable, and the registers an ISR
+        // prologue pushes are not cheaply bounded. Guessing low there would trade a refusal
+        // that is merely wrong for a stack that silently grows into the data.
         int sramAvailable = RamEnd() - RamStart() + 1;
-        if (maxStack + 64 > sramAvailable)
+        int stackReserve = Math.Min(64, sramAvailable / 2);
+        if (maxStack + stackReserve > sramAvailable)
             throw new InvalidOperationException(
                 $"static data needs {maxStack} bytes but {LayoutChip()} has {sramAvailable} bytes of SRAM " +
-                $"(and the call stack needs room on top). Reduce array sizes or pick a chip with more RAM.");
+                $"(and the call stack needs {stackReserve} of them). Reduce array sizes or pick a chip with more RAM.");
         _needsGc = program.NeedsGc;
         _varSizes = allocator.VariableSizes;
         _bssSize = program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum();
