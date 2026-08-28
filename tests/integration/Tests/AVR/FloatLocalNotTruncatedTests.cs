@@ -62,6 +62,15 @@ public class FloatLocalNotTruncatedTests
     public void AnIntegerLocalIsUnaffected()
         => Output().Should().Contain("\n7\n");
 
+    // A value whose integer part does not fit in a byte was not merely truncated, it was
+    // WRAPPED: 300.5 printed 44, because 300 in a byte is 44. Truncation alone would have
+    // printed 300. This row was missing from the report, and it is the one that separates
+    // "prints a plausible small number" from "prints an unrelated one", so it is kept distinct
+    // from the 1.5 and 3.75 rows above rather than folded into them.
+    [Test]
+    public void AValueAboveAByteWasWrappedNotJustTruncated()
+        => Output().Should().Contain("\n300.5\n", "300.5 printed 44, which is 300 wrapped into a byte");
+
     // CONTROL, and the one a careless fix would break: asking for truncation still truncates.
     [Test]
     public void AnExplicitCastStillTruncates()

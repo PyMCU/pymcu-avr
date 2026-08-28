@@ -41,6 +41,15 @@ def main():
     n = 7
     print(n)
 
+    # A value whose integer part does not fit in a byte. The defect did not merely truncate it,
+    # it truncated AND WRAPPED: 300 in a byte is 44. That is the row that separates "prints a
+    # plausible small number" from "prints an unrelated one", and it is why the reported bound,
+    # "read back as its truncated integer part", understated the severity.
+    #
+    # Placed before the cast below so the StartWith and EndWith assertions still hold.
+    w = 300.5
+    print(w)
+
     t = uint8(1.5)
     print(t)
 
