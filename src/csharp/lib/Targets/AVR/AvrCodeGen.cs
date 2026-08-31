@@ -2000,8 +2000,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             int val = c.Value;
             if (type.SizeOf() == 4)
             {
-                if (val < int.MaxValue)
+                // Emitting nothing means "no value of this type can exceed the threshold",
+                // and that is only true at the maximum of the TYPE. int.MaxValue is the
+                // largest SIGNED 32-bit value; an unsigned one reaches twice as far, so
+                // asking int.MaxValue dropped the comparison over half the uint32 range.
+                // The 8- and 16-bit forms below get this right because 0xFF and 0xFFFF are
+                // values an int can hold: 32 is the width where the type outgrows it.
+                bool atTypeMax = signed ? val == int.MaxValue : (uint)val == uint.MaxValue;
+                if (!atTypeMax)
                 {
+                    // The emitted bytes are the low 32 bits of the threshold plus one, and
+                    // those are the same whether val is read as signed or unsigned.
                     long cmpVal = (long)val + 1;
                     Emit("LDI", "R18", $"{cmpVal & 0xFF}");
                     Emit("LDI", "R19", $"{(cmpVal >> 8) & 0xFF}");
