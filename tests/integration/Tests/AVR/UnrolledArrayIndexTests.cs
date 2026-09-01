@@ -44,7 +44,12 @@ public class UnrolledArrayIndexTests
         var ex = Assert.Throws<InvalidOperationException>(
             () => PymcuCompiler.BuildSource(RuntimeIndexOfComprehension));
 
-        ex!.Message.Should().Contain("'xs' has no declared array type");
+        // The wording changed with PyMCU da47289d (the #246 fix): the message now explains
+        // WHY it cannot be indexed at run time rather than only stating the array has no type.
+        // What this test pins has not changed: the message must name the array and show the
+        // annotation that fixes it.
+        ex!.Message.Should().Contain("'xs' is not addressable at run time here");
+        ex.Message.Should().Contain("it lives as separate variables", "the message must say why, not just that");
         ex.Message.Should().Contain("xs: uint8[4]", "the message must show the annotation that fixes it");
         ex.Message.Should().NotContain("subscript must be", "the subscript was never the problem");
     }
