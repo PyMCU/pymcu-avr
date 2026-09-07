@@ -41,23 +41,29 @@ import subprocess
 
 import pytest
 
-import pymcu.chips
-from pymcu.backend.avr import AvrBackendPlugin
-from pymcu.toolchain.avr import wasi
-
 # pymcu-avr is not installed in the toolchain-smoke CI job, which installs only
 # pymcu-avr-toolchain and pytest on purpose: its question is whether the toolchain
-# WHEEL works standalone on each platform. Importing AvrgasToolchain at module level
-# made that job fail at COLLECTION, which takes the whole file down including the
-# cases that need nothing from pymcu-avr. Guarded the way test_avr_supply_chain.py
-# already guards it.
+# WHEEL works standalone on each platform. Any module-level import from pymcu made
+# that job fail at COLLECTION, which takes the whole file down including the cases
+# that need nothing from pymcu-avr. Guarded the way test_avr_supply_chain.py does.
+#
+# ALL FOUR go in the guard, not just the one the error happened to name. The first
+# attempt guarded only avrgas, because that was the import in the message, and the
+# job then failed on `import pymcu.chips` instead: a collection error reports the
+# first bad import, not the set of them.
 try:
-    from rich.console import Console
+    import pymcu.chips
+    from pymcu.backend.avr import AvrBackendPlugin
+    from pymcu.toolchain.avr import wasi
     from pymcu.toolchain.avr.avrgas import AvrgasToolchain
+    from rich.console import Console
     _HAS_AVRGAS = True
 except ImportError:
-    Console = None  # type: ignore[assignment]
+    pymcu = None  # type: ignore[assignment]
+    AvrBackendPlugin = None  # type: ignore[assignment]
+    wasi = None  # type: ignore[assignment]
     AvrgasToolchain = None  # type: ignore[assignment]
+    Console = None  # type: ignore[assignment]
     _HAS_AVRGAS = False
 
 pytestmark = pytest.mark.skipif(
