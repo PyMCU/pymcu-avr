@@ -22,9 +22,15 @@ public static class ChipCatalog
         while (dir != null && !File.Exists(Path.Combine(dir, "hatch_build.py")))
             dir = Path.GetDirectoryName(dir);
         Assert.NotNull(dir);
-        var chips = Path.Combine(Path.GetDirectoryName(dir)!, "pymcu",
-                                 "lib", "src", "pymcu", "chips");
-        Assert.True(Directory.Exists(chips), $"chip catalog not found at {chips}");
+        // PyMCU, not pymcu. The monorepo directory is PyMCU on disk, and this spelling is
+        // the third surface of that: the ProjectReference in the csproj, the checkout path
+        // in the workflows, and this. macOS is case-insensitive so all three looked fine
+        // here while the lowercase ones failed every Linux job.
+        var sibling = Path.GetDirectoryName(dir)!;
+        var chips = Path.Combine(sibling, "PyMCU", "lib", "src", "pymcu", "chips");
+        Assert.True(Directory.Exists(chips),
+            $"chip catalog not found at {chips}. Siblings present: "
+            + string.Join(", ", Directory.GetDirectories(sibling).Select(Path.GetFileName)));
         return chips;
     }
 
