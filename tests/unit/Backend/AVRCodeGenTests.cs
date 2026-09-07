@@ -390,6 +390,75 @@ public class AVRCodeGenTests
         Assert.Contains(".extern uart_puts", asm);
     }
 
+    // ─── ExternSignatures: the C ABI at the call site ────────────────────
+    // An @extern function has no body, so it never reaches ProgramIR.Functions and the
+    // backend has no parameter widths for it other than what ExternSignatures carries.
+
+    private static ProgramIR ExternCallProgram(string symbol, List<DataType> paramTypes,
+                                               DataType returnType, params Val[] args)
+    {
+        var prog = new ProgramIR();
+        prog.ExternSymbols.Add(symbol);
+        prog.ExternSignatures.Add(new ExternSignature
+        {
+            Symbol = symbol, ParamTypes = paramTypes, ReturnType = returnType,
+        });
+        prog.Functions.Add(new Function
+        {
+            Name = "main",
+            Body =
+            [
+                new Call(symbol, args.ToList(),
+                         returnType == DataType.VOID
+                             ? new NoneVal()
+                             : new Variable("r", returnType)),
+                new Return(new NoneVal()),
+            ],
+        });
+        return prog;
+    }
+
+    [Fact]
+    public void ExternCall_SmallLiteral_FillsBothHalvesOfA16BitParameter()
+    {
+        // f(5) to a uint16_t parameter: without the declared width the call loaded R24 only
+        // and left R25 holding whatever the previous call had put there.
+        var asm = Compile(ExternCallProgram("c_take_u16",
+            [DataType.UINT16], DataType.UINT8, new Constant(5)));
+
+        Assert.Contains("LDI\tR24, 5", asm);
+        Assert.Contains("LDI\tR25, 0", asm);
+    }
+
+    [Fact]
+    public void ExternCall_Uint32FirstArgument_UsesTheAvrGccLayout()
+    {
+        // avr-gcc reads a 32-bit arg0 as byte0 in R22 .. byte3 in R25. PyMCU's own layout
+        // anchors it at R24 with bytes 2-3 in R22:R23, which swaps the 16-bit halves.
+        var asm = Compile(ExternCallProgram("c_take_u32",
+            [DataType.UINT32], DataType.UINT8, new Constant(0x00010002)));
+
+        Assert.Contains("LDI\tR22, 2", asm);
+        Assert.Contains("LDI\tR24, 1", asm);
+    }
+
+    [Fact]
+    public void ExternCall_TooManyArguments_IsRejected()
+    {
+        // Six 16-bit arguments do not fit in R16..R25. PyMCU passes the overflow through its
+        // own SRAM region, which a C callee never reads; avr-gcc would use R8 and the stack.
+        var prog = ExternCallProgram("c_take_six",
+            [DataType.UINT16, DataType.UINT16, DataType.UINT16,
+             DataType.UINT16, DataType.UINT16, DataType.UINT16],
+            DataType.UINT8,
+            new Constant(1), new Constant(2), new Constant(3),
+            new Constant(4), new Constant(5), new Constant(6));
+
+        var ex = Assert.Throws<Exception>(() => Compile(prog));
+        Assert.Contains("too many arguments", ex.Message);
+        Assert.Contains("c_take_six", ex.Message);
+    }
+
     // ─── ISR context save/restore: R0 and R1 ─────────────────────────────
     // R0 is clobbered by every MUL instruction; R1 is the zero register relied on by
     // SBC/ADC patterns after MUL. When the ISR body (or a callee) uses them they must be

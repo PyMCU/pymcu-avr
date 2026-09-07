@@ -62,6 +62,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private readonly Dictionary<string, int> _flashArraySizes = new();
     // Maps function name → list of parameter sizes (in bytes) for correct call-site arg loading.
     private Dictionary<string, List<int>> _functionParamSizes = new();
+
+    // @extern symbols: these calls cross into avr-gcc-compiled code, which lays a 32-bit
+    // first argument (and a 32-bit return) out the other way round from PyMCU's own convention.
+    private readonly HashSet<string> _externSymbols = new();
     private int _labelCounter;
     private Function? _currentFunction;
     // R2-R15 registers used as variable homes program-wide (incl. high byte of 16-bit homes).
@@ -502,7 +506,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // A 32-bit FIRST arg keeps the R24-anchored PyMCU layout (byte0=R24, byte2=R22); a lower 32-bit
     // arg is contiguous from its base. Returns the base register (as passed to LoadIntoReg) per arg.
     // Caller and callee must use this identically. Floats keep their own special-casing.
-    private static List<string> ArgBaseRegs(IReadOnlyList<int> sizes)
+    //
+    // cAbi anchors that first 32-bit argument at R22 instead, which is what avr-gcc expects
+    // (byte0=R22 .. byte3=R25). PyMCU's own layout has the two 16-bit halves the other way round,
+    // so an @extern call that used it handed C a uint32_t with its halves swapped. Only the base
+    // of that one slot differs: the registers each argument occupies are the same either way.
+    private static List<string> ArgBaseRegs(IReadOnlyList<int> sizes, bool cAbi = false)
     {
         var bases = new List<string>(sizes.Count);
         int top = 25;
@@ -510,7 +519,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             int slots = sz >= 4 ? 4 : 2;
             int low = top - slots + 1;
-            int baseNum = slots == 4 && top == 25 ? 24 : low;
+            int baseNum = slots == 4 && top == 25 && !cAbi ? 24 : low;
             // Argument registers must be R16..R25: loading an immediate (LDI/SUBI/...) requires a
             // high register, and arg values include constants. Assigning a base below R16 (which
             // avr-gcc reaches for many args) makes the assembler reject "register above 15 required".
@@ -533,7 +542,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // R2..R15 home pool is never touched by the calling convention, so live variables survive calls.
     private readonly record struct ArgLoc(bool IsReg, string Reg, int SpillOffset, int Size);
 
-    private static List<ArgLoc> AssignArgLocations(IReadOnlyList<int> sizes, out int spillBytes)
+    private static List<ArgLoc> AssignArgLocations(IReadOnlyList<int> sizes, out int spillBytes,
+                                                  bool cAbi = false)
     {
         var locs = new List<ArgLoc>(sizes.Count);
         int top = 25;
@@ -545,7 +555,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             if (!spilling)
             {
                 int low = top - slots + 1;
-                int baseNum = slots == 4 && top == 25 ? 24 : low;
+                int baseNum = slots == 4 && top == 25 && !cAbi ? 24 : low;
                 if (baseNum >= 16)
                 {
                     locs.Add(new ArgLoc(true, "R" + baseNum, 0, sz));
@@ -930,6 +940,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 sizes.Add(_varSizes.TryGetValue(p, out int sz) ? sz : 1);
             _functionParamSizes[func.Name] = sizes;
         }
+
+        // @extern functions have no body, so they never appear in program.Functions. Their
+        // declared widths arrive alongside the symbol list instead; without them a call site
+        // sized each argument by the width of the VALUE, and arduino_map(0, 1023, 255) loaded
+        // R24 while leaving R25 -- the high half of a uint16_t parameter -- undefined.
+        foreach (var sig in program.ExternSignatures)
+            _functionParamSizes[sig.Symbol] = sig.ParamTypes.Select(t => t.SizeOf()).ToList();
+
+        _externSymbols.Clear();
+        foreach (var sym in program.ExternSymbols)
+            _externSymbols.Add(sym);
 
         // Record how long each flash table is, before any function is compiled: a load of a
         // table larger than 256 bytes needs a 16-bit index, and the FlashData instruction that
@@ -2143,7 +2164,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         var argSizes = new List<int>(call.Args.Count);
         for (var k = 0; k < call.Args.Count; k++)
             argSizes.Add(ps != null && k < ps.Count ? ps[k] : GetValType(call.Args[k]).SizeOf());
-        var argLocs = AssignArgLocations(argSizes, out _);
+        // A call into C follows avr-gcc's layout for a 32-bit first argument and 32-bit return.
+        bool cAbi = _externSymbols.Contains(call.FunctionName);
+        var argLocs = AssignArgLocations(argSizes, out _, cAbi);
+
+        // Arguments past R16 go to PyMCU's own SRAM overflow region, which a PyMCU callee reads
+        // and a C one knows nothing about: avr-gcc keeps going down to R8 and then uses the
+        // stack. Rather than hand C registers nobody loaded, refuse the call.
+        if (cAbi && argLocs.Any(l => !l.IsReg))
+            throw new Exception(
+                $"too many arguments in the call to the C function '{call.FunctionName}': they must " +
+                "fit in R16..R25 (about five 16-bit arguments), because arguments beyond that are " +
+                "passed in a way C does not read. Pass fewer arguments, or pack them into an array " +
+                "and pass a pointer.");
 
         // Widen a constant/narrow arg to its declared parameter width (e.g. Constant(-1) for an
         // int16 param) instead of the size inferred from the value's magnitude.
@@ -2202,7 +2235,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (dstType == DataType.FLOAT)
             StoreFloatFromRegs(call.Dst);
         else
-            StoreRegInto("R24", call.Dst, dstType);
+            // avr-gcc returns a 32-bit value in R22..R25 (byte0 in R22); PyMCU's own convention
+            // reads byte0 from R24 and bytes 2-3 from R22:R23. Reading a C uint32_t that way
+            // swapped its halves.
+            StoreRegInto(cAbi && dstType.SizeOf() == 4 ? "R22" : "R24", call.Dst, dstType);
     }
 
     // Indirect call through a function pointer (ICALL Z on AVR).
