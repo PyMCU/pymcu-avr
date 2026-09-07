@@ -133,8 +133,15 @@ jobs:
           fail = int(s.get("failures", 0)) + int(s.get("errors", 0))
           ran = tot - sk
           print(f"ran {ran}, skipped {sk}, failed {fail}, of {tot} collected")
-          if ran < 6:
-              sys.exit(f"only {ran} tests actually ran; this job is not measuring the wheel")
+          # Per platform, because the floor is not the same everywhere and a single
+          # number is either blind on Windows or useless on POSIX.
+          # test_avr_supply_chain.py skips four cases on Windows for real reasons:
+          # execute bits and symlinks, neither of which exists there. So 6 run on
+          # linux and macos, 2 on windows. Measured, not assumed.
+          floor = 2 if sys.platform.startswith("win") else 6
+          if ran < floor:
+              sys.exit(f"only {ran} tests actually ran, expected at least {floor} "
+                       f"on {sys.platform}; this job is not measuring the wheel")
           EOF
 
   # ---------------------------------------------------------------------------
