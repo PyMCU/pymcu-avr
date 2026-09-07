@@ -66,7 +66,7 @@ jobs:
         with:
           repository: PyMCU/PyMCU
           ref: main
-          path: pymcu
+          path: PyMCU
           sparse-checkout: |
             extensions/pymcu-sdk/csharp
             global.json
