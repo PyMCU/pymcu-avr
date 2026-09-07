@@ -25,7 +25,18 @@ from pathlib import Path
 
 import pytest
 
-from pymcu.toolchain.avr import wasi
+# pymcu-avr is not installed in the toolchain-smoke CI job, which installs only the
+# toolchain wheel and pytest on purpose. A module-level import of this made that job
+# fail at COLLECTION, taking the whole file with it.
+try:
+    from pymcu.toolchain.avr import wasi
+    _HAS_PYMCU_AVR = True
+except ImportError:
+    wasi = None  # type: ignore[assignment]
+    _HAS_PYMCU_AVR = False
+
+pytestmark = pytest.mark.skipif(
+    not _HAS_PYMCU_AVR, reason="pymcu-avr not installed (toolchain-smoke job has only the wheel)")
 
 
 @pytest.mark.parametrize("chip,emulation", [

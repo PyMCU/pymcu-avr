@@ -96,7 +96,30 @@ jobs:
           uv pip install --python .venv pymcu-avr-toolchain pytest
 
       - name: Run toolchain smoke tests
-        run: uv run --python .venv --no-project pytest tests/toolchain/ -v --tb=short
+        run: |
+          uv run --python .venv --no-project pytest tests/toolchain/ -v --tb=short \
+            --junitxml=smoke.xml
+
+      # A green run that skipped almost everything reads exactly like a green run that
+      # tested the wheel. Several files skip themselves when pymcu-avr is absent, which
+      # is correct for this job and is also how this check could quietly stop measuring.
+      # 12 is the number that ran here when the floor was written; if a change drops it
+      # below, that is a thing to look at rather than a threshold to lower.
+      - name: The smoke run has to have actually run
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'EOF'
+          import sys, xml.etree.ElementTree as ET
+          r = ET.parse("smoke.xml").getroot()
+          s = r if r.tag == "testsuite" else r.find("testsuite")
+          tot = int(s.get("tests", 0)); sk = int(s.get("skipped", 0))
+          fail = int(s.get("failures", 0)) + int(s.get("errors", 0))
+          ran = tot - sk
+          print(f"ran {ran}, skipped {sk}, failed {fail}, of {tot} collected")
+          if ran < 12:
+              sys.exit(f"only {ran} tests actually ran; this job is not measuring the wheel")
+          EOF
 
   # ---------------------------------------------------------------------------
   # Unit tests for the C# AVR backend (codegen, linear scan, peephole).

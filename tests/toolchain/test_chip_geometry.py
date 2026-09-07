@@ -18,9 +18,26 @@ from __future__ import annotations
 import re
 
 import pytest
-from rich.console import Console
 
-from pymcu.toolchain.avr.avrgas import AvrgasToolchain
+# pymcu-avr is not installed in the toolchain-smoke CI job, which installs only
+# pymcu-avr-toolchain and pytest on purpose: its question is whether the toolchain
+# WHEEL works standalone on each platform. Importing AvrgasToolchain at module level
+# made that job fail at COLLECTION, which takes the whole file down including the
+# cases that need nothing from pymcu-avr. Guarded the way test_avr_supply_chain.py
+# already guards it.
+try:
+    from rich.console import Console
+    from pymcu.toolchain.avr.avrgas import AvrgasToolchain
+    _HAS_AVRGAS = True
+except ImportError:
+    Console = None  # type: ignore[assignment]
+    AvrgasToolchain = None  # type: ignore[assignment]
+    _HAS_AVRGAS = False
+
+pytestmark = pytest.mark.skipif(
+    not _HAS_AVRGAS, reason="pymcu-avr not installed (toolchain-smoke job has only the wheel)")
+
+
 
 # chip -> (RAMSTART, SRAM bytes, has JMP/CALL, flash bytes = FLASHEND + 1)
 CHIPS = {
