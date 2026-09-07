@@ -95,10 +95,12 @@ jobs:
           uv venv .venv
           uv pip install --python .venv pymcu-avr-toolchain pytest
 
+      # One line on purpose. A `\` continuation is not a line continuation in
+      # PowerShell, which is the default shell on the windows runner, so the split
+      # version broke the command there, produced no smoke.xml, and the check below
+      # then failed with FileNotFoundError instead of saying what went wrong.
       - name: Run toolchain smoke tests
-        run: |
-          uv run --python .venv --no-project pytest tests/toolchain/ -v --tb=short \
-            --junitxml=smoke.xml
+        run: uv run --python .venv --no-project pytest tests/toolchain/ -v --tb=short --junitxml=smoke.xml
 
       # A green run that skipped almost everything reads exactly like a green run that
       # tested the wheel. Most of tests/toolchain skips itself when pymcu-avr is absent,
@@ -121,7 +123,10 @@ jobs:
         shell: bash
         run: |
           python3 - <<'EOF'
-          import sys, xml.etree.ElementTree as ET
+          import sys, os, xml.etree.ElementTree as ET
+          if not os.path.exists("smoke.xml"):
+              sys.exit("no smoke.xml: the pytest step did not run to completion, "
+                       "so this says nothing about the wheel. Look at that step, not this one.")
           r = ET.parse("smoke.xml").getroot()
           s = r if r.tag == "testsuite" else r.find("testsuite")
           tot = int(s.get("tests", 0)); sk = int(s.get("skipped", 0))
