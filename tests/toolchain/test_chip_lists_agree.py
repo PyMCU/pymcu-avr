@@ -70,10 +70,20 @@ pytestmark = pytest.mark.skipif(
     not _HAS_AVRGAS, reason="pymcu-avr not installed (toolchain-smoke job has only the wheel)")
 
 
-BINARY = AvrBackendPlugin.get_backend_binary()
+# Guarding the import is not enough: this line RUNS at import time, so with
+# AvrBackendPlugin set to None it raised AttributeError during collection and took
+# the file down exactly as the unguarded import had. A guarded name still needs its
+# module-level USES guarded, which is a second place to look and not the same place.
+if _HAS_AVRGAS:
+    BINARY = AvrBackendPlugin.get_backend_binary()
+    _binary_missing = not BINARY.exists()
+    _binary_reason = f"AVR backend binary not present at {BINARY}"
+else:
+    BINARY = None
+    _binary_missing = True
+    _binary_reason = "pymcu-avr not installed"
 
-needs_binary = pytest.mark.skipif(
-    not BINARY.exists(), reason=f"AVR backend binary not present at {BINARY}")
+needs_binary = pytest.mark.skipif(_binary_missing, reason=_binary_reason)
 
 
 def backend_catalog() -> dict[str, dict]:
@@ -137,10 +147,20 @@ def declared_geometry() -> dict[str, dict[str, int]]:
     return out
 
 
-BACKEND = backend_catalog() if BINARY.exists() else {}
-DECLARED = declared_geometry()
-SRAM = AvrgasToolchain._SRAM_BYTES
-FLASH = AvrgasToolchain._FLASH_BYTES
+# Same reason as the BINARY block above: these three run at import time and reach
+# into names that are None when pymcu-avr is absent.
+if _HAS_AVRGAS:
+    BACKEND = backend_catalog() if BINARY.exists() else {}
+    DECLARED = declared_geometry()
+    SRAM = AvrgasToolchain._SRAM_BYTES
+    FLASH = AvrgasToolchain._FLASH_BYTES
+    WASI_CHIPS = wasi._CHIPS
+else:
+    BACKEND = {}
+    DECLARED = {}
+    SRAM = {}
+    FLASH = {}
+    WASI_CHIPS = {}
 
 
 def chips() -> list[str]:
@@ -153,7 +173,7 @@ def test_the_backend_publishes_a_catalog():
 
 
 @needs_binary
-@pytest.mark.parametrize("name,table", [("wasi._CHIPS", wasi._CHIPS),
+@pytest.mark.parametrize("name,table", [("wasi._CHIPS", WASI_CHIPS),
                                         ("_SRAM_BYTES", SRAM),
                                         ("_FLASH_BYTES", FLASH)])
 def test_the_toolchain_tables_name_the_same_chips_as_the_backend(name, table):

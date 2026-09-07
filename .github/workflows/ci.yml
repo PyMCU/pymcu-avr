@@ -101,10 +101,21 @@ jobs:
             --junitxml=smoke.xml
 
       # A green run that skipped almost everything reads exactly like a green run that
-      # tested the wheel. Several files skip themselves when pymcu-avr is absent, which
-      # is correct for this job and is also how this check could quietly stop measuring.
-      # 12 is the number that ran here when the floor was written; if a change drops it
-      # below, that is a thing to look at rather than a threshold to lower.
+      # tested the wheel. Most of tests/toolchain skips itself when pymcu-avr is absent,
+      # which is correct for this job and is also how the job could quietly stop
+      # measuring anything at all.
+      #
+      # 6 is what this job can actually reach, measured in a venv built to match it
+      # exactly: python + pytest + pymcu-avr-toolchain and nothing else gives
+      # "6 passed, 133 skipped". The first version of this floor said 12, taken from a
+      # "collected 12 items" line in a failing run -- a COLLECTION count from a run that
+      # then errored, not a count of tests that ran. Two different numbers, and only one
+      # of them is what this checks.
+      #
+      # That 133 of 139 tests here need pymcu-avr is itself worth someone's attention:
+      # most of tests/toolchain is not testing the toolchain wheel. Not tonight's job.
+      # If a change drops the 6, that is a thing to look at rather than a threshold to
+      # lower.
       - name: The smoke run has to have actually run
         if: always()
         shell: bash
@@ -117,7 +128,7 @@ jobs:
           fail = int(s.get("failures", 0)) + int(s.get("errors", 0))
           ran = tot - sk
           print(f"ran {ran}, skipped {sk}, failed {fail}, of {tot} collected")
-          if ran < 12:
+          if ran < 6:
               sys.exit(f"only {ran} tests actually ran; this job is not measuring the wheel")
           EOF
 
