@@ -255,7 +255,24 @@ jobs:
           uv venv .venv
           uv pip install --python .venv pymcu-sdk
           uv pip install --python .venv -e ../PyMCU/lib  # use development stdlib (has all fixes)
-          uv pip install --python .venv pymcu-avr-toolchain
+          # The WASI toolchain, because that is what a user gets: pymcu-avr
+          # depends on it, and `pip install "pymcu-compiler[avr]"` therefore
+          # installs it. This job pulls the backend with --no-deps below, so
+          # without this line it would silently fall through to the native
+          # avr-gcc path instead, which no default install ships.
+          #
+          # That difference is not cosmetic. The two wheels carry avr-libc
+          # generations with mutually exclusive float symbols -- WASI (2.2.0)
+          # has floorf/fmodf, native (7.3.0) has floor/fmod -- and the compiler
+          # emits the f-suffixed pair, so every float // and % links under one
+          # and not the other. See issue #19.
+          #
+          # WHAT THIS JOB NO LONGER COVERS: the native avr-gcc link path in
+          # toolchain/avr/avrgas.py. A green run here says nothing about it. It
+          # is still reachable (PYMCU_AVR_WASI=0, or a system avr-gcc on PATH)
+          # and is currently expected to fail on float math until the native
+          # wheel moves off avr-libc 7.3.0.
+          uv pip install --python .venv pymcu-avr-toolchain-wasi
           uv pip install --python .venv -e ../PyMCU
           uv pip install --python .venv questionary  # transitive dep of pymcu-compiler not resolved by uv pip -e
           uv pip install --python .venv -e . --no-deps
@@ -269,17 +286,21 @@ jobs:
           echo "$GITHUB_WORKSPACE/pymcu-avr/build/bin" >> $GITHUB_PATH
           echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/pymcu-avr/.venv" >> $GITHUB_ENV
 
-      # Pre-seed the toolchain cache. get_tool() triggers the auto-download from
-      # GitHub Releases (same as the stub's public API), and _fetch.py applies
-      # execute bits and as/ld symlinks automatically. No manual chmod needed.
+      # Pre-seed the toolchain cache and, more importantly, say out loud which
+      # toolchain this job is about to test. A link failure naming a libm symbol
+      # should not need an archaeology session to attribute (issue #19), so the
+      # resolved wasm directory and the avr-libc version go in the log while the
+      # run is green, not only once it is not.
       - name: Pre-seed AVR toolchain cache
         working-directory: pymcu-avr
         run: |
           "$GITHUB_WORKSPACE/pymcu-avr/.venv/bin/python3" -c "
-          import pymcu_avr_toolchain as tc
-          print('avr-gcc ->', tc.get_tool('avr-gcc'))
-          print('avr-as  ->', tc.get_tool('avr-as'))
-          print('avr-objcopy ->', tc.get_tool('avr-objcopy'))
+          import pymcu_avr_toolchain_wasi as tc
+          from pymcu.toolchain.avr import wasi
+          print('toolchain     -> WASI (native avr-gcc path NOT covered by this job)')
+          print('wasi package  ->', tc.__file__)
+          print('wasm modules  ->', wasi.find_wasi_root())
+          print('sysroot avr5  ->', tc.sysroot('avr5'))
           "
 
       - name: Restore integration test packages
