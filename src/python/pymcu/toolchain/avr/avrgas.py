@@ -51,6 +51,7 @@ directly without any download.
 """
 
 import contextlib
+import importlib
 import os
 import platform
 import re
@@ -518,21 +519,44 @@ class AvrgasToolchain(ExternalToolchain):
             if not Confirm.ask(f"Run: pip install {_WASI_PKG}?", default=True):
                 raise RuntimeError("AVR toolchain installation aborted by user.")
 
+        # Install the package the user was shown and agreed to. This used to
+        # install _WHEEL_PKG instead: the prompt above offers the WASI toolchain,
+        # the answer yes was taken for it, and the native wheel arrived. That is
+        # not a naming slip, it changes what the build does. The two toolchains
+        # ship different avr-libc generations with mutually exclusive symbols --
+        # avr-libc 2.2.0 in the WASI wheel exports floorf and fmodf, the 7.3.0
+        # native wheel exports floor and fmod -- and the compiler emits the
+        # f-suffixed pair. So consenting to the WASI toolchain and receiving the
+        # native one leaves a toolchain that cannot link float // or %, reached
+        # by saying yes to the right question.
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", _WHEEL_PKG],
+            [sys.executable, "-m", "pip", "install", _WASI_PKG],
             check=False,
         )
         if result.returncode != 0:
             raise RuntimeError(
-                f"`pip install {_WHEEL_PKG}` failed (exit {result.returncode}).\n"
-                f"Try manually: pip install {_WHEEL_PKG}"
+                f"`pip install {_WASI_PKG}` failed (exit {result.returncode}).\n"
+                f"Try manually: pip install {_WASI_PKG}"
             )
 
-        AvrgasToolchain._wheel_usable = None  # force re-validation of new install
+        # Re-validate against the package that was actually installed. Clearing
+        # _wheel_usable alone was written for the native path and does nothing
+        # for this one: _wasi_checked is a class flag that the is_cached() call
+        # at the top of this method has already set to True, with _wasi_tools
+        # left None, so without resetting it the pipeline keeps answering from
+        # that cached miss and a successful install still reports "no usable
+        # binaries". invalidate_caches() is needed too, because find_wasi_root()
+        # imports pymcu_avr_toolchain_wasi and the path finder has already
+        # cached a directory listing taken before pip wrote the package.
+        importlib.invalidate_caches()
+        AvrgasToolchain._wheel_usable = None
+        AvrgasToolchain._wasi_checked = False
+        AvrgasToolchain._wasi_tools = None
+        AvrgasToolchain._wasi_ffi = {}
 
         if not self.is_cached():
             raise RuntimeError(
-                f"{_WHEEL_PKG} was installed but no usable binaries were found.\n"
+                f"{_WASI_PKG} was installed but no usable binaries were found.\n"
                 f"The wheel may not yet support your platform. "
                 f"Install avr-gcc manually and ensure it is on PATH."
             )
