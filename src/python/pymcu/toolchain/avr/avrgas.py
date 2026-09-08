@@ -817,6 +817,36 @@ class AvrgasToolchain(ExternalToolchain):
             return wasi.link(firmware_obj, output_dir, linker_script,
                              extra_objects=c_objects)
 
+        # ── Everything below here is the native avr-gcc link, and two things
+        # about it have to be said before anyone edits it. ──────────────────
+        #
+        # IT HAS NO TEST COVERAGE, in any job. The integration suite used to
+        # reach it by accident -- it installed the native wheel and pulled the
+        # backend with --no-deps, so the WASI pipeline above was never
+        # importable -- and that oversight was the only thing exercising this
+        # code. Fixing the job to install what users actually get removed it.
+        # tests/toolchain/test_avr_supply_chain.py does cover this pipeline, but
+        # its class is guarded by skipif(not _HAS_AVRGAS) and the one job that
+        # installs the native toolchain installs `pymcu-avr-toolchain pytest`
+        # and no backend, so those tests skip: 6 passed, 133 skipped. Nothing
+        # else can reach here either, because pymcu-avr hard-depends on
+        # pymcu-avr-toolchain-wasi and the branch above wins whenever it imports.
+        #
+        # IT CANNOT LINK FLOAT // OR %. The native wheel ships avr-libc 7.3.0,
+        # which exports floor and fmod; the WASI wheel ships 2.2.0, which
+        # exports floorf and fmodf; the two sets are disjoint. AvrCodeGen emits
+        # the f-suffixed pair, so float floor-division and modulo fail here with
+        # "undefined reference to floorf" while linking fine on WASI. Issue #19
+        # holds the measurement and the symbol tables.
+        #
+        # It is NOT dead code, which is why it is still here. It is reached for
+        # a chip with no entry in the WASI toolchain's cc1_flags.json, when
+        # wasmtime is absent or broken, and for a system avr-gcc on PATH. Do not
+        # delete it on the strength of the coverage note above: that gap was
+        # created by removing the accident that hid it, not by discovering the
+        # path is unused. Coverage becomes possible once the native wheel moves
+        # to avr-libc 2.2.0, at which point a job forcing PYMCU_AVR_WASI=0 can
+        # be green rather than expected-red.
         avr_gcc = self._find_bin_for_ffi("avr-gcc")
 
         _gcc_bin_path = Path(avr_gcc).parent
