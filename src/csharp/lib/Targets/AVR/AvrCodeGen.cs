@@ -4509,15 +4509,15 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         return false;
     }
 
-    private static string ExnCodeName(int code) => code switch
-    {
-        1 => "ValueError",
-        2 => "TypeError",
-        3 => "IndexError",
-        4 => "KeyError",
-        5 => "NotImplementedError",
-        _ => $"Exception{code}"
-    };
+    // Derived from the shared list rather than copied. This was a hand-written switch that
+    // stopped at 5, so an uncaught ZeroDivisionError -- code 6, in that list since before this
+    // file was touched -- printed "E:Exception6" (PyMCU#260). The other backend had the same
+    // switch with the same omission, which is exactly what BuiltinExceptionNames' own docstring
+    // predicted would happen to a second copy. Deriving is what stops there being a third.
+    private static string ExnCodeName(int code) =>
+        PyMCU.Common.BuiltinExceptionNames.TryGetName(code, out var name)
+            ? name
+            : $"Exception{code}";
 
     private static string ExnAsciiBytes(int code)
     {
