@@ -16,7 +16,7 @@ public class CompatMpPwmSurfaceTests
     private const int TCCR0A = 0x44;
     private const int TCCR0B = 0x45;
     private const int OCR0A = 0x47;
-    private const int OCR0B = 0x48;
+    private const int OCR2B = 0xB4;   // Pin(3) is Timer2's OC2B: Timer0's other channel would collide with init(freq=20000)
 
     private SimSession _session = null!;
 
@@ -60,7 +60,7 @@ public class CompatMpPwmSurfaceTests
 
     [Test]
     public void DutyNsKeyword_AtConstruction()
-        => Checkpoint(5).Data[OCR0B].Should().Be(64, "125 us at 2 kHz is 25 %");
+        => Checkpoint(5).Data[OCR2B].Should().Be(64, "125 us at 2 kHz is 25 %");
 
     [Test]
     public void TheGetters_ReadBackWhatWasSet()
