@@ -39,28 +39,28 @@ public class CompatMpPwmSurfaceTests
     {
         var uno = Checkpoint(1);
         uno.Data[TCCR0A].Should().Be(0xC3);
-        uno.Data[OCR0A].Should().Be(128);
+        uno.Data[OCR0A].Should().Be(127, "32768 is 50 %: high for OCR + 1 counts");
     }
 
     [Test]
     public void Duty_IsTheLegacy1023Scale()
-        => Checkpoint(2).Data[OCR0A].Should().Be(128, "duty(512) is 50 %");
+        => Checkpoint(2).Data[OCR0A].Should().Be(127, "duty(512) is 50 %");
 
     [Test]
     public void DutyNs_DerivesFromTheFrequency()
-        => Checkpoint(3).Data[OCR0A].Should().Be(64, "250 us at 1 kHz is 25 %");
+        => Checkpoint(3).Data[OCR0A].Should().Be(63, "250 us at 1 kHz is 25 %");
 
     [Test]
     public void InitKeywords_ReprogramFrequencyAndDuty()
     {
         var uno = Checkpoint(4);
         uno.Data[TCCR0B].Should().Be(0x02, "20 kHz is prescaler 8");
-        uno.Data[OCR0A].Should().Be(192);
+        uno.Data[OCR0A].Should().Be(191, "49152 is 75 %");
     }
 
     [Test]
     public void DutyNsKeyword_AtConstruction()
-        => Checkpoint(5).Data[OCR2B].Should().Be(64, "125 us at 2 kHz is 25 %");
+        => Checkpoint(5).Data[OCR2B].Should().Be(63, "125 us at 2 kHz is 25 %");
 
     [Test]
     public void TheGetters_ReadBackWhatWasSet()

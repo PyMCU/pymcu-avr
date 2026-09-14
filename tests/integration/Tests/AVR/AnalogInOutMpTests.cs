@@ -39,6 +39,6 @@ public class AnalogInOutMpTests
     {
         var uno = SimWithA0(512);
         uno.RunUntilSerialBytes(uno.Serial, 20, maxMs: 4000);
-        uno.Data[OCR0A].Should().Be(128, "duty(512) on the 0..1023 scale is 50 %: OCR0A 128");
+        uno.Data[OCR0A].Should().Be(127, "duty(512) on the 0..1023 scale is 50 %: 128 of 256 counts high, OCR0A one less");
     }
 }

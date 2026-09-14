@@ -61,7 +61,9 @@ public class CompatCpPwmioTests
         var uno = Sim();
         uno.RunUntilSerialBytes(uno.Serial, 1, maxMs: 50);
         // duty_cycle=32768 (16-bit) -> duty8 = 32768 >> 8 = 128
-        uno.Data[OCR0A].Should().Be(128, "OCR0A = 128 for 50% duty cycle");
+        // Fast PWM is high for OCR + 1 counts, so 50 % is OCR 127; 128 read 50.4 % on the
+        // Uno (pymcu-circuitpython#30).
+        uno.Data[OCR0A].Should().Be(127, "OCR0A = 127 for 50 % duty cycle");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -6,11 +6,11 @@
 # runtime set. Registers are read at BREAK checkpoints; the getters print.
 #
 # Checkpoints:
-#   1 -- PWM(Pin(6), freq=1000, duty_u16=32768, invert=1)  -> TCCR0A 0xC3, OCR0A 128
-#   2 -- pwm.duty(512)                                     -> OCR0A 128; prints 512
-#   3 -- pwm.duty_ns(250000) at 1 kHz (25 %)               -> OCR0A 64; prints 16384
-#   4 -- pwm.init(freq=20000, duty_u16=49152)              -> TCCR0B 0x02, OCR0A 192
-#   5 -- second PWM(Pin(3), freq=2000, duty_ns=125000)     -> OCR2B 64 (25 % of 500 us)
+#   1 -- PWM(Pin(6), freq=1000, duty_u16=32768, invert=1)  -> TCCR0A 0xC3, OCR0A 127
+#   2 -- pwm.duty(512)                                     -> OCR0A 127; prints 512
+#   3 -- pwm.duty_ns(250000) at 1 kHz (25 %)               -> OCR0A 63; prints 16384
+#   4 -- pwm.init(freq=20000, duty_u16=49152)              -> TCCR0B 0x02, OCR0A 191
+#   5 -- second PWM(Pin(3), freq=2000, duty_ns=125000)     -> OCR2B 63 (25 % of 500 us)
 #        (Pin(3) is Timer2: a second channel of Timer0 after init(freq=20000) would
 #        ask the shared prescaler for another bucket and is refused at compile time,
 #        PyMCU#300)

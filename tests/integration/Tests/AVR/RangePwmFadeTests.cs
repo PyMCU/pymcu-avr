@@ -36,7 +36,7 @@ public class RangePwmFadeTests
     {
         var uno = _session.Reset();
         uno.RunToBreak(maxInstructions: 2_000_000);
-        uno.Data[OCR0A].Should().Be(253, "p == 99 is duty 64879, whose high byte is 253");
+        uno.Data[OCR0A].Should().Be(252, "p == 99 is duty 64879: 253 of 256 counts high, OCR one less");
     }
 
     [Test]
@@ -46,6 +46,6 @@ public class RangePwmFadeTests
         uno.RunToBreak(maxInstructions: 2_000_000);
         uno.RunInstructions(1);
         uno.RunToBreak(maxInstructions: 2_000_000);
-        uno.Data[OCR0A].Should().Be(127, "p == 50 is duty 32767, whose high byte is 127");
+        uno.Data[OCR0A].Should().Be(127, "p == 50 is duty 32767: rounds to 128 counts, OCR 127");
     }
 }

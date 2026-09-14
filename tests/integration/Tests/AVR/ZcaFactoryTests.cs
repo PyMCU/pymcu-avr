@@ -30,6 +30,6 @@ public class ZcaFactoryTests
         uno.AddAdc(AvrAdc.AdcConfig, out var adc);
         adc.ChannelValues[0] = 512 / 1024.0 * 5.0;   // A0 == channel 0
         uno.RunUntilSerialBytes(uno.Serial, 4, maxMs: 4000);
-        uno.Data[OCR0A].Should().Be(128, "factory ADC read 512 is duty(512), 50 % on the 0..1023 scale: OCR0A 128");
+        uno.Data[OCR0A].Should().Be(127, "factory ADC read 512 is duty(512), 50 %: 128 of 256 counts high, OCR0A one less");
     }
 }

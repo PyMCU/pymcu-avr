@@ -58,7 +58,7 @@ public class CompatMpPwmTests
     {
         var uno = Sim();
         uno.RunUntilSerialBytes(uno.Serial, 1, maxMs: 50);
-        uno.Data[OCR0A].Should().Be(128, "OCR0A = 128 after duty(512), 50 % on the 0..1023 scale");
+        uno.Data[OCR0A].Should().Be(127, "OCR0A = 127 after duty(512), 50 % on the 0..1023 scale: high for OCR + 1 counts");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

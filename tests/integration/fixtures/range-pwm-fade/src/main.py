@@ -6,8 +6,8 @@
 # its bounds; this fixture pins that they keep working and that the duty reaches the
 # hardware: OCR0A holds the high byte of duty_cycle at two checkpoints (asm BREAK).
 #
-#   checkpoint 1: p == 99 on the way up,   duty 64879 -> OCR0A 253
-#   checkpoint 2: p == 50 on the way down, duty 32767 -> OCR0A 127
+#   checkpoint 1: p == 99 on the way up,   duty 64879 -> 253 counts high, OCR0A 252
+#   checkpoint 2: p == 50 on the way down, duty 32767 -> 128 counts high, OCR0A 127
 #
 # Expected UART (115200):
 #   u 0 0
