@@ -20,12 +20,15 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// The frame is 0x00, 0xFF, 0xA5: the shortest pulse eight times, the longest eight times,
 /// and an alternating byte that a decoder with the two widths swapped cannot read right.
 ///
-/// MEASURED, and one number is not what it should be. The high times are inside the
-/// protocol window and the data decodes, but the bit PERIOD is 41 cycles for a zero and 45
-/// for a one, against a nominal 20: the emitter re-runs its `match bit` inside the bit loop,
-/// so every bit pays for the port dispatch twice over. A strip still reads the frame, since
-/// what ends one is the line staying low past 50 us and this is 2.1 us, but it goes out at
-/// half rate. Pinned below at what it is, with the window it must not leave. See PyMCU#354.
+/// MEASURED. A zero bit is now inside the datasheet on all three of its numbers: 437 ns
+/// high, 875 ns low, 1.31 us end to end. A one is high for 750 ns, which is in window, and
+/// then low for 812 ns where the datasheet says 450, so its period is 1.56 us against 1.25.
+///
+/// It used to be 41 and 45 cycles for the two, because the emitter re-ran its `match bit`
+/// inside the bit loop and every bit paid for the port dispatch again. That is fixed: there
+/// is one emitter per pin now and nothing left to dispatch on. What is left of the gap is
+/// three codegen shapes in the loop's tail, named in PyMCU#355, and the one-bit period is
+/// pinned below at what it measures rather than asserted as though it were right.
 /// </summary>
 [TestFixture]
 public class CompatCpNeopixelWriteTests
@@ -172,24 +175,47 @@ public class CompatCpNeopixelWriteTests
     }
 
     [Test]
-    public void TheBitPeriodIsPinnedAtWhatItMeasures()
+    public void AZeroBitIsInsideTheDatasheetEndToEnd()
     {
-        // NOT the nominal 1.25 us, and deliberately not asserted as though it were. The
-        // emitter re-runs its port dispatch inside the bit loop, so a bit costs 41 cycles
-        // (2.56 us) for a zero and 45 (2.81 us) for a one. The frame is valid at that rate
-        // and goes out at half speed; PyMCU#354 is the fix. This pins the number so the fix
-        // shows up here as a failure to update rather than passing unnoticed.
+        // The win. T0H, T0L and the period, all three, which was not true of any bit before
+        // the per-pin emitter landed: a zero used to take 41 cycles.
+        var (highs, lows, periods) = Pulses();
+
+        // Seven of the eight: the last bit of a byte ends at a seam, whose low carries the
+        // caller's loop as well and is measured separately.
+        for (var i = 0; i < 7; i++)
+        {
+            (highs[i] * NsPerCycle).Should().BeInRange(250, 550, "T0H is 400 ns");
+            (lows[i] * NsPerCycle).Should().BeInRange(700, 1000, "T0L is 850 ns");
+            (periods[i] * NsPerCycle).Should().BeInRange(1100, 1400, "a bit is 1.25 us");
+        }
+    }
+
+    [Test]
+    public void AOneBitIsPinnedAtWhatItMeasures()
+    {
+        // T1H is in window; T1L is 812 ns where the datasheet says 450, so the period is
+        // 25 cycles against a nominal 20. What is left is three codegen shapes in the
+        // loop's tail, not this emitter's to spend -- PyMCU#355. Pinned at the measurement
+        // so that fix shows up here as a test to update rather than passing unnoticed.
+        var (highs, _, periods) = Pulses();
+
+        for (var i = 8; i < 15; i++)
+        {
+            (highs[i] * NsPerCycle).Should().BeInRange(650, 950, "T1H is 800 ns");
+            periods[i].Should().Be(25, "as measured; nominal is 20");
+        }
+    }
+
+    [Test]
+    public void TheByteSeamsCostTheCallAndNoMore()
+    {
+        // The last bit of a byte carries the caller's loop and the CALL into the emitter as
+        // well. Separated from the bits so widening one band cannot hide the other.
         var periods = Pulses().Periods;
 
-        // Two of them are byte seams -- the caller's loop and the call into the emitter --
-        // and cost 63 and 68 cycles. Separated so widening one band cannot hide the other.
-        var seams = new[] { periods[7], periods[15] };
-        var withinAByte = periods.Where((_, i) => i != 7 && i != 15);
-
-        withinAByte.Should().OnlyContain(p => p >= 38 && p <= 48,
-            "41 cycles for a zero, 45 for a one, as measured (nominal is 20)");
-        seams.Should().OnlyContain(p => p >= 58 && p <= 72,
-            "the gap between two bytes carries the loop and the call as well");
+        new[] { periods[7], periods[15] }.Should().OnlyContain(p => p >= 34 && p <= 48,
+            "39 and 43 cycles, as measured: 2.4 and 2.7 us, nowhere near the 50 us latch");
     }
 
     [Test]
@@ -201,9 +227,9 @@ public class CompatCpNeopixelWriteTests
         uno.RunToBreak(1_000_000);
         var elapsed = uno.Cpu.Cycles - start;
 
-        // 24 bits at the measured rate is about 1030 cycles; the reset that follows is more
+        // 24 bits at the measured rate is about 570 cycles; the reset that follows is more
         // than 50 us, which is another 800.
-        elapsed.Should().BeGreaterThan(1030 + 800,
+        elapsed.Should().BeGreaterThan(570 + 800,
             "the write ends by holding the line low past 50 us so the strip latches");
     }
 }
