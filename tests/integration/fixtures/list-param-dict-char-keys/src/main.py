@@ -1,9 +1,10 @@
 # PyMCU -- list-param-dict-char-keys: a seven-segment table keyed by CHARACTERS (PyMCU#338).
 #
 # A one-character string literal folds to its character code, so these keys are constant
-# integers that are simply not contiguous from zero. The table is read three ways: with a
-# constant key, with the characters of a constant string, and with a byte only known at run
-# time -- GPIOR0 here, a UART in real life.
+# integers that are simply not contiguous from zero. Two tables of the SAME glyphs, a row per
+# character and a bit mask per character, each read three ways: with a constant key, with the
+# characters of a constant string, and with a byte only known at run time -- GPIOR0 here, a
+# UART in real life. Both shapes were refused, each for its own reason.
 #
 # Segments a..g on D2..D8, so a..f are PD2..PD7 and g is PB0, common cathode. Each lookup
 # prints the two port registers, which is the same measurement a scope makes and the only one
@@ -17,6 +18,7 @@
 #   0 1
 #   240 1          <- show(code) with code = GPIOR0, the same glyph as 'b'
 #   X refused      <- a code with no glyph is the library's own raise, not a compiler refusal
+#   then the same six lines again, from the MASK table, which describes the same glyphs
 #   END
 from machine import Pin
 from pymcu.chips.atmega328p import GPIOR0, GPIOR1, PORTB, PORTD
@@ -44,7 +46,29 @@ class SevenSegChars:
             pin.value(on)
 
 
+class SevenSegMasks:
+    """The same glyphs as a bit MASK per character (gfedcba) instead of a row.
+
+    It is the other half of the same rule and it failed for its own reason: the table bound
+    and a constant key folded, but the lookup refused every run-time key on the line after an
+    `in` that had just compared the same run-time byte against the same keys.
+    """
+
+    def __init__(self, pins):
+        self.segments = [Pin(p, Pin.OUT) for p in pins]
+        self.chars = {"0": 0x3F, "1": 0x06, "A": 0x77, "b": 0x7C,
+                      "C": 0x39, "-": 0x40, " ": 0x00}
+
+    def show(self, ch):
+        if ch not in self.chars:
+            raise ValueError("no glyph")
+        mask = self.chars[ch]
+        for i in range(7):
+            self.segments[i].value((mask >> i) & 1)
+
+
 d = SevenSegChars([2, 3, 4, 5, 6, 7, 8])
+m = SevenSegMasks([2, 3, 4, 5, 6, 7, 8])
 
 
 def report():
@@ -69,6 +93,24 @@ def main():
     other = GPIOR1.value
     try:
         d.show(other)
+        report()
+    except ValueError:
+        print("X refused")
+
+    # The mask table, the same three ways in. Every line must match the rows above it: the
+    # two tables describe the same glyphs.
+    m.show("A")
+    report()
+
+    for ch in "Cb-":
+        m.show(ch)
+        report()
+
+    m.show(code)
+    report()
+
+    try:
+        m.show(other)
         report()
     except ValueError:
         print("X refused")
