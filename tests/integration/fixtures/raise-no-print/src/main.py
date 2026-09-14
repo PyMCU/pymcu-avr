@@ -9,8 +9,10 @@
 # unhandled-exception path itself, including turning the transmitter on.
 #
 # The test seeds GPIOR0 before running. With 90 the raise fires; with anything else the program
-# writes 0x55 to GPIOR1 and spins, which is how the run is told apart from a crash.
-from pymcu.chips.atmega328p import GPIOR0, GPIOR1
+# writes 0x55 to GPIOR1 and then blinks D13, which is how the run is told apart from a crash --
+# and the blink is what makes this fixture observable to the differential harness, which
+# compares pins and the wire and skips a program that moves neither.
+from pymcu.chips.atmega328p import GPIOR0, GPIOR1, DDRB, PORTB
 from pymcu.types import uint8
 
 
@@ -19,5 +21,7 @@ def main():
     if code == 90:
         raise ValueError
     GPIOR1.value = 0x55
+    DDRB[5] = 1
     while True:
-        pass
+        PORTB[5] = 1
+        PORTB[5] = 0
