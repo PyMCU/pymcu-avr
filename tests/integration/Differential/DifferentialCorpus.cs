@@ -57,6 +57,13 @@ public static class DifferentialCorpus
             "two Timer0 channels (OC0A, OC0B) started at different points of the program; the " +
             "order in which their output edges interleave depends on how many cycles the code " +
             "between the two starts takes, while every register value is identical",
+        ["examples/pwm-multi"] =
+            "three free-running hardware PWM channels on three timers, started at different " +
+            "points of the program; which output edge lands first after init depends on how " +
+            "many cycles the init code takes, so the GPIO change ORDER differs between builds " +
+            "while every register value is identical. Measured: the two builds emit the same " +
+            "512 changes and the same 5 UART bytes, 518 cycles apart, and the first difference " +
+            "is PORTB before PORTD instead of after",
         ["examples/rtos-multitask"] =
             "preemptive scheduler — how many pin writes each task gets in between timer ticks " +
             "is a function of how fast the code is",
