@@ -1,0 +1,11 @@
+[project]
+name = "list-param-seven-segment"
+version = "0.1.0"
+dependencies = ["pymcu-stdlib", "pymcu-circuitpython"]
+
+[tool.pymcu]
+board = "arduino_uno"
+frequency = 16000000
+sources = "src"
+entry = "main.py"
+stdlib = ["circuitpython"]
