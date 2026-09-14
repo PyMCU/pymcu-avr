@@ -1,61 +1,52 @@
+using Avr8Sharp.TestKit;
+using Avr8Sharp.TestKit.Boards;
 using FluentAssertions;
 using NUnit.Framework;
-using Avr8Sharp.TestKit.Boards;
-using Avr8Sharp.TestKit;
 
 namespace PyMCU.IntegrationTests.Tests.AVR;
 
 /// <summary>
-/// Integration tests for fixtures/avr/compat-cp-alarm.
-/// Verifies the pymcu-circuitpython alarm sleep entry points run on real AVR:
-/// alarm.light_sleep_until_alarms(), alarm.exit_and_deep_sleep_until_alarms() and
-/// alarm.sleep_until_alarms() each block on a TimeAlarm (~50 ms) and return.
-/// Expected UART: "ABCDE".
+/// fixtures/compat-cp-alarm (pymcu-circuitpython#20): sleep_until_alarms waits on more than
+/// one alarm and says which fired. It took one alarm and returned a constant 0.
 ///
-/// The third is the DIRECT call and it is asserted alongside the other two on
-/// purpose (PyMCU#271): it used to fail while its own wrappers compiled, because
-/// `alarm.time.TimeAlarm(...)` -- a class nested in a module-level namespace --
-/// left the named variable untagged and only the anonymous constructor temp
-/// carried the class. Asserting one direction would not notice a change that
-/// fixed it by breaking the other.
-///
-/// This also covers nested-class ZCA construction (alarm.time.TimeAlarm, a class
-/// nested in a module-level namespace) compiling on-target.
+/// A TimeAlarm also starts the millisecond time base itself now: the build starts that clock
+/// only for a program that names ticks_ms, monotonic or asyncio, so an alarm was waiting on
+/// a counter that never moved and the call never returned.
 /// </summary>
 [TestFixture]
 public class CompatCpAlarmTests
 {
-    private SimSession _session = null!;
+    private const int Gpior0Addr = 0x3E;
+    private const int D2Bit = 2;
+
+    private static SimSession _session = null!;
 
     [OneTimeSetUp]
-    public void BuildFirmware() => _session = new SimSession(PymcuCompiler.BuildFixture("compat-cp-alarm"));
+    public void BuildFirmware() =>
+        _session = new SimSession(PymcuCompiler.BuildFixture("compat-cp-alarm"));
 
-    [Test]
-    public void LightSleep_WakesAndContinues()
+    private static (byte Which, double Ms) Run(bool pinHigh)
     {
-        var uno = Sim();
-        uno.RunUntilSerial(uno.Serial, "B", maxMs: 500);
-        uno.Serial.Should().Contain("B", "light_sleep_until_alarms() returns and the program continues");
-    }
-
-    /// The direct call, which is the one PyMCU#271 refused. Separate from the
-    /// ordering test so a regression names which entry point came back.
-    [Test]
-    public void DirectSleepUntilAlarms_WakesAndContinues()
-    {
-        var uno = Sim();
-        uno.RunUntilSerial(uno.Serial, "D", maxMs: 1500);
-        uno.Serial.Should().Contain("D", "sleep_until_alarms() returns and the program continues");
+        var uno = _session.Reset();
+        uno.PortD.SetPinValue(D2Bit, pinHigh);
+        var start = uno.Cpu.Cycles;
+        uno.RunToBreak(60_000_000);
+        return (uno.Data[Gpior0Addr], (uno.Cpu.Cycles - start) / 16000.0);
     }
 
     [Test]
-    public void DeepSleepEntry_ReturnsAndReachesDone()
+    public void TheTimeAlarmFiresWhenThePinStaysLow()
     {
-        var uno = Sim();
-        uno.RunUntilSerial(uno.Serial, "E", maxMs: 1500);
-        uno.Serial.Text.Should().Contain("ABCDE",
-            "all three sleep entry points run in order and the firmware reaches the done marker");
+        var r = Run(false);
+        r.Which.Should().Be(0, "the first alarm in the list is the time one");
+        r.Ms.Should().BeInRange(49, 55, "the alarm was set 50 ms out");
     }
 
-    private ArduinoUnoSimulation Sim() => _session.Reset();
+    [Test]
+    public void ThePinAlarmFiresFirstWhenThePinIsAlreadyHigh()
+    {
+        var r = Run(true);
+        r.Which.Should().Be(1, "the second alarm in the list is the pin one");
+        r.Ms.Should().BeLessThan(10, "the pin is already at the level asked for");
+    }
 }

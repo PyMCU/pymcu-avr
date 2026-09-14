@@ -1,43 +1,30 @@
-# CircuitPython alarm module integration test fixture
+# CircuitPython alarm: waiting on more than one alarm, and knowing which fired
+# (pymcu-circuitpython#20).
 #
-# Exercises the alarm sleep entry points with a TimeAlarm on real AVR:
-#   - alarm.light_sleep_until_alarms()          (light sleep)
-#   - alarm.exit_and_deep_sleep_until_alarms()  (deep-sleep entry)
-#   - alarm.sleep_until_alarms()                (the DIRECT call, PyMCU#271)
+# sleep_until_alarms() took ONE alarm and returned a constant 0, so a program waiting on
+# "a time limit or a button" could only wait on one of the two and could not have told them
+# apart if it had waited on both. Up to four are polled now and the return value is the
+# position of the one that fired.
 #
-# Each TimeAlarm wakes ~50 ms in the future; sleep_until_alarms() blocks in a
-# delay until the absolute monotonic_time is reached, then returns. Markers
-# bracket each sleep so the simulator confirms both calls run and return.
+# A TimeAlarm also starts the millisecond time base itself. The build starts that clock only
+# for a program that names ticks_ms, monotonic or asyncio, so an alarm was waiting on a
+# counter that never moved and sleep_until_alarms never returned.
 #
-# Expected UART output: "ABCDE"
-#
-import board
-import busio
+# The test drives D2 high or leaves it low, and reads back:
+#   GPIOR0 = which alarm fired (0 = the 50 ms time alarm, 1 = the pin alarm)
 import alarm
-import time
+import board
+from pymcu.chips.atmega328p import GPIOR0
+from pymcu.types import asm, uint8
 
 
 def main():
-    uart = busio.UART(board.TX, board.RX, baudrate=9600)
-    uart.write(b"A")
+    ta = alarm.time.TimeAlarm(monotonic_time=0.05)
+    pa = alarm.pin.PinAlarm(board.D2, value=True)
 
-    a1 = alarm.time.TimeAlarm(monotonic_time=time.monotonic() + 0.05)
-    alarm.light_sleep_until_alarms(a1)
-    uart.write(b"B")
+    w: uint8 = alarm.sleep_until_alarms(ta, pa)
+    GPIOR0.value = w
+    asm("BREAK")
 
-    a2 = alarm.time.TimeAlarm(monotonic_time=time.monotonic() + 0.05)
-    alarm.exit_and_deep_sleep_until_alarms(a2)
-    uart.write(b"C")
-
-    # The DIRECT call, which the two above reach only through one more @inline
-    # forward. It is the case that used to fail (PyMCU#271) while its own two
-    # wrappers compiled, so both directions belong in one fixture: if a change
-    # ever fixes the direct call by routing the wrappers down the broken path,
-    # the markers below stop appearing in order.
-    a3 = alarm.time.TimeAlarm(monotonic_time=time.monotonic() + 0.05)
-    alarm.sleep_until_alarms(a3)
-    uart.write(b"D")
-
-    uart.write(b"E")
     while True:
         pass
