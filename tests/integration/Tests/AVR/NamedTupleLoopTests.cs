@@ -32,10 +32,14 @@ public class NamedTupleLoopTests
         return uno.Serial.Text;
     }
 
+    // The second column is `(d >> 8) + 1`. It reads 1 all the way down when the loop variable
+    // is a byte, which is the column that made the truncation visible on real silicon: every
+    // duty in the user's sweep measured the same 4 us pulse.
     [Test]
     public void ATupleOfTenWideConstants_KeepsEveryValue()
         => Transcript().Should().Contain(
-            "W 256\nW 383\nW 512\nW 16384\nW 16639\nW 32768\nW 32895\nW 33024\nW 49152\nW 65280\n");
+            "W 256 2\nW 383 2\nW 512 3\nW 16384 65\nW 16639 65\n"
+            + "W 32768 129\nW 32895 129\nW 33024 130\nW 49152 193\nW 65280 256\n");
 
     [Test]
     public void ATupleOfNineConstants_WalksEveryElement()

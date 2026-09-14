@@ -7,10 +7,13 @@
 # `for`. Past eight both spellings now take the same storage -- and that storage was one
 # byte per element whatever the values were, so a 16-bit table ran on its low byte.
 #
-# The list arms are here because the tuple is only correct if it agrees with them.
+# The list arms are here because the tuple is only correct if it agrees with them, and the
+# second column on the W arm is `(d >> 8) + 1`: it reads 1 for every element when the loop
+# variable is a byte, which is how the truncation showed up on real silicon.
 #
 # Expected UART (115200):
-#   W 256 / W 383 / W 512 / W 16384 / W 16639 / W 32768 / W 32895 / W 33024 / W 49152 / W 65280
+#   W 256 2 / W 383 2 / W 512 3 / W 16384 65 / W 16639 65 / W 32768 129 / W 32895 129 /
+#   W 33024 130 / W 49152 193 / W 65280 256
 #   T 0 / T 7 / T 14 / T 21 / T 28 / T 35 / T 42 / T 49 / T 56
 #   L 0 / L 7 / L 14 / L 21 / L 28 / L 35 / L 42 / L 49 / L 56
 #   E 100 / E 200 / E 300 / E 400 / E 500 / E 600 / E 700 / E 800 / E 900
@@ -22,7 +25,7 @@ from pymcu.hal.console import print
 def main():
     wide = (256, 383, 512, 16384, 16639, 32768, 32895, 33024, 49152, 65280)
     for d in wide:
-        print("W", d)
+        print("W", d, (d >> 8) + 1)
 
     tupled = (0, 7, 14, 21, 28, 35, 42, 49, 56)
     for d in tupled:
