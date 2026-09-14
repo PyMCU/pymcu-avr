@@ -1185,7 +1185,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         bool needsExnRuntime = program.Functions.Any(f =>
                 f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn")
                 || f.Body.OfType<BranchOnError>().Any(b => b.ErrorLabel == "__pymcu_unhandled_exn"));
-        if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, ChipName());
+        if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, ChipName(), cfg);
         WriteSymbolsIfRequested(optimized, program);
         WriteLineMapIfRequested(optimized);
         WriteVarMapIfRequested(program);
@@ -4316,7 +4316,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (is8bit) Emit("CLR", "R25");
     }
 
-    private static void EmitExnRuntime(TextWriter os, HashSet<int> usedCodes, string chip)
+    private static void EmitExnRuntime(TextWriter os, HashSet<int> usedCodes, string chip,
+                                       DeviceConfig cfg)
     {
         os.WriteLine("; ── Exception runtime ──────────────────────────────────────────────────────");
         var codes = usedCodes.OrderBy(x => x).ToList();
@@ -4336,6 +4337,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         bool is32u4 = chip is "atmega32u4" or "atmega16u4";
         string ucsrA = is32u4 ? "0xC8" : "0xC0";   // UDRE bit 5
         string ucsrB = is32u4 ? "0xC9" : "0xC1";   // TXEN bit 3
+        string ucsrC = is32u4 ? "0xCA" : "0xC2";
+        string ubrrH = is32u4 ? "0xCD" : "0xC5";
+        string ubrrL = is32u4 ? "0xCC" : "0xC4";
         string udr   = is32u4 ? "0xCE" : "0xC6";
         foreach (int code in codes)
         {
@@ -4346,8 +4350,40 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         os.WriteLine();
         os.WriteLine("__pymcu_unhandled_exn:");
         os.WriteLine($"    lds   R16, {ucsrB}");
-        os.WriteLine("    sbrs  R16, 3");
-        os.WriteLine("    rjmp  __exn_halt");
+        // TXEN CLEAR used to mean "halt without a word" (#340), and that is the silent stop the
+        // limitations page promises never happens, wearing another hat: UART0 is only set up
+        // when the driver sees `print(` or an explicit `UART(`, so a program that raises and
+        // never prints wrote `E:<Type>` into a transmitter that was off.
+        //
+        // The transmitter is now turned on HERE, by this path, at the rate `[tool.pymcu]
+        // stdout_baud` names. The test stays: a program that owns the UART reaches this with
+        // TXEN already set and its own baud already programmed, and reprogramming UBRR under a
+        // live 9600 stream would garble the bytes it is in the middle of sending.
+        //
+        // And when the program is known to set the UART up, none of this is emitted at all, so
+        // an image that prints is byte for byte the image it was.
+        if (cfg.UartOwnedByProgram)
+        {
+            os.WriteLine("    sbrs  R16, 3");
+            os.WriteLine("    rjmp  __exn_halt");
+        }
+        else
+        {
+            (int ubrr, int ucsrAVal) = UartSetup(cfg.Frequency, cfg.StdoutBaud);
+            os.WriteLine("    sbrc  R16, 3");
+            os.WriteLine("    rjmp  __exn_tx_ready");
+            os.WriteLine($"    ldi   R16, {ucsrAVal}");
+            os.WriteLine($"    sts   {ucsrA}, R16");
+            os.WriteLine($"    ldi   R16, {(ubrr >> 8) & 0xFF}");
+            os.WriteLine($"    sts   {ubrrH}, R16");
+            os.WriteLine($"    ldi   R16, {ubrr & 0xFF}");
+            os.WriteLine($"    sts   {ubrrL}, R16");
+            os.WriteLine("    ldi   R16, 0x06");            // 8N1, the stdout frame
+            os.WriteLine($"    sts   {ucsrC}, R16");
+            os.WriteLine("    ldi   R16, 0x08");            // TXEN only: this path never reads
+            os.WriteLine($"    sts   {ucsrB}, R16");
+            os.WriteLine("__exn_tx_ready:");
+        }
         if (codes.Count == 1)
         {
             int code = codes[0];
@@ -4386,6 +4422,30 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         os.WriteLine("    cli");
         os.WriteLine("    rjmp  .-2");
         os.WriteLine();
+    }
+
+    /// <summary>
+    /// The UBRR divisor and the UCSRA value for a baud rate, by the SAME rule the stdlib's
+    /// `uart_init` uses (lib/src/pymcu/hal/avr/uart/avr.py).
+    ///
+    /// Double speed is chosen exactly when the normal-speed divisor loses more than half a
+    /// step, which at 16 MHz is what puts 115200 on UBRR=16 with U2X rather than UBRR=8 without
+    /// it -- a 3.5% error the receiver rejects. Two spellings of the same arithmetic would be
+    /// two answers the day one of them is corrected, so this one mirrors the stdlib line for
+    /// line.
+    /// </summary>
+    private static (int Ubrr, int UcsrA) UartSetup(ulong freq, int baud)
+    {
+        if (baud <= 0) baud = 115200;
+        long f = (long)freq;
+        long b = baud;
+        bool doubleSpeed = f * 2 / (16 * b) - f / (16 * b) * 2 != 0;
+        long ubrr = doubleSpeed
+            ? (f + 4 * b) / (8 * b) - 1
+            : (f + 8 * b) / (16 * b) - 1;
+        if (ubrr < 0) ubrr = 0;
+        if (ubrr > 0xFFF) ubrr = 0xFFF;
+        return ((int)ubrr, doubleSpeed ? 0x02 : 0x00);
     }
 
     // ── Symbol shortening (release builds) ───────────────────────────────────────────────────────

@@ -68,6 +68,20 @@ var verboseOpt = new Option<bool>("--verbose", "-v")
     DefaultValueFactory = _ => false
 };
 
+var stdoutBaudOpt = new Option<int>("--stdout-baud")
+{
+    Description = "Rate the program's diagnostic output goes out at; the unhandled-exception "
+                + "path enables the transmitter at this rate when nothing else has",
+    DefaultValueFactory = _ => 115200
+};
+
+var uartOwnedOpt = new Option<bool>("--uart-owned")
+{
+    Description = "The program sets the UART up itself, so the unhandled-exception path emits "
+                + "no initialisation of its own",
+    DefaultValueFactory = _ => false
+};
+
 var emitSymbolsOpt = new Option<string?>("--emit-symbols")
 {
     Description = "Write function symbol map JSON to this path (for profiler use)",
@@ -95,6 +109,8 @@ rootCmd.Options.Add(configOpt);
 rootCmd.Options.Add(resetVecOpt);
 rootCmd.Options.Add(intVecOpt);
 rootCmd.Options.Add(verboseOpt);
+rootCmd.Options.Add(stdoutBaudOpt);
+rootCmd.Options.Add(uartOwnedOpt);
 rootCmd.Options.Add(emitSymbolsOpt);
 rootCmd.Options.Add(emitLineMapOpt);
 rootCmd.Options.Add(emitVarMapOpt);
@@ -109,6 +125,8 @@ rootCmd.SetAction(pr =>
     var resetVec    = pr.GetValue(resetVecOpt);
     var intVec      = pr.GetValue(intVecOpt);
     var verbose     = pr.GetValue(verboseOpt);
+    var stdoutBaud  = pr.GetValue(stdoutBaudOpt);
+    var uartOwned   = pr.GetValue(uartOwnedOpt);
     var emitSymbols  = pr.GetValue(emitSymbolsOpt);
     var emitLineMap  = pr.GetValue(emitLineMapOpt);
     var emitVarMap   = pr.GetValue(emitVarMapOpt);
@@ -151,6 +169,8 @@ rootCmd.SetAction(pr =>
         // Enable source-line comments in the .asm when a linemap is requested
         // (debug builds) but suppress them in plain release builds.
         EmitDebugComments   = !string.IsNullOrEmpty(emitLineMap),
+        StdoutBaud          = stdoutBaud,
+        UartOwnedByProgram  = uartOwned,
     };
     foreach (var item in configs)
     {
