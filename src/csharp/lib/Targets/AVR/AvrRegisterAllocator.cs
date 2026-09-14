@@ -39,6 +39,16 @@ public static class AvrRegisterAllocator
         //    stack (GetGcRefSramAddr throws if the name is not in the stack layout).
         //  - Bytearray / array base names are dereferenced via their SRAM offset.
         var unsafeNames = new HashSet<string>();
+
+        // A global an ISR writes cannot live in R2-R15. That pool is callee-saved, and
+        // EmitContextSave pushes the whole range in every ISR prologue and pops it in the
+        // epilogue -- correct for scratch, fatal for a global, because the handler's write is
+        // restored to its pre-interrupt value on RETI. A quadrature encoder counted every
+        // edge and reported 0 for ever, with nothing said (PyMCU#328). GPIOR promotion covers
+        // the byte-wide ones that fit in a free GPIOR; everything else reached here.
+        foreach (var isrShared in program.IsrSharedGlobals)
+            unsafeNames.Add(isrShared);
+
         foreach (var instr in program.Functions.SelectMany(func => func.Body))
         {
             switch (instr)
