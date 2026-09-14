@@ -53,6 +53,10 @@ public static class DifferentialCorpus
             "six free-running hardware PWM channels at two periods; which output edge lands " +
             "first after init depends on exact init-code timing, so the GPIO change order " +
             "differs between builds while every register value is identical",
+        ["fixtures/compat-mp-pwm-surface"] =
+            "two Timer0 channels (OC0A, OC0B) started at different points of the program; the " +
+            "order in which their output edges interleave depends on how many cycles the code " +
+            "between the two starts takes, while every register value is identical",
         ["examples/rtos-multitask"] =
             "preemptive scheduler — how many pin writes each task gets in between timer ticks " +
             "is a function of how fast the code is",
