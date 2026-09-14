@@ -128,17 +128,25 @@ public static class PymcuCompiler
     public static string BuildSource(string mainPy)
         => Cache.GetOrAdd("src:" + Sha(mainPy), _ => new Lazy<string>(() => CompileSource(mainPy))).Value;
 
+    /// <summary>
+    /// Compiles inline source under a pyproject of the caller's choosing -- a board, a
+    /// compatibility layer -- instead of the bare atmega328p project BuildSource writes.
+    /// </summary>
+    public static string BuildSource(string mainPy, string pyprojectToml)
+        => Cache.GetOrAdd("src:" + Sha(mainPy + "\n" + pyprojectToml),
+            _ => new Lazy<string>(() => CompileSource(mainPy, pyprojectToml))).Value;
+
     private static string Sha(string s)
     {
         var bytes = System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(s));
         return Convert.ToHexString(bytes);
     }
 
-    private static string CompileSource(string mainPy)
+    private static string CompileSource(string mainPy, string? pyprojectToml = null)
     {
-        var dir = Path.Combine(ScratchRoot, "pymcu-gen", Sha(mainPy)[..16]);
+        var dir = Path.Combine(ScratchRoot, "pymcu-gen", Sha(mainPy + "\n" + (pyprojectToml ?? ""))[..16]);
         Directory.CreateDirectory(Path.Combine(dir, "src"));
-        File.WriteAllText(Path.Combine(dir, "pyproject.toml"),
+        File.WriteAllText(Path.Combine(dir, "pyproject.toml"), pyprojectToml ??
             "[project]\n" +
             "name = \"gen\"\n" +
             "version = \"0.1.0\"\n" +
