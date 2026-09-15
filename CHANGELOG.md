@@ -14,6 +14,10 @@ field miscomputed with constant constructor args).
 
 ### Added
 
+- **avr**: four fixtures for the arena allocator (module-level allocation, an @inline
+  `__init__` constructed once, `MemoryError` on overflow, the named high-water global),
+  all green on avr8sharp end to end through the real `pymcu build` driver. See
+  `docs/rfcs/0004-arena-allocator.md` in the `pymcu-compiler` repo.
 - **avr**: the catalog speaks for itself -- a devices subcommand dumping what the backend uses
 - **avr**: FlashSize joins the catalog -- the backend's last name list dies
 - **avr**: float modulo, with Python's floored semantics
