@@ -157,7 +157,16 @@ public static class AvrGpiorPromotion
         return result;
     }
 
-    private static void VisitVals(Instruction instr, Action<Val> visit)
+    /// <summary>
+    /// Every Val an instruction touches, sources and destinations alike.
+    ///
+    /// Shared, because this is the exhaustive set and a second copy of it written by hand goes
+    /// stale in silence. AvrCodeGen's float-parameter scan kept its own list of a dozen kinds,
+    /// and a float parameter whose every use was a kind the list did not name was spilled with
+    /// the integer register layout and read back with the C float one: `-t` on a parameter
+    /// answered `-0.0` for every value (PyMCU#388 is the same loss for a comparison).
+    /// </summary>
+    internal static void VisitVals(Instruction instr, Action<Val> visit)
     {
         // Visiting Dst positions too: a write is a reference for both the
         // use counter and the conflict scan.
