@@ -228,7 +228,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     Emit("CLR", "R25");
                 }
             }
-            Emit("CALL", srcType.SizeOf() == 4 && !IsSignedType(srcType)
+            EmitFloatRuntimeCall(srcType.SizeOf() == 4 && !IsSignedType(srcType)
                 ? "__floatunsisf"
                 : "__floatsisf");
             return;
@@ -356,12 +356,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             // below needs the divisor back, so stack it across the call.
             if (b.Op == IrBinOp.Mod)
                 foreach (var r in new[] { "R21", "R20", "R19", "R18" }) Emit("PUSH", r);
-            Emit("CALL", routine);
+            EmitFloatRuntimeCall(routine);
             // Python float `//` floors the quotient (toward -inf), not truncates. __divsf3 gives
             // true division; apply floorf() (avr-libc single-precision; the double-named `floor`
             // is not provided). This must happen before any float->int narrowing so e.g.
             // int(-7.0 // 2.0) == -4, not -3.
-            if (b.Op == IrBinOp.FloorDiv) Emit("CALL", "floorf");
+            if (b.Op == IrBinOp.FloorDiv) EmitFloatRuntimeCall("floorf");
             if (b.Op == IrBinOp.Mod) EmitFlooredRemainderFixup();
             var dstType = GetValType(b.Dst);
             if (dstType == DataType.FLOAT)
@@ -384,7 +384,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             // Float comparison via GCC __cmpsf2.
             // Returns in R24: 0xFF if arg0<arg1, 0x00 if arg0==arg1, 0x01 if arg0>arg1.
-            Emit("CALL", "__cmpsf2");
+            EmitFloatRuntimeCall("__cmpsf2");
             string trueLabel = MakeLabel("L_FCMP_T");
             string doneLabel = MakeLabel("L_FCMP_D");
             switch (b.Op)
@@ -447,8 +447,51 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Emit("OR", "R0", "R23");
         Emit("OR", "R0", "R22");
         Emit("BREQ", done);             // remainder is +-0.0: no correction, and no -0.0 result
-        Emit("CALL", "__addsf3");       // R22:R25 += R18:R21, both already in place
+        EmitFloatRuntimeCall("__addsf3");   // R22:R25 += R18:R21, both already in place
         EmitLabel(done);
+    }
+
+    // Calls into the soft-float runtime, routed so the T flag survives them.
+    //
+    // libgcc's float routines carry a sign bit through T (`BST`/`BLD`) and return with it in
+    // whatever state their last operation left. That is allowed: T is not part of the AVR
+    // calling convention. PyMCU's exception model uses T for "an error is in flight", and a
+    // `try` body puts a `BRTS` after EVERY call it contains, because the callee's CanFail is not
+    // known when the body is lowered. So a printed float armed the guard belonging to an
+    // unrelated call, the raise three lines below it was never reached, and the program halted
+    // with `E:RuntimeError` while its handler sat right there (#384).
+    //
+    // Each symbol gets one thunk that restores SREG after the call, so a call site costs four
+    // cycles and no bytes. A program with no `BRTS` anywhere cannot observe T, and those keep
+    // calling the runtime directly -- which is what leaves every program without exceptions
+    // byte-identical.
+    private readonly SortedSet<string> _floatThunks = new(StringComparer.Ordinal);
+    private bool _programReadsTFlag;
+
+    private static string FloatThunkName(string symbol) => "__pymcu_ts_" + symbol.TrimStart('_');
+
+    private void EmitFloatRuntimeCall(string symbol)
+    {
+        if (!_programReadsTFlag) { Emit("CALL", symbol); return; }
+        _floatThunks.Add(symbol);
+        Emit("CALL", FloatThunkName(symbol));
+    }
+
+    // R0 is call-clobbered on both sides of this, so it is stacked rather than kept: the callee
+    // may use it (the float routines do) and so may whoever called the thunk.
+    private void EmitFloatThunks()
+    {
+        foreach (var symbol in _floatThunks)
+        {
+            EmitComment($"T-flag-safe call into {symbol} (#384)");
+            EmitLabel(FloatThunkName(symbol));
+            Emit("IN", "R0", "0x3F");
+            Emit("PUSH", "R0");
+            Emit("CALL", symbol);
+            Emit("POP", "R0");
+            Emit("OUT", "0x3F", "R0");
+            Emit("RET");
+        }
     }
 
     // Float -> integer, with the float already staged in R22:R25.
@@ -463,7 +506,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // what makes uint8(-3.5) come out as 253 rather than 0.
     private void EmitFloatToIntCall(DataType dstType)
     {
-        Emit("CALL", dstType.SizeOf() == 4 && !IsSignedType(dstType)
+        EmitFloatRuntimeCall(dstType.SizeOf() == 4 && !IsSignedType(dstType)
             ? "__fixunssfsi"
             : "__fixsfsi");
     }
@@ -912,6 +955,13 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // So every pool register in the program is pushed by an ISR prologue and TrimIsrContextSave
         // takes back the ones the handler's body provably never touches: exact after allocation,
         // and zero bytes for a body that stays in the caller-saved set.
+        // Whether anything in this program can READ the T flag. Only BranchOnError compiles to a
+        // BRTS, and SignalError is what sets T for one to read, so a program with neither cannot
+        // observe what the soft-float runtime leaves there and needs no thunks (#384).
+        _programReadsTFlag = program.Functions.Any(f =>
+            f.Body.Any(i => i is BranchOnError or SignalError));
+        _floatThunks.Clear();
+
         // A GLOBAL homed in the pool is the exception, and it must not be saved: the register IS
         // the variable's storage, shared by every function that names it, so pushing it on entry
         // and popping it on exit undoes the handler's write on RETI. That is PyMCU#328, where a
@@ -1191,6 +1241,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             if (_stackLayout.TryGetValue(g, out int isrOff))
                 for (int b = 0; b < 4; b++)
                     noForward.Add(RamStart() + isrOff + b);
+
+        // The T-flag-safe float thunks go in with the rest of the body, so the peephole and the
+        // listing see them like any other code (#384).
+        EmitFloatThunks();
 
         var optimized = AvrPeephole.Optimize(_assembly, noForward, RamStart(), _outlinedSubroutines);
         foreach (var line in optimized)
@@ -1962,7 +2016,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         Emit("POP", "R23");
         Emit("POP", "R24");
         Emit("POP", "R25");
-        Emit("CALL", "__cmpsf2");
+        EmitFloatRuntimeCall("__cmpsf2");
         switch (cond)
         {
             case "eq": Emit("CPI", "R24", "0x00"); EmitBranch("BREQ", target); break;
