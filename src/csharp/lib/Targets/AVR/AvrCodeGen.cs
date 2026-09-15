@@ -69,8 +69,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private int _labelCounter;
     private Function? _currentFunction;
     // R2-R15 registers used as variable homes program-wide (incl. high byte of 16-bit homes).
-    // An ISR that re-enters a function shared with mainline code must preserve these.
+    // An ISR prologue pushes all of them and TrimIsrContextSave takes back the ones this
+    // handler's body provably never touches.
     private List<string> _isrHomeRegs = new();
+    // For a pool register that is half of a 16-bit home, the other half. Touching either half
+    // means the home is live, so both are saved together.
+    private readonly Dictionary<int, int> _isrHomePartner = new();
     // The subset actually saved by the current ISR's prologue, restored by its epilogue.
     private List<string> _isrExtraSaves = new();
     private int _maxStaticUsage; // total static SRAM used by StackAllocator; set in Compile()
@@ -896,18 +900,41 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         _regLayout = AvrRegisterAllocator.Allocate(program);
 
         // Registers R2-R15 used as variable homes (including the high byte of a 16-bit home).
-        // The allocator hands these out uniquely per name, so an ISR's own homes never overlap
-        // mainline homes -- but a function reachable from BOTH an ISR and mainline code shares the
-        // SAME home registers across both invocations. If such a function is interrupted mid-body
-        // and the ISR re-enters it, the inner call clobbers the outer call's live homes. ISRs that
-        // make any call therefore preserve these registers (see EmitContextSave).
+        //
+        // The allocator hands these out uniquely per NAME, which is not uniquely per FUNCTION.
+        // Two things break the "an ISR only touches its own homes" reading of that guarantee:
+        // a function reachable from both an ISR and mainline code has ONE set of homes for both
+        // invocations, and an @inline expanded in both is the SAME dotted name in both, so both
+        // expansions are handed the SAME registers. Either way an ISR writes a register mainline
+        // code is holding a live value in, and the prologue's fixed caller-saved set -- decided
+        // before allocation ran -- does not cover R2-R15 (pymcu-avr#22).
+        //
+        // So every pool register in the program is pushed by an ISR prologue and TrimIsrContextSave
+        // takes back the ones the handler's body provably never touches: exact after allocation,
+        // and zero bytes for a body that stays in the caller-saved set.
+        // A GLOBAL homed in the pool is the exception, and it must not be saved: the register IS
+        // the variable's storage, shared by every function that names it, so pushing it on entry
+        // and popping it on exit undoes the handler's write on RETI. That is PyMCU#328, where a
+        // quadrature encoder counted every edge and reported 0 for ever. The allocator keeps
+        // globals that an ISR SHARES with mainline code out of the pool for that reason; a global
+        // only the handler names still reaches it, and pulseio's `_pulse_last` -- the timestamp
+        // each edge leaves for the next one -- is one.
+        var globalNames = new HashSet<string>(program.Globals.Select(g => g.Name), StringComparer.Ordinal);
         var homeRegs = new SortedSet<int>();
+        _isrHomePartner.Clear();
         foreach (var (name, reg) in _regLayout)
         {
             int rn = ParseRegToken(reg);
             if (rn is < 2 or > 15) continue;
+            bool sixteen = _varSizes.TryGetValue(name, out int sz) && sz == 2;
+            if (globalNames.Contains(name)) continue;
             homeRegs.Add(rn);
-            if (_varSizes.TryGetValue(name, out int sz) && sz == 2) homeRegs.Add(rn + 1);
+            if (sixteen)
+            {
+                homeRegs.Add(rn + 1);
+                _isrHomePartner[rn] = rn + 1;
+                _isrHomePartner[rn + 1] = rn;
+            }
         }
         _isrHomeRegs = homeRegs.Select(rn => "R" + rn).ToList();
 
@@ -1207,13 +1234,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var r in new[] { "R0", "R1", "R16", "R17", "R18", "R19", "R20", "R21",
                                   "R22", "R23", "R24", "R25", "R26", "R27", "R30", "R31" })
             Emit("PUSH", r);
-        // If this ISR makes any call it may re-enter a function shared with mainline code, whose
-        // R2-R15 variable homes would then be the SAME registers as the interrupted invocation's.
-        // Preserve them. A leaf ISR (no calls) only writes its own uniquely-named homes, which by
-        // the allocator's unique-per-name guarantee never overlap the interrupted code, so it
-        // needs no extra save.
-        bool mayReenter = _currentFunction?.Body.Any(i => i is Call or IndirectCall) ?? false;
-        _isrExtraSaves = mayReenter ? _isrHomeRegs : new List<string>();
+        // R2-R15, the named-variable home pool, is callee-saved and this prologue's fixed set was
+        // chosen before register allocation ran. A handler writes a pool register whenever the
+        // allocator homed one of its locals there, and that register is not the handler's alone:
+        // a function reachable from both an ISR and mainline code has one set of homes for both,
+        // and an @inline expanded in both is the same dotted name in both. Push all of them here
+        // and let TrimIsrContextSave take back the ones this body never touches, which costs a
+        // handler that stays in the caller-saved set nothing (pymcu-avr#22).
+        _isrExtraSaves = _isrHomeRegs;
         foreach (var r in _isrExtraSaves) Emit("PUSH", r);
         Emit("IN", "R16", "0x3F");
         Emit("PUSH", "R16");
@@ -1328,12 +1356,15 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (op.Length > 0 && (op[0] == 'X' || op[0] == 'Y' || op[0] == 'Z')) set.Add(r + 1);
     }
 
-    // Shrinks the conservative ISR context save (R0,R1,R16-R27,R30,R31,SREG) to the registers
-    // the handler body actually uses. Purely subtractive: it removes a PUSH and the matching
-    // POP(s) only for a register the body provably never touches, so it can never drop a
-    // needed save. R1 and R16 are always kept (R16 backs the SREG save, R1 is the zero
-    // register the prologue clears); if the body makes ANY call, the full set is kept (the
-    // callee may clobber anything caller-saved).
+    // Shrinks the conservative ISR context save (R0,R1,R16-R27,R30,R31, every R2-R15 home in the
+    // program, SREG) to the registers the handler body actually uses. Purely subtractive: it
+    // removes a PUSH and the matching POP(s) only for a register the body provably never touches,
+    // so it can never drop a needed save. R1 and R16 are always kept (R16 backs the SREG save, R1
+    // is the zero register the prologue clears); if the body makes ANY call, the full set is kept
+    // (the callee may clobber anything caller-saved, pool homes included).
+    //
+    // Touching either half of a 16-bit home keeps both halves: the codegen reaches the pair through
+    // MOVW and through the two byte registers, and a home is written as a whole.
     private void TrimIsrContextSave(int start, int end)
     {
         var used = new HashSet<int>();
@@ -1357,11 +1388,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
         }
         if (hasMul) { used.Add(0); used.Add(1); }
+        // A 16-bit home is written as a whole; either half being touched keeps both.
+        foreach (int r in used.ToList())
+            if (_isrHomePartner.TryGetValue(r, out int partner)) used.Add(partner);
         if (hasCall) return;   // a callee may clobber any caller-saved register — keep the full save
 
-        // Trimmable = the caller-saved registers the save covers, minus the always-kept R1/R16.
+        // Trimmable = the caller-saved registers the save covers, minus the always-kept R1/R16,
+        // plus every R2-R15 home the prologue pushed that this body never touches.
         var drop = new HashSet<int>();
         foreach (var r in new[] { 0, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 30, 31 })
+            if (!used.Contains(r)) drop.Add(r);
+        for (int r = 2; r <= 15; r++)
             if (!used.Contains(r)) drop.Add(r);
         if (drop.Count == 0) return;
 
