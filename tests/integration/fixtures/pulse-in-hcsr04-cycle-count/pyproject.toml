@@ -1,0 +1,14 @@
+[project]
+name = "pulse-in-hcsr04-cycle-count"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "pymcu-stdlib",
+]
+
+[tool.pymcu]
+target    = "atmega328p"
+frequency = 16000000
+sources   = "src"
+entry     = "main.py"
+stdlib    = []
