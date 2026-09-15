@@ -993,12 +993,29 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var func in program.Functions)
             foreach (var instr in func.Body)
             {
+                // A COMPARISON counts. This set decides the register layout a float parameter is
+                // spilled with at function entry, and it listed only the instructions that
+                // produce a value. A parameter whose every use is a comparison was therefore
+                // never seen as float, spilled with the R24-anchored uint32 layout, and then
+                // read back by the float path with the R22-anchored C layout: the two 16-bit
+                // halves swap, and `def gt(t: float, k: float): return t > k` answered false for
+                // every pair of values, while the same comparison one float add later answered
+                // correctly because the add had rewritten the slot (PyMCU#388). It is what makes
+                // `(monotonic() - timestamp) > self._timeout` decide by storage in a driver.
                 var valsToCheck = instr switch
                 {
                     Binary b => new[] { b.Src1, b.Src2, b.Dst },
                     Copy c => new[] { c.Src, c.Dst },
                     Return { Value: not null } r => new[] { r.Value! },
                     Call cl => [.. cl.Args, cl.Dst],
+                    JumpIfEqual je => new[] { je.Src1, je.Src2 },
+                    JumpIfNotEqual jn => new[] { jn.Src1, jn.Src2 },
+                    JumpIfLessThan jl => new[] { jl.Src1, jl.Src2 },
+                    JumpIfLessOrEqual jle => new[] { jle.Src1, jle.Src2 },
+                    JumpIfGreaterThan jg => new[] { jg.Src1, jg.Src2 },
+                    JumpIfGreaterOrEqual jge => new[] { jge.Src1, jge.Src2 },
+                    JumpIfZero jz => new[] { jz.Condition },
+                    JumpIfNotZero jnz => new[] { jnz.Condition },
                     _ => Array.Empty<Val>()
                 };
                 foreach (var v in valsToCheck)
