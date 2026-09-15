@@ -2,17 +2,18 @@
 # runtime-sized field, now that PyMCU#392 makes field assignment recognize bytearray()
 # at all (previously refused unconditionally, constant size or not).
 #
-# `self.buf[i]` bracket indexing on this field is deliberately NOT exercised here: it
-# currently silently compiles to a bit operation instead of a byte access (PyMCU#418), a
-# wrongcode bug distinct from and worse than PyMCU#415 (which at least refuses). This
-# fixture verifies construction and the once rule -- an @inline __init__ constructed once
-# at module level -- by reading the field's raw value, the offset arena.alloc()
-# returned, which is deterministically 0 for the first allocation in the program. See
-# arena-in-init (this same directory's sibling fixture) for the local-variable spelling
-# this generalizes, kept alongside this one.
+# Writes and reads back three indices through `self.buf[i]` / `d.buf[i]` (PyMCU#418: a
+# field holding an arena buffer was never marked as one at the field-write site, so
+# indexing it fell through to the generic bit-index fallback and silently compiled to a
+# bit operation instead of a byte access -- fixed on this branch, not just documented),
+# and reports `len(self.buf)`. See arena-in-init (this same directory's sibling fixture)
+# for the local-variable spelling this generalizes, kept alongside this one.
 #
 # Expected UART output:
-#   0
+#   11
+#   22
+#   33
+#   4
 #   done
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.hal.console import print
@@ -25,11 +26,25 @@ class Dev:
         self.buf = bytearray(n)
 
     @inline
-    def offset(self) -> uint16:
-        return self.buf
+    def poke(self, i: uint16, v: uint8) -> None:
+        self.buf[i] = v
+
+    @inline
+    def peek(self, i: uint16) -> uint8:
+        return self.buf[i]
+
+    @inline
+    def size(self) -> uint16:
+        return len(self.buf)
 
 
-n: uint16 = uint16(GPIOR0.value) + 3
+n: uint16 = uint16(GPIOR0.value) + 4
 d: Dev = Dev(n)
-print(d.offset())
+d.poke(0, 11)
+d.poke(1, 22)
+d.poke(2, 33)
+print(d.peek(0))
+print(d.peek(1))
+print(d.peek(2))
+print(d.size())
 print("done")
