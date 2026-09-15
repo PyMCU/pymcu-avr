@@ -166,6 +166,80 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // Soft-float helpers
     // -------------------------------------------------------------------------
 
+    // Load a FLOAT value straight into the ABI's SECOND argument slot,
+    // R18(B0/LSB):R19(B1):R20(B2):R21(B3/MSB), without going through R22:R25.
+    //
+    // Returns false when the value cannot be put there without a runtime call --
+    // an integer source needs __floatsisf, which both reads and returns R22:R25
+    // and clobbers R18:R21 on the way. Every other source (a constant, a register
+    // home, a stack slot, a global) is four independent instructions that touch
+    // nothing else, so the caller's first argument can already be sitting in
+    // R22:R25 while this runs.
+    //
+    // What it replaces: load arg1 into R22:R25, MOV it four registers down, and
+    // stack arg0 across all of that. Sixteen instructions where four will do, on
+    // every float operation with a non-integer second operand. The float printer
+    // spent about 120 bytes of its 510 on that shuffle alone (pymcu-avr#24).
+    private bool TryLoadFloatIntoArg1(Val val)
+    {
+        if (val is FloatConstant fc)
+        {
+            uint bits = BitConverter.SingleToUInt32Bits((float)fc.Value);
+            Emit("LDI", "R18", $"{bits & 0xFF}");
+            Emit("LDI", "R19", $"{(bits >> 8) & 0xFF}");
+            Emit("LDI", "R20", $"{(bits >> 16) & 0xFF}");
+            Emit("LDI", "R21", $"{(bits >> 24) & 0xFF}");
+            return true;
+        }
+
+        if (GetValType(val) != DataType.FLOAT) return false;
+
+        var name = val switch { Variable v => v.Name, Temporary t => t.Name, _ => "" };
+
+        if (!string.IsNullOrEmpty(name) && _regLayout.TryGetValue(name, out string? regBase))
+        {
+            int rn = int.Parse(regBase[1..]);
+            // A float home never lands in R18-R21 (those are scratch, not in the
+            // R2-R15 pool), so there is no overlap to order around.
+            Emit("MOV", "R18", $"R{rn}");
+            Emit("MOV", "R19", $"R{rn + 1}");
+            Emit("MOV", "R20", $"R{rn + 2}");
+            Emit("MOV", "R21", $"R{rn + 3}");
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(name) && _stackLayout.TryGetValue(name, out int offset))
+        {
+            if (offset + 3 < 64)
+            {
+                EmitSlotLoad("R18", offset);
+                EmitSlotLoad("R19", offset + 1);
+                EmitSlotLoad("R20", offset + 2);
+                EmitSlotLoad("R21", offset + 3);
+            }
+            else
+            {
+                int abs = 0x0100 + offset;
+                Emit("LDS", "R18", $"0x{abs:X4}");
+                Emit("LDS", "R19", $"0x{abs + 1:X4}");
+                Emit("LDS", "R20", $"0x{abs + 2:X4}");
+                Emit("LDS", "R21", $"0x{abs + 3:X4}");
+            }
+            return true;
+        }
+
+        // A global float: only a named one has an address to load from. Anything
+        // else here has no home this method can reach, so it takes the long way.
+        if (val is not (Variable or Temporary or MemoryAddress)) return false;
+
+        var addr = ResolveAddress(val);
+        Emit("LDS", "R18", addr);
+        Emit("LDS", "R19", $"{addr}+1");
+        Emit("LDS", "R20", $"{addr}+2");
+        Emit("LDS", "R21", $"{addr}+3");
+        return true;
+    }
+
     // Load a FLOAT value into R22(B0/LSB):R23(B1):R24(B2):R25(B3/MSB).
     private void LoadFloatIntoRegs(Val val)
     {
@@ -321,23 +395,29 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // Compile a binary operation where at least one operand is FLOAT.
     private void CompileFloatBinary(Binary b)
     {
-        // Load arg0 (Src1) into R22:R25, push onto stack, load arg1 (Src2) into R22:R25,
-        // move arg1 to R18:R21 (GCC arg1 slot), restore arg0 to R22:R25 (GCC arg0 slot).
         // GCC AVR float ABI: arg0 in R25:R24:R23:R22, arg1 in R21:R20:R19:R18, result in R25:R24:R23:R22.
+        //
+        // Load arg0 (Src1) into R22:R25, then put arg1 (Src2) in R18:R21. When arg1
+        // can be loaded there directly that is all it takes. When it cannot -- an
+        // integer source, which has to go through __floatsisf in R22:R25 -- arg0 is
+        // stacked across the conversion and arg1 moved four registers down after it.
         LoadFloatIntoRegs(b.Src1);
-        Emit("PUSH", "R25");
-        Emit("PUSH", "R24");
-        Emit("PUSH", "R23");
-        Emit("PUSH", "R22");
-        LoadFloatIntoRegs(b.Src2);
-        Emit("MOV", "R18", "R22");
-        Emit("MOV", "R19", "R23");
-        Emit("MOV", "R20", "R24");
-        Emit("MOV", "R21", "R25");
-        Emit("POP", "R22");
-        Emit("POP", "R23");
-        Emit("POP", "R24");
-        Emit("POP", "R25");
+        if (!TryLoadFloatIntoArg1(b.Src2))
+        {
+            Emit("PUSH", "R25");
+            Emit("PUSH", "R24");
+            Emit("PUSH", "R23");
+            Emit("PUSH", "R22");
+            LoadFloatIntoRegs(b.Src2);
+            Emit("MOV", "R18", "R22");
+            Emit("MOV", "R19", "R23");
+            Emit("MOV", "R20", "R24");
+            Emit("MOV", "R21", "R25");
+            Emit("POP", "R22");
+            Emit("POP", "R23");
+            Emit("POP", "R24");
+            Emit("POP", "R25");
+        }
 
         bool isArith = b.Op is IrBinOp.Add or IrBinOp.Sub or IrBinOp.Mul
                        or IrBinOp.Div or IrBinOp.FloorDiv or IrBinOp.Mod;
@@ -2017,22 +2097,26 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // that byte rather than from the flags an integer compare would have set.
     private void EmitFloatCompareJump(Val src1, Val src2, string cond, string target)
     {
-        // GCC AVR float ABI: arg0 in R25:R22, arg1 in R21:R18. Load arg0 first and park it on
-        // the stack -- both loads land in R22:R25, and the routine clobbers R18:R21 as scratch.
+        // GCC AVR float ABI: arg0 in R25:R22, arg1 in R21:R18. Load arg0 first, then arg1
+        // straight into its own slot. Only an arg1 that needs converting from an integer has
+        // to travel through R22:R25, and then arg0 is parked on the stack across it.
         LoadFloatIntoRegs(src1);
-        Emit("PUSH", "R25");
-        Emit("PUSH", "R24");
-        Emit("PUSH", "R23");
-        Emit("PUSH", "R22");
-        LoadFloatIntoRegs(src2);
-        Emit("MOV", "R18", "R22");
-        Emit("MOV", "R19", "R23");
-        Emit("MOV", "R20", "R24");
-        Emit("MOV", "R21", "R25");
-        Emit("POP", "R22");
-        Emit("POP", "R23");
-        Emit("POP", "R24");
-        Emit("POP", "R25");
+        if (!TryLoadFloatIntoArg1(src2))
+        {
+            Emit("PUSH", "R25");
+            Emit("PUSH", "R24");
+            Emit("PUSH", "R23");
+            Emit("PUSH", "R22");
+            LoadFloatIntoRegs(src2);
+            Emit("MOV", "R18", "R22");
+            Emit("MOV", "R19", "R23");
+            Emit("MOV", "R20", "R24");
+            Emit("MOV", "R21", "R25");
+            Emit("POP", "R22");
+            Emit("POP", "R23");
+            Emit("POP", "R24");
+            Emit("POP", "R25");
+        }
         EmitFloatRuntimeCall("__cmpsf2");
         switch (cond)
         {
