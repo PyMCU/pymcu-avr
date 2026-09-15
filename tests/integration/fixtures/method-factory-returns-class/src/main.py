@@ -7,34 +7,23 @@
 # missing class, not the keyword argument: the same call fails identically written
 # positionally.
 #
+# Owner/Pin live in pinlib.py, a DIFFERENT file from this one, matching adafruit_pcf8574.py's
+# own shape exactly (PCF8574.get_pin() and its DigitalInOut return type are both defined in
+# the library module, called from a separate main.py) -- the fix's method-call case alone
+# built fine with everything in one file and needed a second, cross-module fix once measured
+# against the real library.
+#
 # Reduced from adafruit_pcf8574.py's PCF8574.get_pin() / DigitalInOut.switch_to_output().
 #
 # Expected UART output: MF 1 END
+import pinlib
 from pymcu.types import uint8
 from pymcu.hal.uart import UART
-
-
-class Pin:
-    def __init__(self, n: uint8, owner: "Owner") -> None:
-        self._n: uint8 = n
-        self._owner: Owner = owner
-
-    def switch_to_output(self, value: bool = False, **kwargs) -> None:
-        self._owner.written = value
-
-
-class Owner:
-    def __init__(self) -> None:
-        self.written: bool = False
-
-    def get_pin(self, n: uint8) -> Pin:
-        return Pin(n, self)
-
 
 uart = UART(115200)
 uart.println("MF")
 
-o = Owner()
+o = pinlib.Owner()
 led = o.get_pin(7)
 led.switch_to_output(value=True)
 print(o.written)
