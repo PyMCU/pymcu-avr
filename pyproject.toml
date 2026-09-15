@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pymcu-avr"
-version = "0.1.0a9"
+version = "0.1.0b1"
 description = "AVR support for pymcu-compiler: codegen backend + toolchain driver"
 readme = "README.md"
 authors = [
@@ -13,7 +13,7 @@ authors = [
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
-    "pymcu-sdk>=0.1.0a4",
+    "pymcu-sdk>=0.1.0b1",
     # The whole AVR toolchain -- avr-as, avr-ld, avr-objcopy and the C/C++ front
     # ends -- as wasm32-wasip1 modules run through wasmtime. One
     # architecture-independent wheel instead of one native build per platform,
