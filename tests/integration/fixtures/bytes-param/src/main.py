@@ -52,16 +52,16 @@ def first_control(buf: bytearray) -> uint8:
     return buf[0]
 
 
-def main() -> None:
-    uart = UART(9600)
-    gbuf[0] = 5
-    gbuf[1] = 6
-    gbuf[2] = 7
+uart = UART(9600)
+gbuf[0] = 5
+gbuf[1] = 6
+gbuf[2] = 7
 
-    print("first", first(gbuf))
-    print("third", third(gbuf))
-    print("total", total(gbuf, 3))
-    print("ctl", first_control(gbuf))
-    print("done")
-    while True:
-        pass
+print("first", first(gbuf))
+print("third", third(gbuf))
+print("total", total(gbuf, 3))
+print("ctl", first_control(gbuf))
+print("done")
+
+while True:
+    pass

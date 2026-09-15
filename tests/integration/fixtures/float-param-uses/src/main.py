@@ -41,14 +41,14 @@ def add_only(t: float) -> float:
     return r
 
 
-def main() -> None:
-    uart = UART(9600)
-    x: float = 2.25
+uart = UART(9600)
+x: float = 2.25
 
-    print("neg", neg_only(x))
-    print("cmp", cmp_only(x))
-    print("add", add_only(x))
+print("neg", neg_only(x))
+print("cmp", cmp_only(x))
+print("add", add_only(x))
 
-    print("done")
-    while True:
-        pass
+print("done")
+
+while True:
+    pass

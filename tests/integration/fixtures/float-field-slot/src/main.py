@@ -75,17 +75,17 @@ a = A(0.1)
 b = B(7, 0.25)
 
 
-def main() -> None:
-    uart = UART(9600)
+uart = UART(9600)
 
-    print("gt", a.gt())
-    print("t", a.t())
-    print("pad", a.pad())
+print("gt", a.gt())
+print("t", a.t())
+print("pad", a.pad())
 
-    print("rev-gt", b.gt())
-    print("rev-t", b.t())
-    print("rev-n", b.n())
+print("rev-gt", b.gt())
+print("rev-t", b.t())
+print("rev-n", b.n())
 
-    print("done")
-    while True:
-        pass
+print("done")
+
+while True:
+    pass
