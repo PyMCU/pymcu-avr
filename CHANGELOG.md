@@ -1,12 +1,16 @@
 # Changelog — pymcu-avr
 
-## 0.1.0b1 — Unreleased (prepared 2026-09-15)
+## 0.1.0b1 (frozen at fc99c48, 2026-09-15)
 
 Beta 1: the AVR backend moves out of alpha alongside the frontend
 (`pymcu-compiler`/`pymcu-stdlib` 0.1.0b1) and the CircuitPython layer.
 Every fix below was exercised on real Arduino Uno silicon or the AVR8Sharp
 emulator with a regression fixture in the integration suite. The
-ARM/RP2040/RP2350, PIC, and RISC-V backends stay alpha on purpose.
+ARM/RP2040/RP2350, PIC, and RISC-V backends stay alpha on purpose. Three
+fixes the freeze waited on land in this range: #427 (a nested `@inline`
+closure over `self` did not mutate it), #429 (a factory's unannotated
+field threaded the wrong value), and #430 (`super()` plus a subclass
+field miscomputed with constant constructor args).
 
 ### Added
 
@@ -49,6 +53,7 @@ ARM/RP2040/RP2350, PIC, and RISC-V backends stay alpha on purpose.
 - **avr**: an ISR prologue saves every R2-R15 home its body writes ([#22](https://github.com/PyMCU/pymcu-avr/issues/22))
 - **avr**: a call into the soft-float runtime keeps the T flag the exception model signals with ([PyMCU#384](https://github.com/PyMCU/PyMCU/issues/384))
 - **avr**: a float whose only use is a comparison is still a float ([PyMCU#388](https://github.com/PyMCU/PyMCU/issues/388))
+- **avr**: the set of float names asks the walker that knows every operand
 
 ### Performance
 
@@ -57,6 +62,7 @@ ARM/RP2040/RP2350, PIC, and RISC-V backends stay alpha on purpose.
 ### Documentation
 
 - **toolchain**: the native link path has no coverage, and cannot link float math
+- **changelog**: add 0.1.0b1 section
 
 ### Tests
 
@@ -230,6 +236,33 @@ ARM/RP2040/RP2350, PIC, and RISC-V backends stay alpha on purpose.
 - **avr**: a name is as wide as the value finally stored in it ([PyMCU#385](https://github.com/PyMCU/PyMCU/issues/385))
 - **avr**: every float relation is decided by its operands ([PyMCU#388](https://github.com/PyMCU/PyMCU/issues/388))
 - **avr**: a float operand is not shuffled through the first argument's registers
+- **avr**: a `bytes` parameter compiles to a subroutine that answers
+- **avr**: a float field alongside a second field round-trips
+- **avr**: assert the pulse capture ring sizes to the maxlen asked ([PyMCU#406](https://github.com/PyMCU/PyMCU/issues/406))
+- **avr**: assert the flash bound for a large buffer extend ([PyMCU#411](https://github.com/PyMCU/PyMCU/issues/411))
+- **avr**: both fields of two boxed classes, read from outside, in one build
+- **avr**: a range bound to a name, walked both ways ([#363](https://github.com/PyMCU/pymcu-avr/issues/363))
+- **avr**: a bytearray field written in __init__ compiles and reads right
+- **avr**: a bytearray written inline as a call argument compiles and reads right
+- **avr**: a two-index dunder round trip with no return annotation is correct
+- **avr**: a class with no __init__ constructs and runs like CPython ([#391](https://github.com/PyMCU/pymcu-avr/issues/391))
+- **avr**: an overridden sibling runs from inside an outlined self-call ([#373](https://github.com/PyMCU/pymcu-avr/issues/373))
+- **avr**: an enum-member-annotated property reads like CPython ([#376](https://github.com/PyMCU/pymcu-avr/issues/376))
+- **avr**: a class inherited across a module boundary constructs right ([#420](https://github.com/PyMCU/pymcu-avr/issues/420))
+- **avr**: every with-block bound name reads the real field value ([#390](https://github.com/PyMCU/pymcu-avr/issues/390))
+- **avr**: a factory method's returned instance dispatches correctly ([#421](https://github.com/PyMCU/pymcu-avr/issues/421))
+- **avr**: the factory method and its return class live in different files ([#421](https://github.com/PyMCU/pymcu-avr/issues/421))
+- **avr**: a member read through a dotted submodule alias resolves ([#422](https://github.com/PyMCU/pymcu-avr/issues/422))
+- **avr**: add bytes-literal-arg fixture -- bytes([...]) / bytes(N) on AVR
+- **avr**: add array-array-as-list fixture -- import array / array.array on AVR
+- **avr**: add RFC 0006's two size-gate fixtures, with NUnit coverage
+- **avr**: pulse_in reports the true HC-SR04 echo width, not 8/9 of it
+- **avr**: a subclass instance passes isinstance() against its base ([#424](https://github.com/PyMCU/pymcu-avr/issues/424))
+- **avr**: field from a property setter and an init-called helper reads back on real silicon ([PyMCU#441](https://github.com/PyMCU/PyMCU/issues/441))
+- **avr**: add union-parameter-at-call-site fixture -- Union[A, B] on AVR
+- **avr**: a factory's unannotated single field threads its real value ([#429](https://github.com/PyMCU/pymcu-avr/issues/429))
+- **avr**: a nested @inline closure over self actually mutates it ([#427](https://github.com/PyMCU/pymcu-avr/issues/427))
+- **avr**: super() plus a subclass field with constant ctor args ([#430](https://github.com/PyMCU/pymcu-avr/issues/430))
 
 ### Build
 
@@ -240,6 +273,10 @@ ARM/RP2040/RP2350, PIC, and RISC-V backends stay alpha on purpose.
 - dispatch a playground rebuild after a successful PyPI publish
 - **integration**: test the toolchain users actually get, and say what that drops
 
+### Chore
+
+- **release**: bump to 0.1.0b1
+
 ### Reverted
 
 - **test**: compat-cp-board-buses, whose feature is reverted ([#7](https://github.com/PyMCU/pymcu-avr/issues/7))
@@ -249,6 +286,7 @@ ARM/RP2040/RP2350, PIC, and RISC-V backends stay alpha on purpose.
 - Revert tracking of the ffi-wide-args fixture, which was not mine to commit
 - Untrack the ffi-wide-args fixture again, swept in by a directory-wide add
 - bench(avr): PyMCU against avr-gcc -Os, four programs, one instrument
+- style(avr): the three fixtures added this week run at module level
 
 
 ## 0.1.0a9 — 2026-08-18
