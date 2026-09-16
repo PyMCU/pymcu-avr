@@ -79,9 +79,10 @@ public class CompatMpSpiRwTests
     }
 
     [Test]
-    public void Readinto_SendsDummyByte_0xFF_ByDefault()
+    public void Readinto_SendsDummyByte_0x00_ByDefault()
     {
-        // Default write_byte for readinto is 0xFF; verify MOSI line.
+        // Default write_byte for readinto is 0x00, matching MicroPython
+        // (machine.SPI.readinto(buf, write=0x00)); verify the MOSI line.
         var mosiBytes = new List<byte>();
         var uno = SimWithCapture(b => { mosiBytes.Add(b); return 0; });
 
@@ -91,8 +92,8 @@ public class CompatMpSpiRwTests
         uno.Serial.InjectByte((byte)'R');
 
         uno.RunUntilSerialBytes(uno.Serial, after + 3, maxMs: 1000);
-        mosiBytes.Should().Equal(new byte[] { 0xFF, 0xFF, 0xFF },
-            "readinto clocks 0xFF as dummy output by default");
+        mosiBytes.Should().Equal(new byte[] { 0x00, 0x00, 0x00 },
+            "readinto clocks 0x00 as dummy output by default");
     }
 
     // ── write_readinto(w_buf, r_buf, n) ───────────────────────────────────────
