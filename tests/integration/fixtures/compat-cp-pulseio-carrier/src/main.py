@@ -18,7 +18,7 @@ frame: uint16[4] = [560, 560, 1690, 560]
 def main():
     out = pulseio.PulseOut(board.D3, frequency=38000, duty_cycle=32768)
     asm("BREAK")
-    out.send(frame, 4)
+    out.send(frame)
     asm("BREAK")
 
     while True:
