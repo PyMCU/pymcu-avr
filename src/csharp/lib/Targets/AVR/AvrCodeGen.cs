@@ -420,7 +420,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
 
         bool isArith = b.Op is IrBinOp.Add or IrBinOp.Sub or IrBinOp.Mul
-                       or IrBinOp.Div or IrBinOp.FloorDiv or IrBinOp.Mod;
+                       or IrBinOp.Div or IrBinOp.FloorDiv or IrBinOp.Mod or IrBinOp.Pow;
         if (isArith)
         {
             string routine = b.Op switch
@@ -430,6 +430,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 IrBinOp.Mul                     => "__mulsf3",
                 IrBinOp.Div or IrBinOp.FloorDiv => "__divsf3",
                 IrBinOp.Mod                     => "fmodf",
+                IrBinOp.Pow                     => "powf",
                 _ => throw Unsupported($"the AVR backend has no float lowering for {b.Op}")
             };
             // fmodf clobbers its second argument's registers, and the floored correction
