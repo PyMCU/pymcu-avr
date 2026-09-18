@@ -1,0 +1,14 @@
+[project]
+name = "tuple-index"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pymcu]
+board = "arduino_uno"
+frequency = 16000000
+sources = "src"
+entry = "main.py"
+
+[tool.pymcu.toolchain]
+name = "avr"

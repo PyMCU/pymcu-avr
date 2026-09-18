@@ -4636,11 +4636,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private static string MakeShortSymbol(string name)
     {
         if (name.Length <= 24) return name;
+        // Try the tail after each __ separator, rightmost first. A tail that does not
+        // start with a letter or '_' is not a valid assembler symbol (unrolled element
+        // names end in __N, e.g. "..._coeff__0" would shorten to "0"), so keep walking
+        // back to an earlier separator until a usable tail appears.
         int dunder = name.LastIndexOf("__");
-        if (dunder >= 0 && dunder + 2 < name.Length)
+        while (dunder >= 0 && dunder + 2 < name.Length)
         {
             string tail = name[(dunder + 2)..];
-            if (tail.Length <= 24) return tail;
+            if (tail.Length <= 24 && (char.IsLetter(tail[0]) || tail[0] == '_'))
+                return tail;
+            dunder = dunder == 0 ? -1 : name.LastIndexOf("__", dunder - 1);
         }
         uint h = 2166136261u;
         foreach (char c in name) { h ^= (byte)c; h *= 16777619u; }
