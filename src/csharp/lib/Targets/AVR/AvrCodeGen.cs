@@ -144,9 +144,23 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             default:
             {
                 var name = val switch { Variable v => v.Name, Temporary t => t.Name, _ => "" };
-                return name.Replace('.', '_');
+                return AsmSymbol(name);
             }
         }
+    }
+
+    /// <summary>
+    /// An assembler symbol from an IR name. Dots become underscores; a name that would
+    /// start with a digit is prefixed so avr-as does not see <c>.equ 0</c> (unrolled
+    /// <c>coeff__N</c> slots, or a shortening Replace that left a bare index).
+    /// </summary>
+    private static string AsmSymbol(string name)
+    {
+        var s = name.Replace('.', '_');
+        if (s.Length == 0) return s;
+        if (!(char.IsLetter(s[0]) || s[0] == '_'))
+            return "_v" + s;
+        return s;
     }
 
     private static DataType GetValType(Val val) => val switch
@@ -772,7 +786,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     Emit("LDI", reg,   $"lo8(0x{absAddr:X4})");
                     Emit("LDI", regH2, $"hi8(0x{absAddr:X4})");
                 } else {
-                    string label = ab.ArrayName.Replace('.', '_');
+                    string label = AsmSymbol(ab.ArrayName);
                     Emit("LDI", reg,   $"lo8({label})");
                     Emit("LDI", regH2, $"hi8({label})");
                 }
@@ -1157,7 +1171,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             if (_regLayout.ContainsKey(name)) continue;
             if (_allTmpRegNames.Contains(name)) continue;
-            var safeName = name.Replace('.', '_');
+            var safeName = AsmSymbol(name);
+            if (safeName.Length == 0) continue;
             EmitRaw($".equ {safeName}, _stack_base + {offset}");
         }
 
@@ -2482,7 +2497,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private void CompileVirtualCall(VirtualCall vc)
     {
         // Load self pointer into Z (vptr is the first 2 bytes of the object in SRAM).
-        string selfName = vc.Self.Name.Replace('.', '_');
+        string selfName = AsmSymbol(vc.Self.Name);
         if (_stackLayout.TryGetValue(selfName, out int selfOffset))
         {
             EmitSlotLoad("R30", selfOffset);
@@ -3180,7 +3195,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
             else
             {
-                string lbl = foldAb.ArrayName.Replace('.', '_');
+                string lbl = AsmSymbol(foldAb.ArrayName);
                 Emit("LDI", "R24", $"lo8({lbl}+{foldC.Value})");
                 Emit("LDI", "R25", $"hi8({lbl}+{foldC.Value})");
             }
@@ -4653,6 +4668,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         return $"_s{h:x8}";
     }
 
+    /// <summary>
+    /// Replace an assembler symbol as a whole token. <see cref="string.Replace(string,string)"/>
+    /// is a substring edit, so shortening <c>foo_coeff</c> inside <c>.equ foo_coeff__0</c>
+    /// left a bare <c>__0</c> or, with a digit tail, <c>.equ 0</c>.
+    /// </summary>
+    private static string ReplaceAsmSymbol(string content, string full, string sh)
+    {
+        if (string.IsNullOrEmpty(full) || content.IndexOf(full, StringComparison.Ordinal) < 0)
+            return content;
+        return Regex.Replace(content, @"(?<![A-Za-z0-9_])" + Regex.Escape(full) + @"(?![A-Za-z0-9_])",
+                             sh.Replace("$", "$$"));
+    }
+
     // Builds a full-name → short-name map for all long symbols and applies it to _assembly in-place.
     private void ApplySymbolShortening(ProgramIR program)
     {
@@ -4662,7 +4690,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             if (fn.Name.Length > 24) longNames.Add(fn.Name);
         foreach (var key in _stackLayout.Keys)
         {
-            var underscored = key.Replace('.', '_');
+            var underscored = AsmSymbol(key);
             if (underscored.Length > 24) longNames.Add(underscored);
         }
 
@@ -4700,7 +4728,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     break;
                 case AvrAsmLine.LineType.Raw:
                     foreach (var (full, sh) in pairs)
-                        line.Content = line.Content.Replace(full, sh);
+                        line.Content = ReplaceAsmSymbol(line.Content, full, sh);
                     break;
             }
         }
