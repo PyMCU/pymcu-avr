@@ -75,6 +75,9 @@ public static class DifferentialCorpus
         ["fixtures/async-timebase"] =
             "asyncio polls a millisecond time base; the number of not-ready polls before a task " +
             "becomes runnable falls straight out of the execution speed",
+        ["fixtures/factory-pin-through-constructor"] =
+            "PYMCU_NO_OPT force-inlines the large constructor into labels avr-as rejects " +
+            "(`expected symbol name`); FactoryPinThroughConstructorTests covers both front ends",
     };
 
     /// <summary>
