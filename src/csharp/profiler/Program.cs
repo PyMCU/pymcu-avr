@@ -25,6 +25,7 @@ var taskIdAddrOpt = new Option<uint?>("--task-id-addr")   { Description = "SRAM 
 var workloadOpt   = new Option<string?>("--workload")     { Description = "Workload JSON (driver-translated workload.yaml) with scenarios + stimuli" };
 var blockmapOpt   = new Option<string?>("--blockmap")     { Description = "Resolved block map JSON from --emit-blockmap" };
 var emitProfOpt   = new Option<string?>("--emit-profile") { Description = "Write a PGO profile JSON to this path instead of Speedscope" };
+var i2cTraceOpt   = new Option<string?>("--emit-i2c-trace") { Description = "PGO mode: also dump recorded I2C transactions (addr/data/end-cycle) as JSON" };
 var chipOpt       = new Option<string>("--chip")          { Description = "Target chip (PGO mode runs on the Uno/ATmega328P model)", DefaultValueFactory = _ => "atmega328p" };
 
 var root = new RootCommand("pymcuc-avr-profiler — AVR firmware cycle profiler");
@@ -40,6 +41,7 @@ root.Options.Add(taskIdAddrOpt);
 root.Options.Add(workloadOpt);
 root.Options.Add(blockmapOpt);
 root.Options.Add(emitProfOpt);
+root.Options.Add(i2cTraceOpt);
 root.Options.Add(chipOpt);
 
 root.SetAction(pr =>
@@ -56,6 +58,7 @@ root.SetAction(pr =>
     var workloadPath = pr.GetValue(workloadOpt);
     var blockmapPath = pr.GetValue(blockmapOpt);
     var emitProfile = pr.GetValue(emitProfOpt);
+    var i2cTracePath = pr.GetValue(i2cTraceOpt);
     var chip        = pr.GetValue(chipOpt)!;
 
     // ── PGO mode: --emit-profile runs the workload scenarios and writes the
@@ -103,6 +106,23 @@ root.SetAction(pr =>
                 JsonSerializer.Serialize(pgo, PgoJsonContext.Default.PgoProfile));
         }
         catch (Exception ex) { Console.Error.WriteLine($"[ERROR] Cannot write profile: {ex.Message}"); Environment.ExitCode = 1; return; }
+
+        if (i2cTracePath != null)
+        {
+            try
+            {
+                var trace = pgo.I2cTrace.Select(t => new I2cTraceRow
+                {
+                    Scenario = t.Scenario, Index = t.Index,
+                    Addr = $"0x{t.Addr:X2}", Write = t.Write,
+                    Data = Convert.ToHexString(t.Data).ToLowerInvariant(),
+                    DataBytes = t.Data.Length, EndCycle = t.EndCycle,
+                }).ToList();
+                File.WriteAllText(i2cTracePath,
+                    JsonSerializer.Serialize(trace, PgoJsonContext.Default.ListI2cTraceRow));
+            }
+            catch (Exception ex) { Console.Error.WriteLine($"[ERROR] Cannot write i2c trace: {ex.Message}"); Environment.ExitCode = 1; return; }
+        }
 
         var totalCycles = pgo.Scenarios.Aggregate(0UL, (a, s) => a + s.Cycles);
         var failed = pgo.Scenarios.Count(s => s.Crashed != null || s.ExpectMet == false);

@@ -8,11 +8,37 @@
 
 using AVR8Sharp.Core;
 using AVR8Sharp.Core.Decoders;
+using AVR8Sharp.Core.Peripherals;
 using Avr8Sharp.TestKit.Boards;
 
 namespace PyMCU.AVR.PgoSurvey;
 
 public sealed class BreakHit : Exception { }
+
+/// <summary>
+/// An I2C slave that ACKs the listed 7-bit addresses, ACKs every data byte and
+/// returns 0xFF on reads, and counts transactions (open at ConnectToSlave,
+/// close at Stop or at the next ConnectToSlave). Same contract as the
+/// profiler's i2c_slave stimulus, so a survey run can be bounded by the
+/// oracle's transaction count.
+/// </summary>
+public sealed class TwiSlave(AvrTwi twi, HashSet<byte> addresses) : ITwiEventHandler
+{
+    private bool _open;
+    public int Transactions;
+
+    public void Start(bool repeated) => twi.CompleteStart();
+    public void Stop() { Flush(); twi.CompleteStop(); }
+    public void ConnectToSlave(byte addr, bool write)
+    {
+        Flush();   // a repeated START closes the previous transaction
+        _open = true;
+        twi.CompleteConnect(addresses.Contains(addr));
+    }
+    public void WriteByte(byte data) => twi.CompleteWrite(true);
+    public void ReadByte(bool ack) => twi.CompleteRead(0xFF);
+    public void Flush() { if (_open) { Transactions++; _open = false; } }
+}
 
 public sealed class BackEdge
 {
@@ -81,6 +107,10 @@ public sealed class SurveyRun
 
     private ulong _nextUartTick, _nextPinTick;
     private bool _pinState;
+
+    /// <summary>Optional per-instruction stop predicate (e.g. "N I2C
+    /// transactions seen"). Throwing BreakHit stops exactly on the boundary.</summary>
+    public Func<bool>? StopWhen;
 
     public SurveyRun(ArduinoUnoSimulation sim, SymbolTable syms)
     {
@@ -169,6 +199,7 @@ public sealed class SurveyRun
 
         // BREAK: the opcode only raises an event; throw to stop the run here.
         if (m.Kind == InsnKind.Break) { _hitBreak = true; throw new BreakHit(); }
+        if (StopWhen != null && StopWhen()) { _hitBreak = true; throw new BreakHit(); }
 
         // ISR entry: hardware jump to an even word inside the vector table
         // that is not the sequential next pc. pc == 0 is the reset vector.
@@ -261,7 +292,7 @@ public sealed class SurveyRun
             {
                 _sim.RunCyclesProfiled(step, decoder);
             }
-            catch (BreakHit) { /* stopped exactly at BREAK */ }
+            catch (BreakHit) { /* stopped exactly at BREAK / StopWhen */ }
             catch (Exception ex)
             {
                 EndReason = "crash";

@@ -15,6 +15,85 @@ public static class PgoRunner
     private const ushort BreakOpcode = 0x9598;
     private const double Hcsr04UsPerCm = 0.017;
 
+    /// <summary>One recorded I2C transaction (closed by STOP or repeated START).</summary>
+    public sealed class I2cTraceEntry
+    {
+        public required string Scenario { get; init; }
+        public required int Index { get; init; }
+        public required byte Addr { get; init; }
+        public required bool Write { get; init; }
+        public required byte[] Data { get; init; }
+        public required ulong EndCycle { get; init; }
+    }
+
+    /// <summary>
+    /// An I2C slave on the emulated TWI bus: ACKs the declared addresses on
+    /// connect, ACKs every data byte and returns 0xFF on reads -- the same
+    /// contract the integration tests' TransactionRecorder uses, so a scenario
+    /// can be bounded by "the oracle's N transactions" and checked against a
+    /// prefix of the recorded stream. A transaction opens at ConnectToSlave and
+    /// closes at Stop or at the next ConnectToSlave (repeated START).
+    /// </summary>
+    private sealed class I2cSlaveResponder(AvrTwi twi, HashSet<byte> addresses, Cpu cpu)
+        : ITwiEventHandler
+    {
+        private readonly List<byte> _current = new();
+        private byte _addr;
+        private bool _write;
+        private bool _open;
+
+        public readonly List<I2cTraceEntry> Transactions = new();
+        public string Scenario = "";
+
+        public void Start(bool repeated) => twi.CompleteStart();
+
+        public void Stop()
+        {
+            Close();
+            twi.CompleteStop();
+        }
+
+        public void ConnectToSlave(byte addr, bool write)
+        {
+            Close();
+            _addr = addr;
+            _write = write;
+            _current.Clear();
+            _open = true;
+            twi.CompleteConnect(addresses.Contains(addr));
+        }
+
+        public void WriteByte(byte data)
+        {
+            _current.Add(data);
+            twi.CompleteWrite(true);
+        }
+
+        public void ReadByte(bool ack)
+        {
+            _current.Add(0xFF);
+            twi.CompleteRead(0xFF);
+        }
+
+        private void Close()
+        {
+            if (!_open) return;
+            Transactions.Add(new I2cTraceEntry
+            {
+                Scenario = Scenario,
+                Index = Transactions.Count,
+                Addr = _addr,
+                Write = _write,
+                Data = _current.ToArray(),
+                EndCycle = cpu.Cycles,
+            });
+            _open = false;
+        }
+
+        /// <summary>Closes a transaction still open when the run stops.</summary>
+        public void Flush() => Close();
+    }
+
     public static PgoProfile Run(string hexContent, WorkloadFile workload,
         BlockMapFile blockmap, uint freq, string chip)
     {
@@ -75,12 +154,26 @@ public static class PgoRunner
         var cpu = sim.Cpu;
         double cyclesPerUs = freq / 1_000_000.0;
 
+        // ── I2C slaves: stimuli that attach a device to the TWI bus ──────────
+        var slaveAddrs = sc.Stimuli
+            .Where(s => s.I2cSlave.HasValue)
+            .Select(s => (byte)s.I2cSlave!.Value)
+            .ToHashSet();
+        I2cSlaveResponder? i2c = null;
+        if (slaveAddrs.Count > 0)
+        {
+            sim.AddTwi(AvrTwi.TwiConfig, out var twi);
+            i2c = new I2cSlaveResponder(twi, slaveAddrs, cpu) { Scenario = sc.Name };
+            twi.EventHandler = i2c;
+        }
+
         // ── Stimulus schedule ────────────────────────────────────────────────
         var events = new List<TimedEvent>();
         var responders = new List<Hcsr04Responder>();
         var warnings = new List<string>();
         foreach (var stim in sc.Stimuli)
         {
+            if (stim.I2cSlave.HasValue) continue;   // bus device, not a timed event
             if (stim.Responder != null)
             {
                 if (stim.Responder != "hc_sr04")
@@ -128,6 +221,9 @@ public static class PgoRunner
         if (budget.HasValue && budget.Value < hardCapCycles) hardCapCycles = budget.Value;
         bool untilBreak = sc.Run.Until == "break";
         int? untilUart = sc.Run.UntilUartBytes;
+        int? untilI2c = sc.Run.UntilI2cTransactions;
+        if (untilI2c.HasValue && i2c == null)
+            warnings.Add("run.until_i2c_transactions needs an i2c_slave stimulus (ignored)");
 
         ulong instructions = 0;
         string? prevBlock = null;
@@ -259,6 +355,8 @@ public static class PgoRunner
             TickResponders(cycles);
 
             if (untilUart.HasValue && sim.Serial.ByteCount >= untilUart.Value) done = true;
+            if (untilI2c.HasValue && i2c != null && i2c.Transactions.Count >= untilI2c.Value)
+                done = true;
         }
 
         var decoder = new ProfilingDecoder(OnInstruction);
@@ -278,6 +376,7 @@ public static class PgoRunner
         {
             crash = ex.Message;
         }
+        i2c?.Flush();   // close a transaction left open when the run stopped
 
         var result = new PgoScenarioResult
         {
@@ -285,6 +384,7 @@ public static class PgoRunner
             Cycles = cpu.Cycles,
             Instructions = instructions,
             Crashed = crash,
+            I2cTransactions = i2c?.Transactions.Count,
         };
         if (sc.Expect?.UartTx is { } expect)
         {
@@ -296,6 +396,29 @@ public static class PgoRunner
                 ? null
                 : $"expected uart_tx prefix '{expect}', got '{System.Text.Encoding.UTF8.GetString(got)[..Math.Min(got.Length, 80)]}'";
         }
+        if (sc.Expect?.I2cTx is { } i2cExpect)
+        {
+            // Flattened stream: each transaction contributes addr + data bytes.
+            var flat = new List<byte>();
+            if (i2c != null)
+                foreach (var t in i2c.Transactions)
+                {
+                    flat.Add(t.Addr);
+                    flat.AddRange(t.Data);
+                }
+            bool met = flat.Count >= i2cExpect.Count
+                && i2cExpect.Select((b, i) => (b, i)).All(x => flat[x.i] == (byte)x.b);
+            result.ExpectMet = result.ExpectMet != false && met;
+            if (!met)
+            {
+                var gotHex = string.Join(' ', flat.Take(40).Select(b => b.ToString("x2")));
+                result.ExpectDetail = (result.ExpectDetail != null ? result.ExpectDetail + "; " : "")
+                    + $"expected i2c_tx prefix [{string.Join(' ', i2cExpect.Select(b => b.ToString("x2")))}], "
+                    + $"got stream starting '{gotHex}' ({i2c?.Transactions.Count ?? 0} transactions)";
+            }
+        }
+        if (i2c != null)
+            profile.I2cTrace.AddRange(i2c.Transactions);
         foreach (var w in warnings)
             Console.Error.WriteLine($"[workload:{sc.Name}] {w}");
         profile.Scenarios.Add(result);

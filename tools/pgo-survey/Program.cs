@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using AVR8Sharp.Core;
 using AVR8Sharp.Core.Decoders;
+using AVR8Sharp.Core.Peripherals;
 using Avr8Sharp.TestKit;
 using Avr8Sharp.TestKit.Boards;
 
@@ -24,6 +25,8 @@ public static class Program
         uint freq = 16_000_000;
         bool stim = false, bench = false;
         int benchCycles = 0;
+        var twiAddrs = new HashSet<byte>();
+        int untilTwi = 0;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -35,6 +38,11 @@ public static class Program
                 case "--bench":  bench = true; break;
                 case "--bench-cycles": benchCycles = int.Parse(args[++i]); break;
                 case "--out":    outPath = args[++i]; break;
+                // --twi-ack 0x3C: attach the TWI peripheral with a slave that
+                // ACKs the (repeatable) 7-bit address; --until-twi N stops the
+                // run when the Nth transaction closes.
+                case "--twi-ack": twiAddrs.Add((byte)ParseU8(args[++i])); break;
+                case "--until-twi": untilTwi = int.Parse(args[++i]); break;
                 default:
                     if (args[i].StartsWith("--"))
                     { Console.Error.WriteLine($"unknown option {args[i]}"); return 2; }
@@ -45,7 +53,13 @@ public static class Program
         if (dist == null || (cycles == 0 && !bench))
         {
             Console.Error.WriteLine(
-                "usage: pgo-survey <dist-dir> --cycles N --freq HZ [--stim] [--bench]");
+                "usage: pgo-survey <dist-dir> --cycles N --freq HZ [--stim] [--bench] "
+                + "[--twi-ack 0x3C] [--until-twi N]");
+            return 2;
+        }
+        if (untilTwi > 0 && twiAddrs.Count == 0)
+        {
+            Console.Error.WriteLine("--until-twi needs --twi-ack");
             return 2;
         }
 
@@ -72,7 +86,16 @@ public static class Program
 
         var sim = new ArduinoUnoSimulation();
         sim.WithHex(hex);
+        TwiSlave? slave = null;
+        if (twiAddrs.Count > 0)
+        {
+            sim.AddTwi(AvrTwi.TwiConfig, out var twi);
+            slave = new TwiSlave(twi, twiAddrs);
+            twi.EventHandler = slave;
+        }
         var run = new SurveyRun(sim, syms);
+        if (untilTwi > 0 && slave != null)
+            run.StopWhen = () => slave.Transactions >= untilTwi;
 
         var sw = Stopwatch.StartNew();
         run.Run(cycles, freq, stim);
@@ -93,9 +116,16 @@ public static class Program
         Console.WriteLine(rep.CsvLine());
         Console.Error.WriteLine(
             $"survey: {rep.Name} cycles={run.Cpu.Cycles} instrs={run.Instrs} " +
-            $"wall={rep.WallMs}ms end={run.EndReason} -> {outPath}");
+            $"wall={rep.WallMs}ms end={run.EndReason}"
+            + (slave != null ? $" i2cTx={slave.Transactions}" : "")
+            + $" -> {outPath}");
         return 0;
     }
+
+    private static int ParseU8(string s)
+        => s.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            ? Convert.ToInt32(s[2..], 16)
+            : int.Parse(s);
 
     /// <summary>&lt;project&gt;/dist or &lt;project&gt;/dist/debug → the project
     /// directory name.</summary>
