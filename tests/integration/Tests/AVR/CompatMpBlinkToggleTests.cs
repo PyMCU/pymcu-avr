@@ -12,8 +12,12 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// in FirmwareSizes.astro's "Why 142 bytes?" copy) -- the MicroPython layer,
 /// <c>machine.Pin(13, Pin.OUT)</c>, <c>.toggle()</c>, <c>time.sleep_ms(500)</c>. A
 /// single instance of a single Pin, so RFC 0006's fold rule (Section 5) leaves it
-/// byte-identical: this fixture pins that number (142 B) to a real corpus entry
+/// byte-identical: this fixture pins that number to a real corpus entry
 /// instead of an unmeasured reference in a design note.
+///
+/// The pin is now 138 B, not the 142 B the RFC and the website quote: the constant
+/// sleep_ms(500) busy loop counts on 3 registers instead of 4 (the count fits in
+/// 24 bits), which drops one LDI and one SBCI.
 ///
 /// Hardware: built-in LED on PB5 (Arduino Uno digital pin 13). No button, no UART.
 /// Logic: led.toggle() -> sleep_ms(500) -> repeat, so PB5 flips every 500 ms starting
@@ -29,12 +33,13 @@ public class CompatMpBlinkToggleTests
     public void BuildFirmware() => _session = new SimSession(PymcuCompiler.BuildFixture("compat-mp-blink-toggle"));
 
     [Test]
-    public void FlashSize_Is142Bytes()
+    public void FlashSize_Is138Bytes()
     {
-        // The exact number RFC 0006's gate (Section 12) pins by name: 40 bytes of user
-        // code + 102 bytes of interrupt vector table. Read the same way `pymcu build`
-        // reports it: the sum of every data record's byte count in the Intel HEX.
-        FlashBytes(PymcuCompiler.BuildFixture("compat-mp-blink-toggle")).Should().Be(142,
+        // The number RFC 0006's gate (Section 12) pins by name, after the constant-delay
+        // counter narrowed to the width its count needs: 36 bytes of user code + 102
+        // bytes of interrupt vector table. Read the same way `pymcu build` reports it:
+        // the sum of every data record's byte count in the Intel HEX.
+        FlashBytes(PymcuCompiler.BuildFixture("compat-mp-blink-toggle")).Should().Be(138,
             "this is the website's own canonical blink number (RFC 0006, Section 12); a " +
             "change here means either a real regression or the RFC's gate needs updating, " +
             "never a silent drift");
