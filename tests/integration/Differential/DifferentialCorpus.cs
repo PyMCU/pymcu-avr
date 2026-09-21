@@ -123,12 +123,20 @@ public static class DifferentialCorpus
     /// open miscompile with a test of its own asserting today's failure, and the day that test
     /// goes red the entry comes out with it.
     ///
-    /// Empty is the expected state. The one entry it has held, fixtures/imported-module-pin
-    /// for #117, came out when that turned out to be a fixture asking for a name the stdlib
-    /// does not export rather than a defect.
+    /// The one entry is different in kind but identical in mechanics: fixtures/
+    /// compat-cp-framebuf-text pins the INTENDED refusal at the edge of the language --
+    /// adafruit_framebuf.FrameBuffer.text() must compile through split()/enumerate() and
+    /// stop at open('font5x8.bin', 'rb') with the RFC 0008 embedded-file diagnostic, which
+    /// CompatCpFramebufTextTests asserts under both front ends. A program that must not
+    /// build has no pair of builds to compare, so it sits out every axis the same way.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> ExpectedBuildFailures =
-        new Dictionary<string, string>();
+        new Dictionary<string, string>
+        {
+            ["fixtures/compat-cp-framebuf-text"] =
+                "FrameBuffer.text() stops at open('font5x8.bin', 'rb'): embedded files are " +
+                "RFC 0008 work; CompatCpFramebufTextTests pins the diagnostic",
+        };
 
     /// <summary>
     /// Every atmega328p program in the repository, minus the timing-dependent ones and the ones
