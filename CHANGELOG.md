@@ -22,6 +22,12 @@ field miscomputed with constant constructor args).
 - **avr**: FlashSize joins the catalog -- the backend's last name list dies
 - **avr**: float modulo, with Python's floored semantics
 - **avr**: the flash and SRAM sizes come from the .mir, and the catalog loses them
+- **avr**: `--emit-blockmap` writes the block/branch map the profiler's PGO mode
+  reads; with no blockmap requested the emitted asm is byte-identical to before
+  (experimental PGO, RFC 0010 in the PyMCU repo)
+- **profiler**: a PGO mode runs a declared `workload.yaml` on the emulator and
+  writes the per-block `profile.json` that `pymcuc --profile` consumes
+- **tools**: pgo-survey builds the corpus both ways and diffs the images
 
 ### Fixed
 
@@ -268,6 +274,9 @@ field miscomputed with constant constructor args).
 - **avr**: a factory's unannotated single field threads its real value ([#429](https://github.com/PyMCU/pymcu-avr/issues/429))
 - **avr**: a nested @inline closure over self actually mutates it ([#427](https://github.com/PyMCU/pymcu-avr/issues/427))
 - **avr**: super() plus a subclass field with constant ctor args ([#430](https://github.com/PyMCU/pymcu-avr/issues/430))
+- **avr**: the PGO differential axis compiles every fixture with and without a
+  profile and compares observable behaviour; `pgo-hot-veto` is the guard that
+  proves the profile reached the optimizer
 
 ### Build
 
