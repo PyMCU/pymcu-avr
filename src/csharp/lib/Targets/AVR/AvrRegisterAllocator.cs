@@ -20,6 +20,31 @@ namespace PyMCU.Backend.Targets.AVR;
 
 public static class AvrRegisterAllocator
 {
+    // EXPERIMENT ONLY (pgo-ssd1306 spike): PYMCU_AVR_VAR_WEIGHTS=<path to a JSON
+    // {name: weight} object> replaces the static use count with the supplied
+    // weight for every name it lists; names absent from the file keep their
+    // static count. This exists to measure what a profile-driven R2-R15 home
+    // order would buy before deciding whether real profile plumbing is worth
+    // it. Not part of the supported interface; drop this commit freely.
+    private static Dictionary<string, long>? LoadVarWeights()
+    {
+        var path = Environment.GetEnvironmentVariable("PYMCU_AVR_VAR_WEIGHTS");
+        if (string.IsNullOrEmpty(path)) return null;
+        try
+        {
+            var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            var w = new Dictionary<string, long>();
+            foreach (var p in json.RootElement.EnumerateObject())
+                w[p.Name] = p.Value.GetInt64();
+            return w;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[PYMCU_AVR_VAR_WEIGHTS] cannot read {path}: {ex.Message} -- ignored");
+            return null;
+        }
+    }
+
     private static int SizeOfType(DataType t) => t switch
     {
         DataType.UINT32 or DataType.INT32 or DataType.FLOAT => 4,
@@ -164,13 +189,18 @@ public static class AvrRegisterAllocator
         // (the callee's own named vars get different registers; leaf scratch is R16-R27).
         // That invariant — not a DotCount heuristic — is what makes cross-call safety hold,
         // so inline-expanded locals (dotted names) are eligible too.
+        // EXPERIMENT: dynamic weights replace the static use counts (see
+        // LoadVarWeights). Applied after unsafe-name exclusion so a weight can
+        // never register-home a name that must stay in SRAM.
+        var weights = LoadVarWeights();
         var sorted = useCount
             .Where(kv => varTypes.TryGetValue(kv.Key, out var dt)
                          && SizeOfType(dt) <= 2
                          && dt != DataType.GC_REF && dt != DataType.FUNCREF
                          && !unsafeNames.Contains(kv.Key))
-            .OrderByDescending(kv => kv.Value)
-            .ThenBy(kv => kv.Key, StringComparer.Ordinal).ToList();
+            .Select(kv => (name: kv.Key, count: weights != null && weights.TryGetValue(kv.Key, out var w) ? w : kv.Value))
+            .OrderByDescending(kv => kv.count)
+            .ThenBy(kv => kv.name, StringComparer.Ordinal).ToList();
 
         var result = new Dictionary<string, string>();
         // R2-R15 are the callee-saved home pool. R2/R3 are otherwise unused by the codegen
