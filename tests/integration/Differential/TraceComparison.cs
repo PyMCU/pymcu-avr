@@ -13,6 +13,7 @@ public readonly record struct TraceLabels(string A, string B)
 {
     public static readonly TraceLabels Optimizer = new("optimized", "unoptimized");
     public static readonly TraceLabels Peephole  = new("peephole", "no-peephole");
+    public static readonly TraceLabels Pgo       = new("plain", "profiled");
 
     /// <summary>
     /// Both labels padded to a common width, so the report lines line up — including with

@@ -205,6 +205,104 @@ public static class PymcuCompiler
     private static readonly Variant NoPeephole = new("nopeep",
         new Dictionary<string, string> { ["PYMCU_NO_PEEPHOLE"] = "1" });
 
+    /// <summary>The PGO profiler binary the spike publishes under build/bin-profiler/.</summary>
+    public static string ProfilerBinary => Path.Combine(RepoRoot, "build", "bin-profiler",
+        "pymcuc-avr-profiler");
+
+    /// <summary>
+    /// Compiles the fixture with a PGO profile: first <c>pymcu profile --pgo</c> builds the
+    /// program with a block map and runs the workload scenarios on the emulator, then
+    /// <c>pymcu build --profile dist/profile.json</c> rebuilds the firmware through the
+    /// profile-aware optimizer. See <see cref="BuildFixtureUnoptimized"/> for why this is a
+    /// scratch copy.
+    /// </summary>
+    public static string BuildFixtureProfiled(string name)
+        => Cache.GetOrAdd("fx-pgo:" + name,
+            _ => new Lazy<string>(() => CompileProfiled("fx", name))).Value;
+
+    /// <summary>Same profiled build for a showcase example.</summary>
+    public static string BuildProfiled(string name)
+        => Cache.GetOrAdd("ex-pgo:" + name,
+            _ => new Lazy<string>(() => CompileProfiled("ex", name))).Value;
+
+    /// <summary>
+    /// Runs one pymcu CLI command in <paramref name="workDir"/>, with the venv on PATH and
+    /// any extra environment applied. Returns (exit code, stdout, stderr).
+    /// </summary>
+    private static (int Exit, string Stdout, string Stderr) RunPymcu(
+        string workDir, string args, IReadOnlyDictionary<string, string>? extraEnv = null)
+    {
+        var venvBin = Path.Combine(RepoRoot, ".venv", "bin");
+        var psi = new ProcessStartInfo
+        {
+            FileName = Path.Combine(venvBin, "python3"),
+            Arguments = $"{PymcuExe} {args}",
+            WorkingDirectory = workDir,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        psi.Environment["PATH"] = venvBin + Path.PathSeparator + psi.Environment["PATH"];
+        if (extraEnv != null)
+            foreach (var (key, value) in extraEnv)
+                psi.Environment[key] = value;
+
+        using var proc = Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start pymcu process.");
+        var stdout = proc.StandardOutput.ReadToEnd();
+        var stderr = proc.StandardError.ReadToEnd();
+        if (!proc.WaitForExit(180_000))
+        {
+            proc.Kill(entireProcessTree: true);
+            throw new TimeoutException($"pymcu {args} timed out in '{workDir}'.\n{stdout}\n{stderr}");
+        }
+        return (proc.ExitCode, stdout, stderr);
+    }
+
+    private static string CompileProfiled(string kind, string name)
+    {
+        var projectDir = kind == "ex"
+            ? Path.Combine(RepoRoot, "examples", name)
+            : Path.Combine(RepoRoot, "tests", "integration", "fixtures", name);
+        if (!Directory.Exists(projectDir))
+            throw new DirectoryNotFoundException($"Project directory not found: {projectDir}");
+
+        var scratch = Path.Combine(ScratchRoot, "pymcu-pgo", kind + "-" + name);
+        if (Directory.Exists(scratch)) Directory.Delete(scratch, recursive: true);
+        CopyProject(new DirectoryInfo(projectDir), new DirectoryInfo(scratch));
+
+        BuildGate.Wait();
+        try
+        {
+            var profilerEnv = new Dictionary<string, string>
+            { ["PYMCU_PROFILER_BINARY"] = ProfilerBinary };
+
+            // Step 1: baseline build + blockmap + emulator run -> dist/profile.json.
+            var (exit, stdout, stderr) = RunPymcu(scratch, "profile --pgo", profilerEnv);
+            if (exit != 0)
+                throw new InvalidOperationException(
+                    $"pymcu profile --pgo failed for '{name}' (exit {exit}):\n{stdout}\n{stderr}");
+
+            var profilePath = Path.Combine(scratch, "dist", "profile.json");
+            if (!File.Exists(profilePath))
+                throw new FileNotFoundException(
+                    $"profile.json not produced for '{name}':\n{stdout}");
+
+            // Step 2: rebuild the same sources with the profile in the compiler.
+            (exit, stdout, stderr) = RunPymcu(scratch, "build", new Dictionary<string, string>
+            { ["PYMCU_PROFILE"] = profilePath });
+            if (exit != 0)
+                throw new InvalidOperationException(
+                    $"profiled pymcu build failed for '{name}' (exit {exit}):\n{stdout}\n{stderr}");
+
+            var hexFile = Path.Combine(scratch, "dist", "firmware.hex");
+            if (!File.Exists(hexFile))
+                throw new FileNotFoundException($"Firmware HEX not found after profiled build: {hexFile}");
+            return File.ReadAllText(hexFile);
+        }
+        finally { BuildGate.Release(); }
+    }
+
     private static string BuildVariant(Variant variant, string kind, string name)
         => Cache.GetOrAdd($"{kind}-{variant.Tag}:{name}",
             _ => new Lazy<string>(() => CompileVariant(variant, kind, name))).Value;
