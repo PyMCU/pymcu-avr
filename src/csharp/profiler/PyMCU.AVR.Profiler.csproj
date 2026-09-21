@@ -10,8 +10,24 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avr8Sharp.TestKit" Version="1.1.0-beta1" />
     <PackageReference Include="System.CommandLine" Version="2.0.6" />
+  </ItemGroup>
+
+  <!-- The published Avr8Sharp.TestKit NuGet (1.1.0-beta1) predates
+       ProfilingDecoder/RunCyclesProfiled, which the PGO mode needs. When the
+       sibling avr8sharp checkout has Release binaries, reference them directly;
+       otherwise fall back to the package (Speedscope mode still builds). -->
+  <PropertyGroup>
+    <Avr8SharpBinDir Condition="'$(Avr8SharpBinDir)' == ''">$(MSBuildProjectDirectory)/../../../../avr8sharp/src/Avr8Sharp.TestKit.Core/bin/Release/net10.0</Avr8SharpBinDir>
+    <Avr8SharpLocal Condition="Exists('$(Avr8SharpBinDir)/Avr8Sharp.dll') and Exists('$(Avr8SharpBinDir)/Avr8Sharp.TestKit.Core.dll')">true</Avr8SharpLocal>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(Avr8SharpLocal)' == 'true'">
+    <Reference Include="Avr8Sharp"><HintPath>$(Avr8SharpBinDir)/Avr8Sharp.dll</HintPath></Reference>
+    <Reference Include="Avr8Sharp.TestKit.Core"><HintPath>$(Avr8SharpBinDir)/Avr8Sharp.TestKit.Core.dll</HintPath></Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(Avr8SharpLocal)' != 'true'">
+    <PackageReference Include="Avr8Sharp.TestKit" Version="1.1.0-beta1" />
   </ItemGroup>
 
   <ItemGroup>
