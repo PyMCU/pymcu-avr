@@ -1,0 +1,21 @@
+# PGO workload for the unmodified Adafruit SSD1306 (128x64, I2C @ 0x3C).
+#
+# The display is a slave on the TWI bus: it ACKs 0x3C and consumes whatever the
+# driver writes. The run stops when the oracle's 50 transactions have closed:
+#   1 probe (empty write) + 1 power-on + 27 init commands + 3 x (6 address-
+#   window commands + one 1025-byte frame write). max_ms is only a safety cap;
+#   the transaction count is the real bound.
+#
+# expect pins a prefix of the flattened stream (each transaction contributes
+# its address byte then its data bytes): probe `3c`, power-on `3c 80 af`, then
+# the init writes through `80 3f` -- multiplex 0x3F pins the 128x64 geometry
+# (the 128x32 program sends 0x1F there).
+scenarios:
+  - name: ssd1306-128x64
+    stimuli:
+      - {i2c_slave: 0x3C}
+    run:
+      until_i2c_transactions: 50
+      max_ms: 2000
+    expect:
+      i2c_tx: "3c 3c 80 af 3c 80 ae 3c 80 20 3c 80 00 3c 80 40 3c 80 a1 3c 80 a8 3c 80 3f"
