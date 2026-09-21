@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// pymcuc-avr-pgo-survey — profile-guided-optimisation survey harness.
+// pymcuc-avr-pgo-survey, profile-guided-optimisation survey harness.
 //
 //   pgo-survey <dist-dir> --cycles N --freq HZ [--stim] [--bench] [--out FILE]
 //

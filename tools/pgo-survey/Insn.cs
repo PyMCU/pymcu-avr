@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// pymcuc-avr-pgo-survey — static instruction classification for the AVR corpus.
+// pymcuc-avr-pgo-survey, static instruction classification for the AVR corpus.
 //
 // Decodes each flash word once into a compact per-PC metadata record, so the
 // per-instruction profiling callback stays O(1). Only what the survey needs is
@@ -12,30 +12,30 @@ public enum InsnKind : byte
 {
     Other,
     Nop,
-    BrCond,     // BRBS/BRBC family (BREQ, BRNE, BRSH, ...) — relative, conditional
-    SkipConst,  // SBRC/SBRS — conditional skip over next instruction
-    SkipIo,     // SBIC/SBIS — conditional skip on an I/O bit
-    Cpse,       // CPSE — conditional skip on register compare
+    BrCond,     // BRBS/BRBC family (BREQ, BRNE, BRSH, ...), relative, conditional
+    SkipConst,  // SBRC/SBRS, conditional skip over next instruction
+    SkipIo,     // SBIC/SBIS, conditional skip on an I/O bit
+    Cpse,       // CPSE, conditional skip on register compare
     Rjmp,
     Rcall,
     Call,
     Jmp,
     Ret,
     Reti,
-    Lds,        // LDS Rd, k  (2 words) — SRAM/IO read at absolute addr
-    Sts,        // STS k, Rr  (2 words) — SRAM/IO write at absolute addr
+    Lds,        // LDS Rd, k  (2 words), SRAM/IO read at absolute addr
+    Sts,        // STS k, Rr  (2 words), SRAM/IO write at absolute addr
     LdX, LdY, LdZ,   // includes post-inc / pre-dec and LDD q-forms
     StX, StY, StZ,
     Push,
     Pop,
-    In,         // IN Rd, A   — I/O read
-    Out,        // OUT A, Rr  — I/O write
-    SbiCbi,     // SBI/CBI    — I/O bit write
+    In,         // IN Rd, A   I/O read
+    Out,        // OUT A, Rr , I/O write
+    SbiCbi,     // SBI/CBI   I/O bit write
     Mov,
     Movw,
-    Lpm,        // LPM/ELPM   — program-memory read (flash traffic, not SRAM)
+    Lpm,        // LPM/ELPM   program-memory read (flash traffic, not SRAM)
     Break,
-    HaltJump,   // rjmp .  / jmp .  — self-targeting spin (halt marker)
+    HaltJump,   // rjmp .  / jmp . , self-targeting spin (halt marker)
 }
 
 public enum MemBase : byte { None, Abs, X, Y, Z, StackPush, StackPop }
@@ -57,7 +57,7 @@ public struct Insn
         Kind is InsnKind.In or InsnKind.Out or InsnKind.SkipIo or InsnKind.SbiCbi;
 
     /// <summary>Opcode-level check (no decode needed): is this word an
-    /// arithmetic op on a register that could serve as a loop counter —
+    /// arithmetic op on a register that could serve as a loop counter , 
     /// DEC/INC/SUB/SBC/SUBI/SBCI/ADIW/SBIW/CPI?</summary>
     public static bool IsCounterOp(ushort op) =>
         (op & 0xFE0F) == 0x940A          // DEC
@@ -95,7 +95,7 @@ public struct Insn
             i.Kind = InsnKind.Rjmp;
             var k = SignExtend(op & 0x0FFF, 12);
             i.TakenTarget = (int)(pc + 1 + k);
-            if (k == -1) i.Kind = InsnKind.HaltJump;    // rjmp .  — terminal spin
+            if (k == -1) i.Kind = InsnKind.HaltJump;    // rjmp . , terminal spin
             return i;
         }
         if ((op & 0xF000) == 0xD000)                    // RCALL k
@@ -174,14 +174,14 @@ public struct Insn
             case 0x9202: i.Kind = InsnKind.StZ; i.Base = MemBase.Z; i.IsMemWrite = true; return i;
             case 0x9004: case 0x9005: i.Kind = InsnKind.Lpm; return i;   // LPM Rd,Z(+)
             case 0x9204: case 0x9205: case 0x9206: case 0x9207:
-                // XCH/LAS/LAC/LAT — not on the classic core; treat as Z-store if seen.
+                // XCH/LAS/LAC/LAT, not on the classic core; treat as Z-store if seen.
                 i.Kind = InsnKind.StZ; i.Base = MemBase.Z; i.IsMemWrite = true; return i;
         }
         if (op == 0x95C8 || op == 0x95D8) { i.Kind = InsnKind.Lpm; return i; } // LPM / ELPM
 
         // ── I/O space ───────────────────────────────────────────────────
         // IN/OUT carry a 6-bit I/O address (A5 sits at bit10), so the mask is
-        // 0xF800 (bits 15..11), not 0xFC00 — the whole 0xB000 block is theirs.
+        // 0xF800 (bits 15..11), not 0xFC00, the whole 0xB000 block is theirs.
         if ((op & 0xF800) == 0xB000)                    // IN Rd, A
         {
             i.Kind = InsnKind.In; i.IsMemRead = true;
@@ -201,7 +201,7 @@ public struct Insn
             return i;
         }
 
-        // LDD/STD (Y/Z + q): 10q0 qqsd dddd yqqq — s=1 store, y=1 → Y else Z.
+        // LDD/STD (Y/Z + q): 10q0 qqsd dddd yqqq, s=1 store, y=1 → Y else Z.
         // Must sit AFTER the I/O tests: under mask 0xD208 an `in` with bit3 of
         // the port number set (e.g. IN Rd, PIND = 0xB009) aliases to LDD Y+q.
         if ((op & 0xD208) == 0x8000 || (op & 0xD208) == 0x8008 ||

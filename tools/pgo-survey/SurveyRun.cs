@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// pymcuc-avr-pgo-survey — per-instruction collector run under ProfilingDecoder.
+// pymcuc-avr-pgo-survey, per-instruction collector run under ProfilingDecoder.
 //
 // The simulation runs in fixed-cycle quanta so the run can stop exactly on
 // BREAK, stimulus bytes/pin edges can be injected between quanta, and the
@@ -102,7 +102,7 @@ public sealed class SurveyRun
         // Vector table: the ATmega328P always gets 26 relaxed rjmp+pad slots,
         // i.e. words 0..51. __bad_interrupt is a loose symbol wherever the
         // linker placed it (it may sit inside the last slot's pad word, or far
-        // below it with real code in between — both occur in the corpus).
+        // below it with real code in between, both occur in the corpus).
         _vecEndWord = 52;
         _mainWord = _syms.AddrOf("main");
         _badIsrWord = _syms.AddrOf("__bad_interrupt");
@@ -149,7 +149,7 @@ public sealed class SurveyRun
             var pm = _meta[_pendBranch];
             if (pc == pm.TakenTarget) BranchTaken[_pendBranch]++;
             else if (pc == pm.FallTarget) BranchNotTaken[_pendBranch]++;
-            // else an interrupt vectored in between: ambiguous — count neither.
+            // else an interrupt vectored in between: ambiguous, count neither.
             _pendBranch = -1;
         }
         if (_pendEdge != null)
@@ -157,7 +157,7 @@ public sealed class SurveyRun
             var ed = _pendEdge;
             _pendEdge = null;
             if (pc == ed.Target) { ed.Taken++; ed.CurTrip++; }
-            else if (pc < _vecEndWord) { /* IRQ stole the outcome — leave open */ }
+            else if (pc < _vecEndWord) { /* IRQ stole the outcome, leave open */ }
             else
             {
                 // Fell through the loop exit or escaped mid-body.
@@ -274,7 +274,7 @@ public sealed class SurveyRun
             if (stimulus) ApplyStimulus(freqHz);
 
             // Early exit when parked in a named halt spin for two consecutive
-            // quanta — the program is finished, not stalled.
+            // quanta, the program is finished, not stalled.
             var lastQ = Quanta[^1];
             if (lastQ.PcCycles.Count <= 4 && AllPcInHalt(lastQ))
             {

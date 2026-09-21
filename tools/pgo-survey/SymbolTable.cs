@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// pymcuc-avr-pgo-survey — symbol table + static region classification.
+// pymcuc-avr-pgo-survey, symbol table + static region classification.
 //
 // Input: firmware.symbols.json produced from `avr-nm --format=bsd` on
-// dist/debug/firmware.elf — same shape profile.py writes: a list of
+// dist/debug/firmware.elf, same shape profile.py writes: a list of
 // {"Name": ..., "WordAddr": ...} for every .text symbol (t/T), plus an optional
 // "dataSymbols" list for SRAM (a/b/d) names used by the variable analysis.
 
@@ -17,7 +17,7 @@ public sealed record SymbolRec(string Name, int WordAddr);
 
 public sealed class SymbolTable
 {
-    // All text symbols sorted by word address — includes inner-function labels
+    // All text symbols sorted by word address, includes inner-function labels
     // (L_*, _dly_*, *.L*) so that delay-loop landmarks resolve precisely.
     public readonly (int Addr, string Name)[] All;
 

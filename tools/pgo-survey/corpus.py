@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# corpus.py — build + survey the whole ATmega328P corpus for the PGO study.
+# corpus.py, build + survey the whole ATmega328P corpus for the PGO study.
 #
 # Enumerates examples/* and tests/integration/fixtures/*, builds each project
 # with the worktree's own pymcuc-avr (PYMCU_BACKEND_BINARY), extracts ELF
-# symbols with avr-nm (the same override profile.py performs — backend
+# symbols with avr-nm (the same override profile.py performs, backend
 # --emit-symbols counts IR instructions, not assembled words), runs the
 # pgo-survey collector for a fixed simulated window, and aggregates CSV.
 #

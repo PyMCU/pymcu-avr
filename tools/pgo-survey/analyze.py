@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# analyze.py — aggregate survey.json across the corpus into the PGO
+# analyze.py, aggregate survey.json across the corpus into the PGO
 # opportunity-sizing numbers (A..E) and the corpus table.
 
 import json

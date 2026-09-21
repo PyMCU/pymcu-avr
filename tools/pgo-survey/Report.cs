@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// pymcuc-avr-pgo-survey — post-run analysis and report generation.
+// pymcuc-avr-pgo-survey, post-run analysis and report generation.
 //
 // Turns the per-PC counters from SurveyRun into the survey.json document:
 // bucket shares, hottest symbols, branch/loop statistics, hot-loop memory
@@ -300,7 +300,7 @@ public sealed class Report
             else user += c;
         }
         // ISR cycles ride on their own tracking (in-isr flag), not regions:
-        // subtract nothing — report both region-based and flag-based shares.
+        // subtract nothing, report both region-based and flag-based shares.
         long bucketSum = delay + uart + user;
         long condTotal = 0, condExec = 0, alwaysTaken = 0, neverTaken = 0,
              mixed = 0, neverExec = 0, takenExecs = 0, notTakenExecs = 0;
@@ -386,7 +386,7 @@ public sealed class Report
             int head = w, bytes;
             // A 2-word instruction head whose operand word never executed:
             // count the pair together (4 B) and skip the operand word. If the
-            // "operand" DID execute, the head word was really data — count
+            // "operand" DID execute, the head word was really data, count
             // 2 B only and let the next word stand on its own.
             if (_meta[w].Words == 2 && w + 1 < _flashWords && _r.Exec[w + 1] == 0)
             { bytes = 4; w++; }
@@ -407,8 +407,8 @@ public sealed class Report
         // stall
         var stall = AnalyzeStall();
 
-        // loops with small constant trip counts that run a counter op —
-        // reroll/unroll candidates — and near-never-run unrolled sequences
+        // loops with small constant trip counts that run a counter op , 
+        // reroll/unroll candidates, and near-never-run unrolled sequences
         var smallConst = edgeStats.Where(e =>
             e.Trips >= 1 && e.TripMax <= 8 && e.TripDistinct == 1
             && e.HasCounter).ToList();
