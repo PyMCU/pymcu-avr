@@ -11,10 +11,11 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// (f-string, a call inside one) compiles as a deferred print. <c>print(e)</c>
 /// produces CPython's text.
 ///
-/// WHAT DISCRIMINATES: <c>bad address 200</c> and
-/// <c>Expected tuple of length 3, got 0</c>. A compile that still refused a call
-/// in a raise would not build. A compile that discarded the pieces would print
-/// empty lines.
+/// WHAT DISCRIMINATES: <c>bad address 200</c>,
+/// <c>Expected tuple of length 3, got 0</c>, and <c>code 7 temp 36.5</c> -- the
+/// last carries a float piece that arrives as a parameter behind a narrower one.
+/// A compile that still refused a call in a raise would not build. A compile
+/// that discarded the pieces would print empty lines.
 ///
 /// The expected lines are CPython's, running the same program.
 /// </summary>
@@ -54,10 +55,18 @@ public class RaiseMessageDeferredPrintTests
     }
 
     [Test]
+    public void AFloatPieceBehindAnIntParameterPrintsItsValue()
+    {
+        FullRun(_session).Serial.Should().ContainLine("code 7 temp 36.5",
+            because: "the float piece arrives as a parameter behind a narrower one; "
+                + "mis-delivered, it stores and prints 0.0");
+    }
+
+    [Test]
     public void TheSameThroughThePythonFrontEnd()
     {
         FullRun(_pySession).Serial.Text.Should().Contain(
-            "bad address 200\nExpected tuple of length 3, got 0\nEND\n",
+            "bad address 200\nExpected tuple of length 3, got 0\ncode 7 temp 36.5\nEND\n",
             because: "both front ends must lower the same deferred-print sequence");
     }
 }
