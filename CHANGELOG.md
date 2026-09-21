@@ -25,6 +25,7 @@ field miscomputed with constant constructor args).
 
 ### Fixed
 
+- **avr**: a program whose module level can end parks the CPU on `__pymcu_halt` (`cli` + spin, the avr-libc `_exit` idiom) instead of RET-ing into an empty stack
 - **avr**: the chip says its own geometry -- stop deducing it from the name
 - **avr**: float() of a 32-bit integer reads all four bytes
 - **avr**: a float cast to uint32 uses the unsigned helper
