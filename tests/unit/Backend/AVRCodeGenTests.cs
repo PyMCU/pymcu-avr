@@ -895,4 +895,85 @@ public class AVRCodeGenTests
         Assert.Contains("STD\t", asm);
         Assert.Contains(", R22", asm);
     }
+
+    // ─── Constant delay loop width ─────────────────────────────────────────
+
+    private static string CompileDelayMs(int ms)
+    {
+        var cfg = new DeviceConfig { Chip = "atmega328p", Arch = "avr", Frequency = 16_000_000 };
+        var prog = new ProgramIR();
+        prog.Functions.Add(new Function
+        {
+            Name = "main",
+            Body =
+            [
+                new Call("_delay_ms_avr", [new Constant(ms)], new NoneVal()),
+                new Return(new NoneVal()),
+            ],
+        });
+        return Compile(prog, cfg);
+    }
+
+    [Fact]
+    public void ConstDelay_CounterIsAsNarrowAsTheCountAllows()
+    {
+        // delay_ms(1) at 16 MHz: 16 000 cycles / 4 cycles-per-iteration on a
+        // 2-register counter = 4 000 iterations; the count fits in 16 bits, so
+        // the loop must not touch R20/R21.
+        var asm = CompileDelayMs(1);
+        Assert.Contains("LDI\tR18, 160", asm);   // 4 000 = 0x0FA0
+        Assert.Contains("LDI\tR19, 15", asm);
+        Assert.Contains("SBCI\tR19, 0", asm);
+        Assert.DoesNotContain("R20", asm);
+        Assert.DoesNotContain("R21", asm);
+    }
+
+    [Fact]
+    public void ConstDelay_CountPast16Bits_UsesThreeRegisters()
+    {
+        // delay_ms(500): 8 000 000 cycles / 5 cycles-per-iteration on a
+        // 3-register counter = 1 600 000 iterations = 0x186A00.
+        var asm = CompileDelayMs(500);
+        Assert.Contains("LDI\tR18, 0", asm);
+        Assert.Contains("LDI\tR19, 106", asm);
+        Assert.Contains("LDI\tR20, 24", asm);
+        Assert.Contains("SBCI\tR20, 0", asm);
+        Assert.DoesNotContain("R21", asm);
+    }
+
+    [Fact]
+    public void ConstDelay_CountPast24Bits_KeepsFourRegisters()
+    {
+        // delay_ms(6000): 96 000 000 cycles needs 16 000 000 iterations of the
+        // 6-cycle 4-register loop -- past the 24-bit reach of the 5-cycle one.
+        var asm = CompileDelayMs(6000);
+        Assert.Contains("LDI\tR21, 0", asm);
+        Assert.Contains("SBCI\tR21, 0", asm);
+    }
+
+    [Fact]
+    public void ConstDelay_SharedSubroutine_UsesTheSameNarrowCounter()
+    {
+        // Three delay_ms(500) sites outline into one __dly_c1600000_3 body:
+        // the shared counter is as narrow as the inline one would be.
+        var cfg = new DeviceConfig { Chip = "atmega328p", Arch = "avr", Frequency = 16_000_000 };
+        var prog = new ProgramIR();
+        prog.Functions.Add(new Function
+        {
+            Name = "main",
+            Body =
+            [
+                new Call("_delay_ms_avr", [new Constant(500)], new NoneVal()),
+                new Call("_delay_ms_avr", [new Constant(500)], new NoneVal()),
+                new Call("_delay_ms_avr", [new Constant(500)], new NoneVal()),
+                new Return(new NoneVal()),
+            ],
+        });
+
+        var asm = Compile(prog, cfg);
+
+        Assert.Contains("__dly_c1600000_3:", asm);
+        Assert.Equal(3, asm.Split('\n').Count(l => l.TrimStart().StartsWith("CALL\t__dly_c1600000_3")));
+        Assert.DoesNotContain("R21", asm);
+    }
 }
