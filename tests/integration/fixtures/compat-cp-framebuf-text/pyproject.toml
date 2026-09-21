@@ -14,3 +14,4 @@ frequency = 16000000
 sources   = "src"
 entry     = "main.py"
 stdlib    = ["circuitpython"]
+files     = ["font5x8.bin"]

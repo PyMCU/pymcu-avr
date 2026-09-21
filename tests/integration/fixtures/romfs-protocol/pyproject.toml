@@ -1,0 +1,13 @@
+[project]
+name = "romfs-protocol"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["pymcu-stdlib>=0.1.2a5", "pymcu>=0.1.0a27"]
+
+[tool.pymcu]
+board     = "arduino_uno"
+frequency = 16000000
+sources   = "src"
+entry     = "main.py"
+# No `files = [...]` line on purpose: the literal in open("data.txt") is what the
+# driver's auto-embed rule picks up (RFC 0008).
