@@ -94,6 +94,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // to the call site, not out of the program.
     private bool _inOutlinedBody;
 
+    // ── PGO block map (--emit-blockmap) ─────────────────────────────────────
+    // IR block boundaries and conditional-jump markers recorded in emission
+    // order, keyed by MIR label. _pgob_N branch markers are real asm labels so
+    // they reach the ELF symtab for post-link address resolution; the peephole
+    // only removes unreferenced L./L_-prefixed labels, never these.
+    private readonly List<(string Function, string Label, bool Entry, int Seq)> _pgoBlocks = new();
+    private readonly List<(int Id, string Function, string Sym, string Taken, int Seq)> _pgoBranches = new();
+    private int _pgoSeq;
+    private int _pgoBranchCounter;
+    // The emitted container a recorded boundary belongs to: the function name,
+    // or the _pymcu_outline_N subroutine label while inside an outlined body.
+    private string _pgoContainer = "";
+
     // Divmod fusion (per function): __div16 already produces both quotient (R24:R25)
     // and remainder (R26:R27). When the same dividend is divided AND mod'd by the same
     // divisor in one basic block (the decimal-print digit loop: r = v % 10; v = v // 10),
@@ -1407,6 +1420,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
 
         var optimized = AvrPeephole.Optimize(_assembly, noForward, RamStart(), _outlinedSubroutines);
+        if (EmitBlockMapPath != null)
+            // _pgob_* branch markers went in as comments so the peephole could
+            // work through them; now that its position is final, each marker
+            // becomes a real label so the assembler puts it in the symtab and
+            // the driver can resolve its address from the ELF.
+            foreach (var line in optimized)
+                if (line.Type == AvrAsmLine.LineType.Comment && line.Content.StartsWith("_pgob_"))
+                {
+                    line.Type = AvrAsmLine.LineType.Label;
+                    line.LabelText = line.Content;
+                }
         foreach (var line in optimized)
             output.WriteLine(line.ToString());
 
@@ -1430,6 +1454,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         WriteSymbolsIfRequested(optimized, program);
         WriteLineMapIfRequested(optimized);
         WriteVarMapIfRequested(program);
+        WriteBlockMapIfRequested();
     }
 
     public override void EmitContextSave()
@@ -1628,6 +1653,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private void CompileFunction(Function func)
     {
         _currentFunction = func;
+        _pgoContainer = func.Name;
         _tmpRegLayout = AvrLinearScan.Allocate(func);
         foreach (var (name, _) in _tmpRegLayout)
             _allTmpRegNames.Add(name);
@@ -1637,6 +1663,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         int funcAsmStart = _assembly.Count;
         EmitLabel(func.Name);
+        RecordBlockMapBoundary(func.Name, func.Name, entry: true);
 
         if (func.IsInterrupt && !func.IsNaked) EmitContextSave();
 
@@ -1915,6 +1942,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var (label, start, end) in pendingSubroutines)
         {
             EmitLabel(label);
+            _pgoContainer = label;
+            RecordBlockMapBoundary(label, label, entry: true);
             _inOutlinedBody = true;
             var subSkip = new Stack<bool>();
             bool SubSkipping() => subSkip.Count > 0 && subSkip.Peek();
@@ -1949,9 +1978,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             case Return r: CompileReturn(r); break;
             case Jump j: Emit("RJMP", j.Target); break;
-            case JumpIfZero jz: CompileJumpIfZero(jz); break;
-            case JumpIfNotZero jnz: CompileJumpIfNotZero(jnz); break;
-            case Label l: EmitLabel(l.Name); break;
+            case JumpIfZero jz: EmitPgoBranchMarker(jz.Target); CompileJumpIfZero(jz); break;
+            case JumpIfNotZero jnz: EmitPgoBranchMarker(jnz.Target); CompileJumpIfNotZero(jnz); break;
+            case Label l:
+                EmitLabel(l.Name);
+                RecordBlockMapBoundary(_pgoContainer, l.Name, entry: false);
+                break;
             case DebugLine d:
                 if (cfg.EmitDebugComments)
                     EmitComment(string.IsNullOrEmpty(d.SourceFile)
@@ -1968,12 +2000,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     _lastSourceLine = d.Line;
                 }
                 break;
-            case JumpIfEqual je: CompileCompareJump(je.Src1, je.Src2, "BREQ", je.Target); break;
-            case JumpIfNotEqual jne: CompileCompareJump(jne.Src1, jne.Src2, "BRNE", jne.Target); break;
-            case JumpIfLessThan jlt: CompileCompareJump(jlt.Src1, jlt.Src2, IsSignedComparison(jlt.Src1, jlt.Src2) ? "BRLT" : "BRLO", jlt.Target); break;
-            case JumpIfLessOrEqual jle: CompileLessOrEqual(jle); break;
-            case JumpIfGreaterThan jgt: CompileGreaterThan(jgt); break;
-            case JumpIfGreaterOrEqual jge: CompileCompareJump(jge.Src1, jge.Src2, IsSignedComparison(jge.Src1, jge.Src2) ? "BRGE" : "BRSH", jge.Target); break;
+            case JumpIfEqual je: EmitPgoBranchMarker(je.Target); CompileCompareJump(je.Src1, je.Src2, "BREQ", je.Target); break;
+            case JumpIfNotEqual jne: EmitPgoBranchMarker(jne.Target); CompileCompareJump(jne.Src1, jne.Src2, "BRNE", jne.Target); break;
+            case JumpIfLessThan jlt: EmitPgoBranchMarker(jlt.Target); CompileCompareJump(jlt.Src1, jlt.Src2, IsSignedComparison(jlt.Src1, jlt.Src2) ? "BRLT" : "BRLO", jlt.Target); break;
+            case JumpIfLessOrEqual jle: EmitPgoBranchMarker(jle.Target); CompileLessOrEqual(jle); break;
+            case JumpIfGreaterThan jgt: EmitPgoBranchMarker(jgt.Target); CompileGreaterThan(jgt); break;
+            case JumpIfGreaterOrEqual jge: EmitPgoBranchMarker(jge.Target); CompileCompareJump(jge.Src1, jge.Src2, IsSignedComparison(jge.Src1, jge.Src2) ? "BRGE" : "BRSH", jge.Target); break;
             case Call c: CompileCall(c); break;
             case IndirectCall ic: CompileIndirectCall(ic); break;
             case VirtualCall vc: CompileVirtualCall(vc); break;
@@ -1987,8 +2019,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case BitClear bc: CompileBitClear(bc); break;
             case BitCheck bck: CompileBitCheck(bck); break;
             case BitWrite bw: CompileBitWrite(bw); break;
-            case JumpIfBitSet jbs: CompileJumpIfBitSet(jbs); break;
-            case JumpIfBitClear jbc: CompileJumpIfBitClear(jbc); break;
+            case JumpIfBitSet jbs: EmitPgoBranchMarker(jbs.Target); CompileJumpIfBitSet(jbs); break;
+            case JumpIfBitClear jbc: EmitPgoBranchMarker(jbc.Target); CompileJumpIfBitClear(jbc); break;
             case AugAssign aa: CompileAugAssign(aa); break;
             case InlineAsm asm2:
                 if (asm2.Operands == null || asm2.Operands.Count == 0)
@@ -2012,7 +2044,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             case GcUnroot gu: CompileGcUnroot(gu); break;
             case SignalError se: CompileSignalError(se); break;
             case SignalSuccess: CompileSignalSuccess(); break;
-            case BranchOnError boe: CompileBranchOnError(boe); break;
+            case BranchOnError boe: EmitPgoBranchMarker(boe.ErrorLabel); CompileBranchOnError(boe); break;
 
             // Every IR instruction must be handled explicitly (or consumed earlier, like
             // InlineExpansionMarker in CompileFunction). A silent fall-through here miscompiles.
@@ -4973,6 +5005,66 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     /// Format: [{"Name":"main","WordAddr":4}, ...]
     /// </summary>
     public string? EmitSymbolsPath { get; set; }
+
+    // ── Block map (--emit-blockmap) ─────────────────────────────────────────
+
+    /// <summary>
+    /// When set, a block map JSON file is written to this path after compilation.
+    /// Records every MIR Label and function/subroutine entry ({Function, Label,
+    /// Entry, WordAddr}) and every IR conditional jump ({Id, Function, Sym, Taken,
+    /// Fallthrough, WordAddr}). WordAddr is null in this file: -mrelax and the
+    /// assembler decide final addresses, so the driver resolves them from the
+    /// linked ELF before the profiler consumes the map.
+    /// </summary>
+    public string? EmitBlockMapPath { get; set; }
+
+    private void RecordBlockMapBoundary(string function, string label, bool entry)
+    {
+        if (EmitBlockMapPath == null) return;
+        _pgoBlocks.Add((function, label, entry, _pgoSeq++));
+    }
+
+    // Marks the head of a conditional jump's emitted sequence. Emitting before
+    // dispatch covers every lowering -- EmitBranch pairs, the SBIC/SBIS+ RJMP
+    // fast paths, and comparisons folded to nothing -- so the marker's resolved
+    // address is where the jump's code begins. The marker goes in as a COMMENT,
+    // not a label: a label line is a hard barrier to every peephole pattern
+    // (any label is a potential jump target), which cost real bytes -- +216 B
+    // on fixtures/yield-from alone. Comments ride through the peephole inertly
+    // and are turned into labels on the optimized list (see Compile), so the
+    // sym still reaches the ELF symtab at its final position.
+    private void EmitPgoBranchMarker(string taken)
+    {
+        if (EmitBlockMapPath == null) return;
+        var sym = $"_pgob_{_pgoBranchCounter++}";
+        EmitComment(sym);
+        _pgoBranches.Add((_pgoBranchCounter - 1, _pgoContainer, sym, taken, _pgoSeq++));
+    }
+
+    private void WriteBlockMapIfRequested()
+    {
+        if (string.IsNullOrEmpty(EmitBlockMapPath)) return;
+
+        // Fallthrough of a recorded jump is the next block boundary emitted in
+        // the same container -- the IR block owning the instruction the
+        // not-taken path runs into.
+        var blocks = _pgoBlocks
+            .Select(b => new BlockMapEntry(b.Function, b.Label, b.Entry, null))
+            .ToList();
+        var branches = _pgoBranches
+            .Select(br => new BlockMapBranch(
+                br.Id, br.Function, br.Sym, br.Taken,
+                _pgoBlocks
+                    .Where(b => b.Function == br.Function && b.Seq > br.Seq)
+                    .OrderBy(b => b.Seq)
+                    .Select(b => (string?)b.Label)
+                    .FirstOrDefault(),
+                null))
+            .ToList();
+        File.WriteAllText(EmitBlockMapPath,
+            JsonSerializer.Serialize(new BlockMap(1, blocks, branches),
+                AvrBlockMapJsonContext.Default.BlockMap));
+    }
 
     private void WriteSymbolsIfRequested(List<AvrAsmLine> optimized, ProgramIR program)
     {

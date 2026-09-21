@@ -100,6 +100,12 @@ var emitVarMapOpt = new Option<string?>("--emit-varmap")
     DefaultValueFactory = _ => null
 };
 
+var emitBlockMapOpt = new Option<string?>("--emit-blockmap")
+{
+    Description = "Write IR block/branch map JSON to this path (for PGO profile attribution)",
+    DefaultValueFactory = _ => null
+};
+
 var rootCmd = new RootCommand("pymcuc-avr — PyMCU AVR backend runner");
 rootCmd.Arguments.Add(irFileArg);
 rootCmd.Options.Add(outputOpt);
@@ -114,6 +120,7 @@ rootCmd.Options.Add(uartOwnedOpt);
 rootCmd.Options.Add(emitSymbolsOpt);
 rootCmd.Options.Add(emitLineMapOpt);
 rootCmd.Options.Add(emitVarMapOpt);
+rootCmd.Options.Add(emitBlockMapOpt);
 
 rootCmd.SetAction(pr =>
 {
@@ -130,6 +137,7 @@ rootCmd.SetAction(pr =>
     var emitSymbols  = pr.GetValue(emitSymbolsOpt);
     var emitLineMap  = pr.GetValue(emitLineMapOpt);
     var emitVarMap   = pr.GetValue(emitVarMapOpt);
+    var emitBlockMap = pr.GetValue(emitBlockMapOpt);
 
     // Derive output path from IR file path when not specified.
     if (string.IsNullOrEmpty(output) && !string.IsNullOrEmpty(irFile))
@@ -185,6 +193,7 @@ rootCmd.SetAction(pr =>
         codegen.EmitSymbolsPath = emitSymbols;
         codegen.EmitLineMapPath = emitLineMap;
         codegen.EmitVarMapPath  = emitVarMap;
+        codegen.EmitBlockMapPath = emitBlockMap;
         using var writer = new StreamWriter(output);
         codegen.Compile(ir, writer);
         Console.WriteLine($"[BUILD_OK] {output}");
@@ -192,6 +201,8 @@ rootCmd.SetAction(pr =>
             Console.WriteLine($"[SYMBOLS] {emitSymbols}");
         if (!string.IsNullOrEmpty(emitLineMap))
             Console.WriteLine($"[LINEMAP] {emitLineMap}");
+        if (!string.IsNullOrEmpty(emitBlockMap))
+            Console.WriteLine($"[BLOCKMAP] {emitBlockMap}");
     }
     catch (Exception ex)
     {
