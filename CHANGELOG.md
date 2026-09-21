@@ -1,5 +1,13 @@
 # Changelog — pymcu-avr
 
+## Unreleased
+
+### Performance
+
+- **avr**: a constant `delay_ms()`/`delay_us()` loop counts on as many registers as the
+  iteration count needs -- 1 to 4 registers at regs+2 cycles per iteration -- instead of
+  always 4; the canonical blink drops from 142 to 138 bytes
+
 ## 0.1.0b1 (frozen at fc99c48, 2026-09-15)
 
 Beta 1: the AVR backend moves out of alpha alongside the frontend
