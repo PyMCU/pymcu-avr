@@ -81,6 +81,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private int _bssSize;
     private int _argSpillBytes;  // bytes of the fixed SRAM region for >R16..R25 overflow arguments
     private bool _needsGc;      // mirrors program.NeedsGc for use in CompileFunction
+    // A Return in the entry function survived the optimizer's CFG pass, so the
+    // program has at least one reachable ending: emit the shared __pymcu_halt
+    // block those returns jump to. Never set for a body that cannot fall
+    // through (its appended Return is deleted as unreachable), which is what
+    // keeps never-ending programs byte-identical.
+    private bool _needsHalt;
+
+    // True while emitting an outlined inline-expansion body (the pendingSubroutines
+    // tail of CompileFunction). Such a body is a real subroutine reached by RCALL:
+    // a Return or terminal SignalError inside it must keep its RET -- it exits back
+    // to the call site, not out of the program.
+    private bool _inOutlinedBody;
 
     // Divmod fusion (per function): __div16 already produces both quotient (R24:R25)
     // and remainder (R26:R27). When the same dividend is divided AND mod'd by the same
@@ -1033,6 +1045,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 $"static data needs {maxStack} bytes but {LayoutChip()} has {sramAvailable} bytes of SRAM " +
                 $"(and the call stack needs {stackReserve} of them). Reduce array sizes or pick a chip with more RAM.");
         _needsGc = program.NeedsGc;
+        _needsHalt = false;
         _varSizes = allocator.VariableSizes;
         _bssSize = program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum();
         _regLayout = AvrRegisterAllocator.Allocate(program);
@@ -1346,6 +1359,24 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // The T-flag-safe float thunks go in with the rest of the body, so the peephole and the
         // listing see them like any other code (#384).
         EmitFloatThunks();
+
+        // The shared halt every Return in main jumps to: park the CPU with
+        // interrupts off and the outputs holding their last state -- what
+        // avr-libc's _exit does (cli + spin), and what __exn_halt already does
+        // for the exception runtime. Emitted once, and only when a Return in
+        // main survived the CFG pass, so a program that can never end pays
+        // nothing for it. It goes through the peephole like everything else:
+        // appended to `output` instead, its jump targets would be labels the
+        // dead-temp-move pass cannot resolve, and that pass bails program-wide
+        // on one unresolved jump. The spin needs a named label for the same
+        // reason -- `rjmp .-2` has no label index entry either.
+        if (_needsHalt)
+        {
+            EmitLabel("__pymcu_halt");
+            Emit("CLI");
+            EmitLabel("__pymcu_halt_spin");
+            Emit("RJMP", "__pymcu_halt_spin");
+        }
 
         var optimized = AvrPeephole.Optimize(_assembly, noForward, RamStart(), _outlinedSubroutines);
         foreach (var line in optimized)
@@ -1852,6 +1883,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var (label, start, end) in pendingSubroutines)
         {
             EmitLabel(label);
+            _inOutlinedBody = true;
             var subSkip = new Stack<bool>();
             bool SubSkipping() => subSkip.Count > 0 && subSkip.Peek();
             for (int i = start; i < end; i++)
@@ -1875,6 +1907,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 CompileInstruction(si);
             }
             Emit("RET");
+            _inOutlinedBody = false;
         }
     }
 
@@ -1977,8 +2010,26 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if ((_currentFunction?.CanFail ?? false) && !(_currentFunction?.IsInterrupt ?? false))
             Emit("CLT");
 
-        if (!(_currentFunction?.IsNaked ?? false))
+        if (_currentFunction?.IsNaked ?? false)
+            return;
+
+        // A Return in the entry function is program termination, not a subroutine
+        // exit: main is reached by RJMP with an empty hardware stack, so a RET
+        // here pops unimplemented SRAM past RAMEND and jumps to whatever those
+        // bytes hold -- a reboot loop or a wild PC. Jump to the shared halt
+        // instead (emitted once at the end of the image), the avr-libc _exit
+        // idiom. JMP is range-safe on every core; -mrelax shrinks it to RJMP
+        // where the halt is in range. An outlined body lifted out of main is a
+        // called subroutine, so its Returns keep their RET.
+        if (_currentFunction?.Name == "main" && !_inOutlinedBody)
+        {
+            Emit("JMP", "__pymcu_halt");
+            _needsHalt = true;
+        }
+        else
+        {
             Emit("RET");
+        }
     }
 
     private void CompileJumpIfZero(JumpIfZero jz)
@@ -5184,7 +5235,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // SignalError is terminal: return immediately with T = 1.
         // CompileReturn injects CLT before RET for CanFail success paths — we must
         // bypass that by emitting RET directly here (without CLT) so T stays set.
-        Emit("RET");
+        // The entry function has no caller to signal: the frontend already routes
+        // raises there to __pymcu_unhandled_exn, so a bare RET in main would only
+        // underflow the stack. Send it to the halt like any other main exit.
+        // Inside an outlined body the RET is a real subroutine exit that delivers
+        // T to the RCALL site, so it is left alone.
+        if (_currentFunction?.Name == "main" && !_inOutlinedBody)
+        {
+            Emit("JMP", "__pymcu_halt");
+            _needsHalt = true;
+        }
+        else
+        {
+            Emit("RET");
+        }
     }
 
     // SignalSuccess — el callee retorna en el happy path.
