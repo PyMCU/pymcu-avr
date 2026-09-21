@@ -30,7 +30,7 @@ public class ZcaMixedFoldAndShareTests
     public void BuildFirmware() => _session = new SimSession(PymcuCompiler.BuildFixture("zca-mixed-fold-and-share"));
 
     [Test]
-    public void FlashSize_Is1010Bytes()
+    public void FlashSize_Is946Bytes()
     {
         // 602 B without any observable output (the number RFC 0006's first draft
         // measured); printing the five values so behaviour is checkable, not just
@@ -39,7 +39,9 @@ public class ZcaMixedFoldAndShareTests
         // 1032 -> 1010: dead-code elimination now drops the result slot of a call
         // nobody reads (the call stays for its side effects), so the fixture's
         // `print(...)` calls no longer each claim a temp for a result never used.
-        FlashBytes(PymcuCompiler.BuildFixture("zca-mixed-fold-and-share")).Should().Be(1010,
+        // 1010 -> 946: the __div32/__mod32 split stopped paying for a dead __mod32 in
+        // every //, which this fixture's `1000000 // self.baud` exercises: -64 B.
+        FlashBytes(PymcuCompiler.BuildFixture("zca-mixed-fold-and-share")).Should().Be(946,
             "this fixture's baseline before RFC 0006's per-field fold (Phase 3) lands; " +
             "a change here needs the RFC's baseline JSON updated alongside it, not silently");
     }
