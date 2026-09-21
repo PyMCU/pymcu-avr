@@ -1061,7 +1061,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         _needsHalt = false;
         _varSizes = allocator.VariableSizes;
         _bssSize = program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum();
-        _regLayout = AvrRegisterAllocator.Allocate(program);
+        _regLayout = AvrRegisterAllocator.Allocate(program, LoadProfileCounts(program));
 
         // Registers R2-R15 used as variable homes (including the high byte of a 16-bit home).
         //
@@ -5017,6 +5017,45 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     /// linked ELF before the profiler consumes the map.
     /// </summary>
     public string? EmitBlockMapPath { get; set; }
+
+    /// <summary>
+    /// When set, the profile JSON produced by `pymcu profile --pgo` orders the
+    /// R2-R15 named-variable homes by dynamic use: each IR use counts the
+    /// profiled execution count of the MIR block that contains it, replacing
+    /// the static use count in AvrRegisterAllocator's sort. Only the ORDER of
+    /// homes changes; eligibility rules are untouched.
+    /// </summary>
+    public string? ProfilePath { get; set; }
+
+    /// <summary>
+    /// One line describing what --profile did in the last Compile (applied with
+    /// N block counts, or ignored with the reason), for the CLI to surface.
+    /// Null when no profile was given.
+    /// </summary>
+    public string? ProfileReport { get; private set; }
+
+    // Reads --profile into block label -> execution count. An unreadable,
+    // wrong-version or foreign (no shared block names) profile degrades to the
+    // static order: the profile is a hint, never a build blocker.
+    private IReadOnlyDictionary<string, ulong>? LoadProfileCounts(ProgramIR program)
+    {
+        ProfileReport = null;
+        if (string.IsNullOrEmpty(ProfilePath)) return null;
+        var profile = AvrPgoProfile.Load(ProfilePath);
+        if (profile == null)
+        {
+            ProfileReport = $"register priority: could not read profile '{ProfilePath}' -- static order";
+            return null;
+        }
+        if (!profile.MatchesProgram(program))
+        {
+            ProfileReport = $"register priority: profile '{ProfilePath}' shares no block names with this program -- static order";
+            return null;
+        }
+        var counts = profile.Blocks.ToDictionary(kv => kv.Key, kv => kv.Value.Count);
+        ProfileReport = $"register priority: ordered by profile ({counts.Count} block counts)";
+        return counts;
+    }
 
     private void RecordBlockMapBoundary(string function, string label, bool entry)
     {

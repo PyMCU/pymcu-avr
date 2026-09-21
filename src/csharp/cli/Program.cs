@@ -106,6 +106,12 @@ var emitBlockMapOpt = new Option<string?>("--emit-blockmap")
     DefaultValueFactory = _ => null
 };
 
+var profileOpt = new Option<string?>("--profile")
+{
+    Description = "PGO profile JSON from 'pymcu profile --pgo': orders R2-R15 register homes by dynamic use",
+    DefaultValueFactory = _ => null
+};
+
 var rootCmd = new RootCommand("pymcuc-avr — PyMCU AVR backend runner");
 rootCmd.Arguments.Add(irFileArg);
 rootCmd.Options.Add(outputOpt);
@@ -121,6 +127,7 @@ rootCmd.Options.Add(emitSymbolsOpt);
 rootCmd.Options.Add(emitLineMapOpt);
 rootCmd.Options.Add(emitVarMapOpt);
 rootCmd.Options.Add(emitBlockMapOpt);
+rootCmd.Options.Add(profileOpt);
 
 rootCmd.SetAction(pr =>
 {
@@ -138,6 +145,7 @@ rootCmd.SetAction(pr =>
     var emitLineMap  = pr.GetValue(emitLineMapOpt);
     var emitVarMap   = pr.GetValue(emitVarMapOpt);
     var emitBlockMap = pr.GetValue(emitBlockMapOpt);
+    var profile      = pr.GetValue(profileOpt);
 
     // Derive output path from IR file path when not specified.
     if (string.IsNullOrEmpty(output) && !string.IsNullOrEmpty(irFile))
@@ -194,9 +202,12 @@ rootCmd.SetAction(pr =>
         codegen.EmitLineMapPath = emitLineMap;
         codegen.EmitVarMapPath  = emitVarMap;
         codegen.EmitBlockMapPath = emitBlockMap;
+        codegen.ProfilePath      = profile;
         using var writer = new StreamWriter(output);
         codegen.Compile(ir, writer);
         Console.WriteLine($"[BUILD_OK] {output}");
+        if (codegen.ProfileReport is { } pgoReport)
+            Console.WriteLine($"[PGO] {pgoReport}");
         if (!string.IsNullOrEmpty(emitSymbols))
             Console.WriteLine($"[SYMBOLS] {emitSymbols}");
         if (!string.IsNullOrEmpty(emitLineMap))
