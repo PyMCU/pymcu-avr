@@ -399,3 +399,96 @@ jobs:
           name: oracle-test-results
           path: pymcu-avr/oracle*-results.xml
           retention-days: 15
+
+  # ---------------------------------------------------------------------------
+  # CircuitPython oracle: the SSD1306 fixtures' I2C streams from real
+  # CircuitPython 10.3.1 on the emulated Pico (RP2040Sharp) must match the
+  # CPython oracle and the PyMCU AVR firmware byte for byte. RP2040Sharp is a
+  # public sibling checkout; the project references its src projects directly
+  # (see tests/oracle-circuitpython/README.md). Kept out of the integration
+  # suite so it never pulls the Pico emulator into that job.
+  # ---------------------------------------------------------------------------
+  oracle-circuitpython:
+    name: CircuitPython Oracle (RP2040Sharp)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: pymcu-avr
+
+    steps:
+      - name: Checkout pymcu-avr
+        uses: actions/checkout@v4
+        with:
+          path: pymcu-avr
+
+      - name: Checkout pymcu monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: PyMCU/PyMCU
+          ref: main
+          path: PyMCU
+          submodules: false
+
+      - name: Checkout RP2040Sharp
+        uses: actions/checkout@v4
+        with:
+          repository: PyMCU/RP2040Sharp
+          ref: main
+          path: RP2040Sharp
+          submodules: false
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: PyMCU/global.json
+
+      - name: Build compiler and backend
+        run: |
+          dotnet publish ../PyMCU/src/compiler/PyMCU.csproj -c Release -o ../PyMCU/build/bin --nologo
+          dotnet publish src/csharp/cli/PyMCU.Backend.AVR.Cli.csproj -c Release -o build/bin --nologo
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install beta source packages and AVR toolchain
+        run: |
+          uv venv .venv
+          uv pip install --python .venv --no-sources pytest -e ../PyMCU/lib -e ../PyMCU/extensions/pymcu-sdk -e ../PyMCU -e .
+
+      # The pinned UF2 plus the prepared 2 MiB flash snapshot (libraries
+      # installed over the REPL); the stamp inside rebuilds the snapshot when a
+      # fixture input changes, so the key only needs the firmware identity.
+      - name: Cache CircuitPython firmware and snapshot
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pymcu-oracle
+          key: pymcu-oracle-${{ runner.os }}-circuitpython-10.3.1
+
+      - name: Run the CircuitPython oracle
+        env:
+          PYMCU_BIN: ${{ github.workspace }}/pymcu-avr/.venv/bin/pymcu
+          PYMCU_BACKEND_BINARY: avr=${{ github.workspace }}/pymcu-avr/build/bin/pymcuc-avr
+        run: |
+          dotnet test tests/oracle-circuitpython/PyMCU.OracleCircuitPython.csproj \
+            --logger "trx;LogFileName=oracle-circuitpython-results.trx" \
+            --logger "console;verbosity=normal" \
+            --results-directory test-results \
+            --nologo \
+            -- NUnit.NumberOfTestWorkers=1
+
+      - name: Upload oracle results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-circuitpython-test-results
+          path: pymcu-avr/test-results/
+          retention-days: 15
