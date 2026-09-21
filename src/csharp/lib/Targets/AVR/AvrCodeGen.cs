@@ -2450,11 +2450,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // overwrite the first (both transit R22:R25) and lets a conversion CALL clobber an
         // already-loaded register argument. Instead: build each float register arg first and
         // stash it on the stack — so all __floatsisf CALLs run while no destination register is
-        // live — then load the integer register args, then pop each float into its ABI register
-        // (float arg0 -> R22:R25, float arg1 -> R18:R21). Float register args only occur at
-        // k <= 1 (two floats fill R18:R25); higher float positions spill and are handled above.
+        // live -- then load the integer register args, then pop each float into its ABI window:
+        // arg0 lands in R22:R25 (byte0 in R22, the float convention), and a float at k >= 1
+        // lands in the four-register window AssignArgLocations assigned it. That window is
+        // R18:R21 only when arg0 was itself 4 bytes; a narrower earlier argument leaves the
+        // float at R20:R23 (or higher), and hardcoding R18:R21 there delivered the high half
+        // to the callee and dropped the low half.
         var stashedFloatArgs = new List<int>();   // arg indices, in push order
-        for (var k = 0; k < call.Args.Count && k <= 1; k++)
+        for (var k = 0; k < call.Args.Count; k++)
         {
             if (!argLocs[k].IsReg || ArgType(k) != DataType.FLOAT) continue;
             LoadFloatIntoRegs(call.Args[k]);                 // -> R22:R25 (may CALL __floatsisf)
@@ -2468,13 +2471,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             if (ArgType(k) == DataType.FLOAT) continue;       // floats handled via stash above
             LoadIntoReg(call.Args[k], argLocs[k].Reg, ArgType(k));
         }
-        // Pop in reverse push order so each float lands in its register without clobbering ints.
+        // Pop in reverse push order so each float lands in its registers without clobbering ints.
         for (var i = stashedFloatArgs.Count - 1; i >= 0; i--)
         {
-            if (stashedFloatArgs[i] == 0)
+            int fk = stashedFloatArgs[i];
+            if (fk == 0)
             { Emit("POP", "R22"); Emit("POP", "R23"); Emit("POP", "R24"); Emit("POP", "R25"); }
             else
-            { Emit("POP", "R18"); Emit("POP", "R19"); Emit("POP", "R20"); Emit("POP", "R21"); }
+            {
+                int fbase = int.Parse(argLocs[fk].Reg[1..]);
+                Emit("POP", $"R{fbase}");     Emit("POP", $"R{fbase + 1}");
+                Emit("POP", $"R{fbase + 2}"); Emit("POP", $"R{fbase + 3}");
+            }
         }
 
         Emit("CALL", call.FunctionName);
