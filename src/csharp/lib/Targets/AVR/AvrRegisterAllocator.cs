@@ -20,31 +20,6 @@ namespace PyMCU.Backend.Targets.AVR;
 
 public static class AvrRegisterAllocator
 {
-    // EXPERIMENT ONLY (pgo-ssd1306 spike): PYMCU_AVR_VAR_WEIGHTS=<path to a JSON
-    // {name: weight} object> replaces the static use count with the supplied
-    // weight for every name it lists; names absent from the file keep their
-    // static count. This exists to measure what a profile-driven R2-R15 home
-    // order would buy before deciding whether real profile plumbing is worth
-    // it. Not part of the supported interface; drop this commit freely.
-    private static Dictionary<string, long>? LoadVarWeights()
-    {
-        var path = Environment.GetEnvironmentVariable("PYMCU_AVR_VAR_WEIGHTS");
-        if (string.IsNullOrEmpty(path)) return null;
-        try
-        {
-            var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
-            var w = new Dictionary<string, long>();
-            foreach (var p in json.RootElement.EnumerateObject())
-                w[p.Name] = p.Value.GetInt64();
-            return w;
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[PYMCU_AVR_VAR_WEIGHTS] cannot read {path}: {ex.Message} -- ignored");
-            return null;
-        }
-    }
-
     private static int SizeOfType(DataType t) => t switch
     {
         DataType.UINT32 or DataType.INT32 or DataType.FLOAT => 4,
@@ -52,10 +27,22 @@ public static class AvrRegisterAllocator
         _ => 1,
     };
 
-    public static Dictionary<string, string> Allocate(ProgramIR program)
+    /// <param name="blockExecCounts">
+    /// PGO: block label -> execution count, keyed by the same MIR label names
+    /// the block map emits (a function's entry block is keyed by the function
+    /// name). When given, each use counts the profiled count of the block that
+    /// contains it instead of 1 -- the ORDER of R2-R15 homes follows dynamic
+    /// use. Instructions in blocks the profile does not mention keep weight 1,
+    /// never 0: a variable the workload never ran still competes for a home.
+    /// </param>
+    public static Dictionary<string, string> Allocate(
+        ProgramIR program, IReadOnlyDictionary<string, ulong>? blockExecCounts = null)
     {
-        var useCount = new Dictionary<string, int>();
+        var useCount = new Dictionary<string, long>();
         var varTypes = new Dictionary<string, DataType>();
+        // Execution weight of the block currently being walked; 1 when no
+        // profile was given or the block is absent from it. Read by CountVal.
+        var weight = 1L;
 
         // First pass: collect names that MUST live in SRAM because some codegen
         // path resolves them by address rather than through _regLayout. Registerizing
@@ -88,10 +75,22 @@ public static class AvrRegisterAllocator
             }
         }
 
-        foreach (var instr in program.Functions.SelectMany(func => func.Body))
+        // The enclosing block of an instruction is the last Label seen (or the
+        // function entry, whose block-map key is the function name). The same
+        // instruction text emitted N times under an inlined outline still counts
+        // once per MIR occurrence, weighted by its own enclosing block each time.
+        foreach (var func in program.Functions)
         {
-            switch (instr)
+            weight = WeightOf(func.Name);
+            foreach (var instr in func.Body)
             {
+                if (instr is Label l)
+                {
+                    weight = WeightOf(l.Name);
+                    continue;
+                }
+                switch (instr)
+                {
                 case Copy c:
                     CountVal(c.Src);
                     CountVal(c.Dst);
@@ -177,6 +176,7 @@ public static class AvrRegisterAllocator
                     CountVal(ga.Size);
                     CountVal(ga.Dst);
                     break;
+                }
             }
         }
 
@@ -189,18 +189,13 @@ public static class AvrRegisterAllocator
         // (the callee's own named vars get different registers; leaf scratch is R16-R27).
         // That invariant — not a DotCount heuristic — is what makes cross-call safety hold,
         // so inline-expanded locals (dotted names) are eligible too.
-        // EXPERIMENT: dynamic weights replace the static use counts (see
-        // LoadVarWeights). Applied after unsafe-name exclusion so a weight can
-        // never register-home a name that must stay in SRAM.
-        var weights = LoadVarWeights();
         var sorted = useCount
             .Where(kv => varTypes.TryGetValue(kv.Key, out var dt)
                          && SizeOfType(dt) <= 2
                          && dt != DataType.GC_REF && dt != DataType.FUNCREF
                          && !unsafeNames.Contains(kv.Key))
-            .Select(kv => (name: kv.Key, count: weights != null && weights.TryGetValue(kv.Key, out var w) ? w : kv.Value))
-            .OrderByDescending(kv => kv.count)
-            .ThenBy(kv => kv.name, StringComparer.Ordinal).ToList();
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal).ToList();
 
         var result = new Dictionary<string, string>();
         // R2-R15 are the callee-saved home pool. R2/R3 are otherwise unused by the codegen
@@ -228,11 +223,16 @@ public static class AvrRegisterAllocator
             _           => null,
         };
 
+        long WeightOf(string blockLabel) =>
+            blockExecCounts != null && blockExecCounts.TryGetValue(blockLabel, out var c)
+                ? (long)Math.Min(c, long.MaxValue)
+                : 1L;
+
         void CountVal(Val val)
         {
             if (val is not Variable v) return;
-            useCount.TryGetValue(v.Name, out int count);
-            useCount[v.Name] = count + 1;
+            useCount.TryGetValue(v.Name, out long count);
+            useCount[v.Name] = count + weight;
             varTypes[v.Name] = v.Type;
         }
     }
