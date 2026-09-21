@@ -55,6 +55,10 @@ tests/oracle-circuitpython/       three-way SSD1306 oracle: CircuitPython
                                   checkout)
 ```
 
+## Testing
+
+`dotnet test tests/integration` runs the AVR8Sharp suite; `just test-oracle` runs the language oracle corpus (`tests/oracle`) under both compiler front ends.
+
 ## Status
 
 Alpha (API) / stable (codegen). 700+ integration tests green across ATmega328P,
