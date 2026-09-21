@@ -1,0 +1,8 @@
+# No stimuli: the while loop spins from reset, so the block enclosing the
+# strobe sites burns far more than the 1% veto threshold. expect.uart_tx
+# asserts the profiled run actually emitted dots.
+scenarios:
+  - name: spin
+    run: {ms: 200}
+    expect:
+      uart_tx: "."

@@ -274,8 +274,13 @@ public static class PymcuCompiler
         BuildGate.Wait();
         try
         {
+            // PGO is an experimental driver feature (RFC 0010): the flag must be set
+            // explicitly for both the collection and the profiled rebuild.
             var profilerEnv = new Dictionary<string, string>
-            { ["PYMCU_PROFILER_BINARY"] = ProfilerBinary };
+            {
+                ["PYMCU_PROFILER_BINARY"] = ProfilerBinary,
+                ["PYMCU_EXPERIMENTAL_PGO"] = "1",
+            };
 
             // Step 1: baseline build + blockmap + emulator run -> dist/profile.json.
             var (exit, stdout, stderr) = RunPymcu(scratch, "profile --pgo", profilerEnv);
@@ -290,7 +295,10 @@ public static class PymcuCompiler
 
             // Step 2: rebuild the same sources with the profile in the compiler.
             (exit, stdout, stderr) = RunPymcu(scratch, "build", new Dictionary<string, string>
-            { ["PYMCU_PROFILE"] = profilePath });
+            {
+                ["PYMCU_PROFILE"] = profilePath,
+                ["PYMCU_EXPERIMENTAL_PGO"] = "1",
+            });
             if (exit != 0)
                 throw new InvalidOperationException(
                     $"profiled pymcu build failed for '{name}' (exit {exit}):\n{stdout}\n{stderr}");

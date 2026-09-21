@@ -1,5 +1,5 @@
 [project]
-name = "pgo-cold-outline"
+name = "pgo-hot-veto"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [

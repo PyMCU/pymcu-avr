@@ -12,10 +12,10 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// out of the UART, in the same order, the same sequence of levels on the pins, and
 /// the same BREAK checkpoints.
 ///
-/// The profile is allowed to change *code*: it moves cold inline-expansion regions
-/// out of line and keeps hot ones inline, but never *behaviour*. A divergence here
-/// is an optimizer miscompile by construction, the same contract as
-/// <see cref="OptimizerDifferentialTests"/>.
+/// The profile is allowed to change *code*: it keeps hot inline-expansion regions
+/// inline where the static model would have outlined them, but never *behaviour*.
+/// A divergence here is an optimizer miscompile by construction, the same contract
+/// as <see cref="OptimizerDifferentialTests"/>.
 /// </summary>
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
@@ -69,8 +69,8 @@ public class PgoDifferentialTests
     /// <summary>
     /// Guards the axis itself. Every assertion above is vacuous if <c>--profile</c> never
     /// reaches the optimizer; the two builds would be the same image and agree trivially.
-    /// The pgo-cold-outline fixture has a region the static cost model refuses to outline
-    /// and the workload keeps cold, so the profiled build must differ.
+    /// The pgo-hot-veto fixture has @inline sites inside the hot loop that the static
+    /// cost model outlines and the profile vetoes, so the profiled build must differ.
     /// </summary>
     [Test]
     public void ProfileSwitch_ActuallyChangesTheEmittedImage()
@@ -78,7 +78,7 @@ public class PgoDifferentialTests
         if (!File.Exists(PymcuCompiler.ProfilerBinary))
             Assert.Ignore("pymcuc-avr-profiler not built (build/bin-profiler/).");
 
-        var program = new DiffProgram(ProgramKind.Fixture, "pgo-cold-outline");
+        var program = new DiffProgram(ProgramKind.Fixture, "pgo-hot-veto");
 
         Assert.That(PymcuCompiler.BuildFixtureProfiled(program.Name),
             Is.Not.EqualTo(program.Optimized()),
