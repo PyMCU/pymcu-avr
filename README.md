@@ -45,6 +45,14 @@ src/csharp/lib/                   AvrBackendProvider + codegen
 src/csharp/cli/                   pymcuc-avr runner CLI
 src/csharp/debugserver/           GDB-stub debug server
 src/csharp/profiler/              cycle-accurate profiler
+tests/integration/                NUnit suite on the AVR8Sharp emulator
+tests/testkit/                    shared I2C-oracle machinery (transaction
+                                  stream, TWI recorder, oracle.py runner)
+tests/oracle/                     language oracle corpus (184 probes, pytest)
+tests/oracle-circuitpython/       three-way SSD1306 oracle: CircuitPython
+                                  10.3.1 on RP2040Sharp vs CPython vs AVR
+                                  firmware (needs an RP2040Sharp sibling
+                                  checkout)
 ```
 
 ## Status
