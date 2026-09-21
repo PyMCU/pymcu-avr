@@ -1,0 +1,20 @@
+# PGO workload for examples/ssd1306 (PyMCU's own SSD1306 driver, I2C @ 0x3C).
+#
+# The display is a slave on the TWI bus. The program sends the 25-byte init
+# table as 25 single-command transactions (START, SLA+W, 0x00, cmd, STOP),
+# prints "OLED"/"OK" on UART, clears the framebuffer, sets two pixels, then
+# idles in `while True: pass` -- it never calls show(), so no frame traffic
+# exists to bound on. The run stops after the 25 init transactions close;
+# max_ms is only a safety cap.
+#
+# expect pins the flattened prefix: each transaction is `3c 00 <cmd>`, the
+# first five init bytes being AE D5 80 A8 3F (the 128x64 multiplex).
+scenarios:
+  - name: ssd1306-pymcu-init
+    stimuli:
+      - {i2c_slave: 0x3C}
+    run:
+      until_i2c_transactions: 25
+      max_ms: 2000
+    expect:
+      i2c_tx: "3c 00 ae 3c 00 d5 3c 00 80 3c 00 a8 3c 00 3f"
