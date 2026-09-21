@@ -226,7 +226,7 @@ public static class PymcuCompiler
             _ => new Lazy<string>(() => CompileProfiled("ex", name))).Value;
 
     /// <summary>
-    /// The scratch copy a profiled fixture build ran in — where its
+    /// The scratch copy a profiled fixture build ran in, where its
     /// <c>dist/firmware.mir</c> and <c>dist/profile.json</c> live after
     /// <see cref="BuildFixtureProfiled"/>. The directory persists for the run.
     /// </summary>
