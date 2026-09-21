@@ -15,9 +15,11 @@ transaction stream, byte for byte:
    run on AVR8Sharp's emulated Arduino Uno.
 
 The fixtures are reused in place from `tests/integration/fixtures/`
-(`adafruit-ssd1306-unmodified`, `compat-cp-framebuf-text`); nothing is copied.
-Today that is 50 transactions for `ssd1306_simpletest` and 43 for the
-framebuf-text program, identical on all three sides.
+(`adafruit-ssd1306-unmodified`, `adafruit-ssd1306-unmodified-64`,
+`compat-cp-framebuf-text`); nothing is copied. Today that is 50 transactions
+for `ssd1306_simpletest` on 128x32, 50 on 128x64 (same program plus a
+`display.text` line, every framebuffer write 1025 bytes instead of 513), and
+43 for the framebuf-text program, identical on all three sides.
 
 ## Why a separate project
 

@@ -91,3 +91,7 @@ public class AdafruitSsd1306OnCircuitPythonTests()
 [TestFixture]
 public class CompatCpFramebufTextOnCircuitPythonTests()
     : CircuitPythonOracleBase("compat-cp-framebuf-text", expectedTransactions: 43);
+
+[TestFixture]
+public class AdafruitSsd1306Unmodified64OnCircuitPythonTests()
+    : CircuitPythonOracleBase("adafruit-ssd1306-unmodified-64", expectedTransactions: 50);
