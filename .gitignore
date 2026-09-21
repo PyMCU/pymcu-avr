@@ -21,8 +21,9 @@ TestResults/
 *.suo
 *.DS_Store
 
-# dotnet publish output
+# dotnet publish / oracle runner output
 build/bin/
+build/oracle/
 
 # venv symlink (points at the monorepo venv) and the locally deployed backend binary
 .venv
