@@ -80,6 +80,15 @@ public sealed class SimSession
         // 5. Clear the UART receive buffer captured by the serial probe.
         _sim.Serial.Clear();
 
+        // 6. Hold the TWI bus lines high, the state a wired-and-pulled-up bus
+        //    sits in at idle. The GPIO model drives PIN only from what a test
+        //    injects -- the internal pull-ups the firmware just enabled do not
+        //    raise it -- and CircuitPython's busio.I2C reads the lines at
+        //    construction and refuses a low one. A test that wants the bus
+        //    held down sets the pin itself after Reset.
+        _sim.PortC.SetPinValue(4, true);   // SDA
+        _sim.PortC.SetPinValue(5, true);   // SCL
+
         return _sim;
     }
 }

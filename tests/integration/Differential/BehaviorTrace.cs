@@ -104,6 +104,11 @@ public static class BehaviorRecorder
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(hexContent);
+        // SDA/SCL sit high on a wired bus; the GPIO model drives PIN only from
+        // injected values, so without this the CircuitPython busio.I2C wiring
+        // check reads a low line and raises.
+        uno.PortC.SetPinValue(4, true);   // SDA
+        uno.PortC.SetPinValue(5, true);   // SCL
 
         var pins = new List<PinEvent>();
         Register(uno.PortB, 'B');

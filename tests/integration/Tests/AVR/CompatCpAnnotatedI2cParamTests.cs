@@ -42,6 +42,11 @@ public class CompatCpAnnotatedI2cParamTests
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(hex);
+        // The bus sits idle-high on the bench; the GPIO model drives PIN only
+        // from injected values, and CircuitPython's busio.I2C refuses a line
+        // that reads low at construction.
+        uno.PortC.SetPinValue(4, true);   // SDA
+        uno.PortC.SetPinValue(5, true);   // SCL
         uno.AddTwi(AvrTwi.TwiConfig, out var twi);
         var recorder = new ProbeI2cDevice(twi, OledAddr);
         twi.EventHandler = recorder;
