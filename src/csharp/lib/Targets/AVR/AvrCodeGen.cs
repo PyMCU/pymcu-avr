@@ -1142,6 +1142,34 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var sym in program.ExternSymbols)
             _externSymbols.Add(sym);
 
+        // A parameter that never appears as a Variable in the body -- unused, or reached
+        // only through instruction kinds StackAllocator does not register -- has no entry
+        // in _varSizes, and the IR carries no declared parameter types. The widest value
+        // any call site actually passes is the only remaining bound. It matters for
+        // layout, not for the parameter itself: an arg0 delivered as a float occupies
+        // R22:R25 (or R24/R25/R22/R23 as a uint32) regardless of what argLocs[0] says, so
+        // understating it lets the next argument's window overlap those registers and the
+        // callee reads bytes the caller overwrote. Only parameters with no width of their
+        // own are touched -- a declared width stays authoritative even when a call site
+        // passes a wider temporary.
+        var funcByName = new Dictionary<string, Function>();
+        foreach (var func in program.Functions)
+            funcByName[func.Name] = func;
+        foreach (var caller in program.Functions)
+            foreach (var instr in caller.Body)
+            {
+                if (instr is not Call cl) continue;
+                if (_externSymbols.Contains(cl.FunctionName)) continue;
+                if (!funcByName.TryGetValue(cl.FunctionName, out var callee)) continue;
+                if (!_functionParamSizes.TryGetValue(cl.FunctionName, out var ps)) continue;
+                for (var k = 0; k < cl.Args.Count && k < callee.Params.Count; k++)
+                {
+                    if (_varSizes.ContainsKey(callee.Params[k])) continue;
+                    var w = GetValType(cl.Args[k]).SizeOf();
+                    if (w > ps[k]) ps[k] = w;
+                }
+            }
+
         // Record how long each flash table is, before any function is compiled: a load of a
         // table larger than 256 bytes needs a 16-bit index, and the FlashData instruction that
         // carries the table may be compiled after the function that reads it.
@@ -1644,8 +1672,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         if (!func.IsInterrupt && func.Name != "main" && func.Params.Count > 0)
         {
-            var paramSizes = func.Params
-                .Select(p => _varSizes.TryGetValue(p, out var psz0) ? psz0 : 1).ToList();
+            // Same size list the call sites use, so the layout below is the layout the
+            // caller computed -- including the call-site width merge above, which is the
+            // only place a never-referenced parameter's width can come from.
+            var paramSizes = _functionParamSizes.TryGetValue(func.Name, out var fps)
+                ? fps
+                : func.Params.Select(p => _varSizes.TryGetValue(p, out var psz0) ? psz0 : 1).ToList();
             var argLocs = AssignArgLocations(paramSizes, out _);
             for (var k = 0; k < func.Params.Count; k++)
             {
