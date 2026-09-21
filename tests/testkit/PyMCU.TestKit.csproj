@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>PyMCU.TestKit</RootNamespace>
+        <AssemblyName>PyMCU.TestKit</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Avr8Sharp.TestKit is published on nuget.org -->
+        <PackageReference Include="Avr8Sharp.TestKit" Version="1.1.0-beta1" />
+        <!-- Assert.Fail in I2cStreams; transitively satisfied for consumers that
+             already reference NUnit. -->
+        <PackageReference Include="NUnit" Version="3.14.0" />
+    </ItemGroup>
+
+</Project>
