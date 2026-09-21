@@ -1,0 +1,8 @@
+# No stimuli: the while loop spins from reset and writes 'd' every 100
+# increments, so the block holding 'hot' dominates the profile. expect pins
+# the first emitted byte so the profiled run proves it really ran.
+scenarios:
+  - name: spin
+    run: {ms: 200}
+    expect:
+      uart_tx: "d"

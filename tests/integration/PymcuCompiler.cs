@@ -226,6 +226,14 @@ public static class PymcuCompiler
             _ => new Lazy<string>(() => CompileProfiled("ex", name))).Value;
 
     /// <summary>
+    /// The scratch copy a profiled fixture build ran in — where its
+    /// <c>dist/firmware.mir</c> and <c>dist/profile.json</c> live after
+    /// <see cref="BuildFixtureProfiled"/>. The directory persists for the run.
+    /// </summary>
+    public static string ProfiledFixtureDir(string name)
+        => Path.Combine(ScratchRoot, "pymcu-pgo", "fx-" + name);
+
+    /// <summary>
     /// Runs one pymcu CLI command in <paramref name="workDir"/>, with the venv on PATH and
     /// any extra environment applied. Returns (exit code, stdout, stderr).
     /// </summary>

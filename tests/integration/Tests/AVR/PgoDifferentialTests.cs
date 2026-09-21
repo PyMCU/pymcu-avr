@@ -87,4 +87,33 @@ public class PgoDifferentialTests
             "did not match the program's labels), so the PGO axis is comparing a build " +
             "against itself.");
     }
+
+    /// <summary>
+    /// Guards the backend leg of the axis. pgo-register-priority has no repeated
+    /// @inline site the optimizer could veto, so its MIR must come out
+    /// identical between the two builds -- while its loop block is hot enough
+    /// under the workload to flip the R2-R15 home order. A differing hex on an
+    /// identical MIR can only be pymcuc-avr consuming the profile.
+    /// </summary>
+    [Test]
+    public void ProfileSwitch_ReachesTheBackend()
+    {
+        if (!File.Exists(PymcuCompiler.ProfilerBinary))
+            Assert.Ignore("pymcuc-avr-profiler not built (build/bin-profiler/).");
+
+        const string name = "pgo-register-priority";
+        var profiled = PymcuCompiler.BuildFixtureProfiled(name);
+        var plain    = PymcuCompiler.BuildFixture(name);
+
+        var mirPgo   = Path.Combine(PymcuCompiler.ProfiledFixtureDir(name), "dist", "firmware.mir");
+        var mirPlain = Path.Combine(PymcuCompiler.FixtureDir(name), "dist", "firmware.mir");
+        Assert.That(File.ReadAllText(mirPgo), Is.EqualTo(File.ReadAllText(mirPlain)),
+            $"{name}: the profiled MIR differs from the plain one -- the optimizer " +
+            "acted on a fixture built to keep it out, so the hex difference below " +
+            "can no longer be attributed to the backend alone.");
+        Assert.That(profiled, Is.Not.EqualTo(plain),
+            $"{name} compiled to an identical image with and without the profile " +
+            "on an identical MIR. --profile is not reaching pymcuc-avr (stale " +
+            "backend binary, or the driver stopped forwarding it).");
+    }
 }
