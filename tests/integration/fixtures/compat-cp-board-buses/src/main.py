@@ -9,6 +9,8 @@
 #   GPIOR0 = TWBR    72    100 kHz at 16 MHz
 #   GPIOR1 = SPCR    0x50  SPE|MSTR, mode 0 at fosc/4
 #   GPIOR2 = UCSR0C  0x06  8N1
+#   PORTC bits 5:4 set  the internal pull-ups on SCL/SDA, which board.I2C() turns
+#                       on the way Arduino's twi_init() does
 import board
 from pymcu.chips.atmega328p import GPIOR0, GPIOR1, GPIOR2, TWBR, SPCR, UCSR0C
 from pymcu.types import asm

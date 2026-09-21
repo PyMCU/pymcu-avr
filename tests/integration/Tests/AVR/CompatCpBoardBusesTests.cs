@@ -16,6 +16,7 @@ public class CompatCpBoardBusesTests
     private const int Gpior0Addr = 0x3E;
     private const int Gpior1Addr = 0x4A;
     private const int Gpior2Addr = 0x4B;
+    private const int PortcAddr = 0x28;
 
     private static SimSession _session = null!;
 
@@ -23,16 +24,21 @@ public class CompatCpBoardBusesTests
     public void BuildFirmware() =>
         _session = new SimSession(PymcuCompiler.BuildFixture("compat-cp-board-buses"));
 
-    private static (byte Twbr, byte Spcr, byte Ucsrc) Run()
+    private static (byte Twbr, byte Spcr, byte Ucsrc, byte Portc) Run()
     {
         var uno = _session.Reset();
         uno.RunToBreak();
-        return (uno.Data[Gpior0Addr], uno.Data[Gpior1Addr], uno.Data[Gpior2Addr]);
+        return (uno.Data[Gpior0Addr], uno.Data[Gpior1Addr], uno.Data[Gpior2Addr], uno.Data[PortcAddr]);
     }
 
     [Test]
     public void BoardI2CProgramsTheTwiAtTheDefaultRate() =>
         Run().Twbr.Should().Be(72, "100 kHz at 16 MHz");
+
+    [Test]
+    public void BoardI2CTurnsOnTheInternalPullUpsLikeArduino() =>
+        (Run().Portc & 0x30).Should().Be(0x30,
+            "PC4 (SDA) and PC5 (SCL) get their internal pull-ups, as twi_init() leaves them");
 
     [Test]
     public void BoardSpiProgramsTheBusAsAControllerInModeZero() =>
