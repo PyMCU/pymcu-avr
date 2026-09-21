@@ -17,9 +17,12 @@ from pymcu.types import asm
 
 
 def main():
+    # UART first: with SDA held low board.I2C() raises the CircuitPython wiring
+    # error, and the exception path only prints E:RuntimeError once a program
+    # that owns the UART has actually enabled the transmitter.
+    uart = board.UART()
     i2c = board.I2C()
     spi = board.SPI()
-    uart = board.UART()
 
     GPIOR0.value = TWBR.value
     GPIOR1.value = SPCR.value
