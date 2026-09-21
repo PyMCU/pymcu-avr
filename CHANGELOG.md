@@ -25,6 +25,16 @@ field miscomputed with constant constructor args).
 - **avr**: `--emit-blockmap` writes the block/branch map the profiler's PGO mode
   reads; with no blockmap requested the emitted asm is byte-identical to before
   (experimental PGO, RFC 0010 in the PyMCU repo)
+- **avr**: `--profile <profile.json>` -- the RFC 0010 second consumer. The
+  profile's per-block execution counts order the R2-R15 named-variable homes by
+  dynamic use (a use counts the count of the block containing it; unprofiled
+  blocks count 1, never 0). Only the ORDER changes -- eligibility and the
+  ordinal-name tiebreak are untouched -- and an unreadable, wrong-version or
+  foreign profile degrades to the static order. The backend reports what it did
+  on a `[PGO]` line the driver relays. With no `--profile` the emitted asm is
+  byte-identical to before (508/508 ROM-gate). Measured on the Adafruit
+  SSD1306 fixtures: -4.0% scenario cycles (-4.8% per `show()` frame) for
+  +98 B flash on 128x32, -17.7% for +562 B on 128x64.
 - **profiler**: a PGO mode runs a declared `workload.yaml` on the emulator and
   writes the per-block `profile.json` that `pymcuc --profile` consumes
 - **profiler**: workload scenarios gain an `i2c_slave` stimulus (a TWI device
