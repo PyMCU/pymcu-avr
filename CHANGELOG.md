@@ -27,6 +27,9 @@ field miscomputed with constant constructor args).
   (experimental PGO, RFC 0010 in the PyMCU repo)
 - **profiler**: a PGO mode runs a declared `workload.yaml` on the emulator and
   writes the per-block `profile.json` that `pymcuc --profile` consumes
+- **profiler**: workload scenarios gain an `i2c_slave` stimulus (a TWI device
+  that ACKs its address), a `run.until_i2c_transactions` bound, and an
+  `expect.i2c_tx` prefix over the flattened transaction stream
 - **tools**: pgo-survey builds the corpus both ways and diffs the images
 
 ### Fixed
