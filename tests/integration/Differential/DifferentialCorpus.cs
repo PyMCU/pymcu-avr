@@ -123,19 +123,24 @@ public static class DifferentialCorpus
     /// open miscompile with a test of its own asserting today's failure, and the day that test
     /// goes red the entry comes out with it.
     ///
-    /// The one entry is different in kind but identical in mechanics: fixtures/
-    /// compat-cp-framebuf-text pins the INTENDED refusal at the edge of the language --
-    /// adafruit_framebuf.FrameBuffer.text() must compile through split()/enumerate() and
-    /// stop at open('font5x8.bin', 'rb') with the RFC 0008 embedded-file diagnostic, which
-    /// CompatCpFramebufTextTests asserts under both front ends. A program that must not
-    /// build has no pair of builds to compare, so it sits out every axis the same way.
+    /// The two SSD1306 entries are different in kind but identical in mechanics: their
+    /// OPTIMIZED builds are what the oracle tests pin, and the unoptimized build the axes
+    /// need for the comparison does not fit the ATmega328P's SRAM (the framebuffer plus
+    /// the temporaries the optimizer would have removed). A program with only one build
+    /// has no pair to compare, so it sits out every axis the same way.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> ExpectedBuildFailures =
         new Dictionary<string, string>
         {
             ["fixtures/compat-cp-framebuf-text"] =
-                "FrameBuffer.text() stops at open('font5x8.bin', 'rb'): embedded files are " +
-                "RFC 0008 work; CompatCpFramebufTextTests pins the diagnostic",
+                "the unoptimized build needs 2039 B of static data on a 2048 B part: the " +
+                "framebuffer, the text path's unoptimized temporaries and the 64 B call " +
+                "stack do not fit together, so the axes have no unoptimized build to pair " +
+                "with; the optimized build is pinned by CompatCpFramebufTextTests",
+            ["fixtures/adafruit-ssd1306-unmodified-64"] =
+                "the unoptimized build needs 2704 B of static data on a 2048 B part (the " +
+                "1025-byte framebuffer plus unoptimized temporaries); the optimized build " +
+                "is pinned by AdafruitSsd1306Unmodified64Tests and the CircuitPython oracle",
         };
 
     /// <summary>
