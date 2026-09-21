@@ -83,10 +83,20 @@ class CustomBuildHook(BuildHookInterface):
             if not src.exists():
                 raise FileNotFoundError(f"Binary not found after publish: {src}")
 
-        shutil.copy2(str(src), str(dst))
-        if sys.platform != "win32":
-            dst.chmod(0o755)
-        self.app.display_info(f"[hatch-hook] Binary placed at: {dst}")
+        # In the dev layout (`just link-dev`) the plugin's binary is a symlink to the
+        # publish output, so src and dst are the same file and copy2 raises
+        # SameFileError. An editable install keeps that link: it always tracks the
+        # next publish, which a copy would not. A wheel needs a real file inside it.
+        same = dst.exists() and os.path.samefile(str(src), str(dst))
+        if same and version == "editable":
+            self.app.display_info(f"[hatch-hook] Binary already linked at: {dst}")
+        else:
+            if dst.is_symlink():
+                dst.unlink()
+            shutil.copy2(str(src), str(dst))
+            if sys.platform != "win32":
+                dst.chmod(0o755)
+            self.app.display_info(f"[hatch-hook] Binary placed at: {dst}")
 
         build_data["artifacts"].append(str(dst.relative_to(root)))
 
