@@ -69,8 +69,13 @@ internal static class CircuitPythonPico
     /// <summary>
     /// Fresh Pico on the prepared snapshot: write <paramref name="codePy"/> as
     /// <c>code.py</c>, soft-reset to autorun it, and return the recorded stream.
+    ///
+    /// A program whose tail is <c>while True: pass</c> never returns to the
+    /// REPL, so the run cannot wait for the prompt: pass
+    /// <paramref name="stopAfterTransactions"/> and the run ends as soon as the
+    /// recorder has that many transactions (plus a tail drain to catch strays).
     /// </summary>
-    public static CpRun RunAutorun(byte[] snapshot, string codePy)
+    public static CpRun RunAutorun(byte[] snapshot, string codePy, int? stopAfterTransactions = null)
     {
         using var sim = new PicoSimulation(withUsbCdc: true);
         var recorder = new Ssd1306WireRecorder(sim.Rp2040);
@@ -87,7 +92,9 @@ internal static class CircuitPythonPico
         recorder.Clear();
         sim.UsbCdc.Clear();
         sim.UsbCdc.InjectString("\x04");  // CTRL-D: soft reset -> autorun code.py
-        var ran = WaitForPrompt(sim, 60_000);
+        var ran = stopAfterTransactions is int stopAfter
+            ? WaitForTransactions(sim, recorder, stopAfter, 300_000)
+            : WaitForPrompt(sim, 60_000);
         sim.RunMilliseconds(200);         // drain tail traffic
 
         var text = sim.UsbCdc.Text;
@@ -212,6 +219,29 @@ internal static class CircuitPythonPico
                 sim.RunMilliseconds(100);   // drain pending USB endpoint reads
                 return true;
             }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Waits until the recorder has <paramref name="count"/> transactions, for a
+    /// code.py that never returns (ends in <c>while True: pass</c>). Returns
+    /// false early if the program raised or fell back to the REPL instead.
+    /// </summary>
+    private static bool WaitForTransactions(
+        PicoSimulation sim, Ssd1306WireRecorder recorder, int count, double timeoutMs)
+    {
+        const double batchMs = 100.0;
+        var elapsed = 0.0;
+        while (elapsed < timeoutMs)
+        {
+            sim.RunMilliseconds(batchMs);
+            elapsed += batchMs;
+            if (recorder.Transactions.Count >= count) return true;
+            var text = sim.UsbCdc.Text;
+            if (text.Contains("Traceback", StringComparison.Ordinal) ||
+                text.Contains(">>> ", StringComparison.Ordinal))
+                return false;
         }
         return false;
     }
