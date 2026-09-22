@@ -92,6 +92,12 @@ public class AdafruitSsd1306OnCircuitPythonTests()
 public class CompatCpFramebufTextOnCircuitPythonTests()
     : CircuitPythonOracleBase("compat-cp-framebuf-text", expectedTransactions: 43);
 
+// Long-string twin: 17- and 21-character display.text() lines. Same init
+// burst + one framebuffer write, so the count matches the short fixture.
+[TestFixture]
+public class CompatCpFramebufTextLongOnCircuitPythonTests()
+    : CircuitPythonOracleBase("compat-cp-framebuf-text-long", expectedTransactions: 43);
+
 [TestFixture]
 public class AdafruitSsd1306Unmodified64OnCircuitPythonTests()
     : CircuitPythonOracleBase("adafruit-ssd1306-unmodified-64", expectedTransactions: 50);
