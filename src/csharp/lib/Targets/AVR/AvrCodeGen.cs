@@ -260,7 +260,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
             else
             {
-                int abs = 0x0100 + offset;
+                int abs = RamStart() + offset;
                 Emit("LDS", "R18", $"0x{abs:X4}");
                 Emit("LDS", "R19", $"0x{abs + 1:X4}");
                 Emit("LDS", "R20", $"0x{abs + 2:X4}");
@@ -373,7 +373,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
             else
             {
-                int abs = 0x0100 + offset;
+                int abs = RamStart() + offset;
                 Emit("LDS", "R22", $"0x{abs:X4}");
                 Emit("LDS", "R23", $"0x{abs + 1:X4}");
                 Emit("LDS", "R24", $"0x{abs + 2:X4}");
@@ -417,7 +417,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
             else
             {
-                int abs = 0x0100 + offset;
+                int abs = RamStart() + offset;
                 Emit("STS", $"0x{abs:X4}", "R22");
                 Emit("STS", $"0x{abs + 1:X4}", "R23");
                 Emit("STS", $"0x{abs + 2:X4}", "R24");
@@ -809,7 +809,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 bool found = _stackLayout.TryGetValue(ab.ArrayName, out abOffset)
                           || _stackLayout.TryGetValue(ab.ArrayName + "__0", out abOffset);
                 if (found) {
-                    int absAddr = 0x0100 + abOffset;
+                    int absAddr = RamStart() + abOffset;
                     Emit("LDI", reg,   $"lo8(0x{absAddr:X4})");
                     Emit("LDI", regH2, $"hi8(0x{absAddr:X4})");
                 } else {
@@ -928,7 +928,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
             else
             {
-                var abs = 0x0100 + offset;
+                var abs = RamStart() + offset;
                 Emit("LDS", reg, $"0x{abs:X4}");
                 if (size >= 2 && srcSize >= 2) Emit("LDS", regH, $"0x{abs + 1:X4}");
                 if (size == 4 && srcSize >= 4) { Emit("LDS", regB2, $"0x{abs + 2:X4}"); Emit("LDS", regB3, $"0x{abs + 3:X4}"); }
@@ -998,7 +998,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
             else
             {
-                var abs = 0x0100 + offset;
+                var abs = RamStart() + offset;
                 Emit("STS", $"0x{abs:X4}", reg);
                 if (size >= 2) Emit("STS", $"0x{abs + 1:X4}", regH);
                 if (size == 4) { Emit("STS", $"0x{abs + 2:X4}", regB2); Emit("STS", $"0x{abs + 3:X4}", regB3); }
@@ -1782,7 +1782,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     }
                     else
                     {
-                        var abs = 0x0100 + off;
+                        var abs = RamStart() + off;
                         Emit("STS", $"0x{abs:X4}", aR);
                         if (p16 || p32) Emit("STS", $"0x{abs + 1:X4}", GetHighReg(aR));
                         if (p32)
@@ -4211,14 +4211,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
             else
             {
-                Emit("LDS", "R24", $"0x{0x0100 + offset:X4}");
-                if (is16) Emit("LDS", "R25", $"0x{0x0100 + offset + 1:X4}");
+                Emit("LDS", "R24", $"0x{RamStart() + offset:X4}");
+                if (is16) Emit("LDS", "R25", $"0x{RamStart() + offset + 1:X4}");
             }
         }
         else
         {
             EmitComment("ArrayLoad variable index via Z");
-            var absBase = 0x0100 + baseOffset;
+            var absBase = RamStart() + baseOffset;
             if (NeedsWideIndex(al.Count, elemSize))
             {
                 // The byte offset does not fit in eight bits, so the index has to be carried
@@ -4272,8 +4272,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
             else
             {
-                Emit("STS", $"0x{0x0100 + offset:X4}", "R24");
-                if (is16) Emit("STS", $"0x{0x0100 + offset + 1:X4}", "R25");
+                Emit("STS", $"0x{RamStart() + offset:X4}", "R24");
+                if (is16) Emit("STS", $"0x{RamStart() + offset + 1:X4}", "R25");
             }
         }
         else
@@ -4281,7 +4281,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("MOV", "R18", "R24");
             if (is16) Emit("MOV", "R19", "R25");
             EmitComment("ArrayStore variable index via Z");
-            var absBase = 0x0100 + baseOffset;
+            var absBase = RamStart() + baseOffset;
             if (NeedsWideIndex(ast.Count, elemSize))
             {
                 // Same as the load side: past 256 bytes the index must be carried as a pair,
@@ -5007,7 +5007,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private int GetGcRefSramAddr(string varName)
     {
         if (_stackLayout.TryGetValue(varName, out int offset))
-            return 0x0100 + offset;
+            return RamStart() + offset;
         throw new Exception($"GcRoot: variable '{varName}' not found in stack layout");
     }
 
@@ -5463,7 +5463,7 @@ internal partial class AvrLineMapJsonContext : JsonSerializerContext { }
 // ── Var map (--emit-varmap) ───────────────────────────────────────────────────────────────────
 
 // StackVars/StackVarLines hold variables that are stack-spilled (not in registers).
-// The int value is the absolute AVR data-space address (0x0100 + stack offset).
+// The int value is the absolute AVR data-space address (RAMSTART + stack offset).
 // Params lists parameter names so the debugger can distinguish them from first-line locals.
 public record VarMapEntry(
     string Function,
