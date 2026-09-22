@@ -1040,6 +1040,121 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         var allocator = new StackAllocator();
         var (offsets, maxStack) = allocator.Allocate(program);
         _stackLayout = offsets;
+
+        // The allocator lays out locals along IR-visible call edges only.
+        // __pymcu_exn_tail is entered solely from the raw asm EmitExnRuntime emits --
+        // no Call instruction ever names it -- so the walk never reaches it and its
+        // whole subtree (the message printer, the UART string writer) gets no slots,
+        // leaving the LDS/STS operands in their emitted bodies with no .equ to link
+        // against. Walk that subtree here and give every missed local a fresh slot
+        // above the high-water mark: the tail runs with all frames dead, on the way
+        // to halt, so disjoint space is all it needs. A function's locals are the
+        // Variable/Temporary operands in its body (inline-expanded ones carry an
+        // "inline<N>_" prefix, not the function's), so the body is scanned, the same
+        // shapes StackAllocator.BuildGraph registers.
+        if (program.Functions.Any(f => f.Name == "__pymcu_exn_tail"))
+        {
+            var exnGlobalNames = new HashSet<string>(
+                program.Globals.Select(g => g.Name), StringComparer.Ordinal);
+            foreach (var ga in program.GlobalArrays.Keys) exnGlobalNames.Add(ga);
+
+            var missed = new HashSet<string>(StringComparer.Ordinal);
+            void CollectLocal(Val? v)
+            {
+                var name = v switch
+                {
+                    Variable vv => vv.Name,
+                    Temporary tt => tt.Name,
+                    _ => null,
+                };
+                if (name != null && !exnGlobalNames.Contains(name))
+                    missed.Add(name);
+            }
+
+            var tailWorklist = new Queue<string>();
+            var tailSeen = new HashSet<string>(StringComparer.Ordinal);
+            tailWorklist.Enqueue("__pymcu_exn_tail");
+            while (tailWorklist.Count > 0)
+            {
+                var tailFn = tailWorklist.Dequeue();
+                if (!tailSeen.Add(tailFn)) continue;
+                var tailFunc = program.Functions.FirstOrDefault(f => f.Name == tailFn);
+                if (tailFunc == null) continue;
+                foreach (var param in tailFunc.Params) missed.Add(param);
+                foreach (var instr in tailFunc.Body)
+                {
+                    switch (instr)
+                    {
+                        case Copy c: CollectLocal(c.Src); CollectLocal(c.Dst); break;
+                        case Bitcast bc: CollectLocal(bc.Src); CollectLocal(bc.Dst); break;
+                        case Binary b: CollectLocal(b.Src1); CollectLocal(b.Src2); CollectLocal(b.Dst); break;
+                        case Unary u: CollectLocal(u.Src); CollectLocal(u.Dst); break;
+                        case BitSet bs: CollectLocal(bs.Target); break;
+                        case BitClear bc: CollectLocal(bc.Target); break;
+                        case BitCheck bck: CollectLocal(bck.Source); CollectLocal(bck.Dst); break;
+                        case BitWrite bw: CollectLocal(bw.Target); CollectLocal(bw.Src); break;
+                        case Call cl:
+                            tailWorklist.Enqueue(cl.FunctionName);
+                            CollectLocal(cl.Dst);
+                            foreach (var ca in cl.Args) CollectLocal(ca);
+                            break;
+                        case Return r: CollectLocal(r.Value); break;
+                        case JumpIfZero jz: CollectLocal(jz.Condition); break;
+                        case JumpIfNotZero jnz: CollectLocal(jnz.Condition); break;
+                        case JumpIfBitSet jbs: CollectLocal(jbs.Source); break;
+                        case JumpIfBitClear jbc: CollectLocal(jbc.Source); break;
+                        case JumpIfEqual je: CollectLocal(je.Src1); CollectLocal(je.Src2); break;
+                        case JumpIfNotEqual jne: CollectLocal(jne.Src1); CollectLocal(jne.Src2); break;
+                        case JumpIfLessThan jlt: CollectLocal(jlt.Src1); CollectLocal(jlt.Src2); break;
+                        case JumpIfLessOrEqual jle: CollectLocal(jle.Src1); CollectLocal(jle.Src2); break;
+                        case JumpIfGreaterThan jgt: CollectLocal(jgt.Src1); CollectLocal(jgt.Src2); break;
+                        case JumpIfGreaterOrEqual jge: CollectLocal(jge.Src1); CollectLocal(jge.Src2); break;
+                        case ArrayLoad al:
+                            if (!exnGlobalNames.Contains(al.ArrayName)) missed.Add(al.ArrayName);
+                            CollectLocal(al.Index); CollectLocal(al.Dst); break;
+                        case ArrayLoadFlash alf: CollectLocal(alf.Index); CollectLocal(alf.Dst); break;
+                        case ArrayStore ast:
+                            if (!exnGlobalNames.Contains(ast.ArrayName)) missed.Add(ast.ArrayName);
+                            CollectLocal(ast.Index); CollectLocal(ast.Src); break;
+                        case IndirectCall ic:
+                            CollectLocal(ic.FuncAddr);
+                            foreach (var icArg in ic.Args) CollectLocal(icArg);
+                            CollectLocal(ic.Dst);
+                            break;
+                        case LoadIndirect li: CollectLocal(li.SrcPtr); CollectLocal(li.Dst); break;
+                        case StoreIndirect si: CollectLocal(si.Src); CollectLocal(si.DstPtr); break;
+                        case AugAssign aa: CollectLocal(aa.Target); CollectLocal(aa.Operand); break;
+                        case GcAlloc ga: CollectLocal(ga.Size); CollectLocal(ga.Dst); break;
+                        case GcRoot gr: CollectLocal(gr.Var); break;
+                        case GcUnroot gu: CollectLocal(gu.Var); break;
+                        case FlashLoadPtr flp: CollectLocal(flp.Ptr); CollectLocal(flp.Index); CollectLocal(flp.Dst); break;
+                        case BytearrayLoad bl:
+                            if (!exnGlobalNames.Contains(bl.PtrName)) missed.Add(bl.PtrName);
+                            CollectLocal(bl.Index); CollectLocal(bl.Dst); break;
+                        case BytearrayStore bs:
+                            if (!exnGlobalNames.Contains(bs.PtrName)) missed.Add(bs.PtrName);
+                            CollectLocal(bs.Index); CollectLocal(bs.Src); break;
+                        case SignalError se: CollectLocal(se.Code); break;
+                        case VirtualCall vc:
+                            CollectLocal(vc.Self);
+                            CollectLocal(vc.Dst);
+                            foreach (var va in vc.Args) CollectLocal(va);
+                            break;
+                        case InlineAsm ia:
+                            if (ia.Operands != null)
+                                foreach (var op in ia.Operands) CollectLocal(op);
+                            break;
+                    }
+                }
+            }
+
+            foreach (var vname in missed)
+            {
+                if (_stackLayout.ContainsKey(vname)) continue;
+                _stackLayout[vname] = maxStack;
+                maxStack += Math.Max(1, allocator.VariableSizes.GetValueOrDefault(vname, 1));
+            }
+        }
         _maxStaticUsage = maxStack;
         // Static SRAM lives as .equ offsets from _stack_base, invisible to the
         // linker's MEMORY regions, so this is the only place overflow can be
@@ -1321,18 +1436,40 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // surviving call sites, and an ISR can hold delay sites too.
         var referencedFuncs = new HashSet<string>();
         var worklist = new Queue<string>();
-        
+
         void AddRef(string name)
         {
             if (referencedFuncs.Add(name))
                 worklist.Enqueue(name);
         }
 
+        // Collect the constant exception codes raised anywhere in the program so EmitExnRuntime
+        // emits their diagnostic name table + UART printer. (Done over the whole program rather
+        // than relying on per-function codegen, which DCE can skip.) Hoisted ahead of the
+        // reference walk because the unhandled path's raw asm is what reaches
+        // __pymcu_exn_tail, and only a function in the graph survives.
+        foreach (var f in program.Functions)
+            foreach (var se in f.Body.OfType<SignalError>())
+                if (se.Code is Constant ce && ce.Value != 0)
+                    _usedExnCodes.Add(ce.Value);
+
+        // Emit the exception runtime when the T-flag model calls __pymcu_unhandled_exn
+        // for an unmatched catch.
+        bool needsExnRuntime = program.Functions.Any(f =>
+                f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn")
+                || f.Body.OfType<BranchOnError>().Any(b => b.ErrorLabel == "__pymcu_unhandled_exn"));
+        bool hasExnTail = program.Functions.Any(f => f.Name == "__pymcu_exn_tail");
+
         AddRef("main");
         foreach (var f in program.Functions.Where(f => f.IsInterrupt))
             AddRef(f.Name);
         foreach (var sym in program.ExternSymbols)
             AddRef(sym);
+        // __pymcu_exn_tail is only ever called from the raw asm EmitExnRuntime writes
+        // after the peephole pass -- the instruction walk cannot see it, so it is added
+        // by name. The printer and writers it calls are reached through its body.
+        if (needsExnRuntime && hasExnTail)
+            AddRef("__pymcu_exn_tail");
 
         while (worklist.Count > 0)
         {
@@ -1445,20 +1582,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitDelayRuntime(output);
         EmitFlashArrayPool(output);
         if (program.NeedsGc) EmitGcRuntime(output);
-        // Collect the constant exception codes raised anywhere in the program so EmitExnRuntime
-        // emits their diagnostic name table + UART printer. (Done over the whole program rather
-        // than relying on per-function codegen, which DCE can skip.)
-        foreach (var f in program.Functions)
-            foreach (var se in f.Body.OfType<SignalError>())
-                if (se.Code is Constant ce && ce.Value != 0)
-                    _usedExnCodes.Add(ce.Value);
-
-        // Emit the exception runtime when the T-flag model calls __pymcu_unhandled_exn
-        // for an unmatched catch.
-        bool needsExnRuntime = program.Functions.Any(f =>
-                f.Body.OfType<Call>().Any(c => c.FunctionName == "__pymcu_unhandled_exn")
-                || f.Body.OfType<BranchOnError>().Any(b => b.ErrorLabel == "__pymcu_unhandled_exn"));
-        if (needsExnRuntime) EmitExnRuntime(output, _usedExnCodes, ChipName(), cfg);
+        // needsExnRuntime / _usedExnCodes were collected before DCE: the walk is what
+        // decides whether __pymcu_exn_tail survives to be called here.
+        if (needsExnRuntime)
+            EmitExnRuntime(output, _usedExnCodes, ChipName(), cfg,
+                           emitTail: referencedFuncs.Contains("__pymcu_exn_tail"));
         WriteSymbolsIfRequested(optimized, program);
         WriteLineMapIfRequested(optimized);
         WriteVarMapIfRequested(program);
@@ -4655,7 +4783,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     }
 
     private static void EmitExnRuntime(TextWriter os, HashSet<int> usedCodes, string chip,
-                                       DeviceConfig cfg)
+                                       DeviceConfig cfg, bool emitTail = false)
     {
         os.WriteLine("; ── Exception runtime ──────────────────────────────────────────────────────");
         var codes = usedCodes.OrderBy(x => x).ToList();
@@ -4682,7 +4810,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (int code in codes)
         {
             os.WriteLine($"__exn_str_{code}:");
-            os.WriteLine($"    .byte {ExnAsciiBytes(code)}");
+            // When __pymcu_exn_tail is linked, the type name is followed by ": <msg>" and
+            // the CRLF comes from the tail; without it the table carries the CRLF itself
+            // and the report is the bare `E:<Type>` it always was.
+            os.WriteLine($"    .byte {ExnAsciiBytes(code, withCrlf: !emitTail)}");
         }
         os.WriteLine("    .balign 2");
         os.WriteLine();
@@ -4749,13 +4880,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         os.WriteLine("__exn_print_loop:");
         os.WriteLine("    lpm   R16, Z+");
         os.WriteLine("    tst   R16");
-        os.WriteLine("    breq  __exn_halt");
+        os.WriteLine(emitTail ? "    breq  __exn_tail" : "    breq  __exn_halt");
         os.WriteLine("__exn_wait_udre:");
         os.WriteLine($"    lds   R17, {ucsrA}");
         os.WriteLine("    sbrs  R17, 5");
         os.WriteLine("    rjmp  __exn_wait_udre");
         os.WriteLine($"    sts   {udr}, R16");
         os.WriteLine("    rjmp  __exn_print_loop");
+        if (emitTail)
+        {
+            // Type name printed; append ": <msg>" + CRLF (or just the CRLF when the
+            // raise carried no message) through the synthesized tail, then park.
+            os.WriteLine("__exn_tail:");
+            os.WriteLine("    call  __pymcu_exn_tail");
+        }
         os.WriteLine("__exn_halt:");
         os.WriteLine("    cli");
         os.WriteLine("    rjmp  .-2");
@@ -4936,13 +5074,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             ? name
             : $"Exception{code}";
 
-    private static string ExnAsciiBytes(int code)
+    private static string ExnAsciiBytes(int code, bool withCrlf = true)
     {
         string name = ExnCodeName(code);
         var bytes = new List<int> { 'E', ':' };
         foreach (char ch in name) bytes.Add(ch);
-        bytes.Add(13);
-        bytes.Add(10);
+        if (withCrlf)
+        {
+            bytes.Add(13);
+            bytes.Add(10);
+        }
         bytes.Add(0);
         return string.Join(", ", bytes);
     }
