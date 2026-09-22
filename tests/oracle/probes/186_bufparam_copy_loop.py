@@ -1,6 +1,5 @@
 # expect: match
 # doc: docs/language/roadmap.md
-# tracked: #32
 from pymcu.types import uint8, uint16
 
 def copy(dst: bytearray, src: bytearray, n: uint16):

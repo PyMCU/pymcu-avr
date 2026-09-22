@@ -1,4 +1,4 @@
-# expect: refuse a bytes or list literal has no value
+# expect: match
 # doc: docs/language/roadmap.md
 from pymcu.types import uint8
 
