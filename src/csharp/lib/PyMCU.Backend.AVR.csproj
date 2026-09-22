@@ -8,9 +8,12 @@
     <!-- SPDX-License-Identifier: MIT -->
   </PropertyGroup>
 
-  <ItemGroup>
+  <PropertyGroup>
     <!-- pymcu-sdk lives in the PyMCU/pymcu monorepo.
-         Expects both repos checked out as siblings: ../pymcu/ next to ../pymcu-avr/ -->
+         Expects both repos checked out as siblings: ../pymcu/ next to ../pymcu-avr/.
+         PyMCURepoDir names that checkout and may be overridden from the environment
+         (MSBuild imports env vars as properties): a worktree build points it at the
+         worktree's sibling so it builds the worktree's SDK, not the main checkout's. -->
     <!-- PyMCU, not pymcu: the directory on disk is PyMCU, and MSBuild does NOT resolve a
          reference at the wrong case. Measured on a case-sensitive APFS volume, with a
          control run at the correct spelling on the same volume:
@@ -18,7 +21,11 @@
              ..\PyMCU\... -> resolves
          The wrong case does not fail the build, it DROPS the reference and goes green,
          so a case-sensitive CI passes on an artifact missing a dependency. -->
-    <ProjectReference Include="..\..\..\..\PyMCU\extensions\pymcu-sdk\csharp\PyMCU.Backend.SDK.csproj" />
+    <PyMCURepoDir Condition="'$(PyMCURepoDir)' == ''">..\..\..\..\PyMCU</PyMCURepoDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(PyMCURepoDir)\extensions\pymcu-sdk\csharp\PyMCU.Backend.SDK.csproj" />
   </ItemGroup>
 
   <ItemGroup>
