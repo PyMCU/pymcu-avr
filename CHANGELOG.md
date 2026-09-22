@@ -4,6 +4,16 @@
 
 ### Added
 
+- **avr**: RFC 0009 phase 1 -- a `-> Optional[X]`/`-> Union[X, None]` return carries its
+  payload in the ordinary result registers and a one-byte member tag in the next
+  register of the return run (R25 after an 8-bit payload, R22 after a 16-bit one, R20
+  after a 32-bit/float one). `Return.Tag` emits the tag store, `Call.TagDst` lands it at
+  the caller, and `--return-tags` advertises the capability so a tag-free `.mir` keeps
+  working while a tagged one on an old backend is refused instead of silently dropping
+  the tag. A program with no runtime-None path is byte-identical.
+- **avr**: `fixtures/adafruit-bmp280-unmodified` — the vendored Adafruit BMP280 driver
+  compiled and run unmodified against a register-file TWI slave, asserting all 27 I2C
+  transactions match the CPython oracle under both front ends, optimizer on and off.
 - **testkit**: `TwiRecorder` takes a `nackAll` option that NACKs every address phase, so a
   fixture can exercise the no-device path without a slave on the bus.
 - **avr**: `fixtures/cp-i2c-nack` and `fixtures/mp-i2c-nack` — a CircuitPython and a
