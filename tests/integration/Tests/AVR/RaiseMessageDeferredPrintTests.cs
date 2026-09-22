@@ -63,10 +63,40 @@ public class RaiseMessageDeferredPrintTests
     }
 
     [Test]
+    public void AnFStringConcatenatedWithALiteralReplaysAsOneMessage()
+    {
+        // The adafruit_seesaw spelling: f"..." "..." across a line break.
+        FullRun(_session).Serial.Should().ContainLine(
+            "Seesaw hardware ID returned 0x60 is not correct! Please check your wiring.",
+            because: "implicit concat folds into one JoinedStr; the deferred print must "
+                + "emit the whole message, not just the f-string piece");
+    }
+
+    [Test]
+    public void AFloatPieceUnderAnFSpecPrintsWithPrecision()
+    {
+        FullRun(_session).Serial.Text.Should().Contain(
+            "bus voltage -0.1V under range\nbus voltage -2.7V under range\n",
+            because: "f\"{v:.1f}\" in a raise must replay through uart_write_float_fmt "
+                + "exactly as print(f\"{v:.1f}\") does, round-half-even included");
+    }
+
+    [Test]
+    public void AnIntPieceUnderAnFSpecConvertsToFloat()
+    {
+        FullRun(_session).Serial.Should().ContainLine("count 9.00 pins",
+            because: "CPython converts the int to float under an f spec (\"9.00\"); "
+                + "parking it as an int would print \"9\"");
+    }
+
+    [Test]
     public void TheSameThroughThePythonFrontEnd()
     {
         FullRun(_pySession).Serial.Text.Should().Contain(
-            "bad address 200\nExpected tuple of length 3, got 0\ncode 7 temp 36.5\nEND\n",
+            "bad address 200\nExpected tuple of length 3, got 0\ncode 7 temp 36.5\n"
+                + "Seesaw hardware ID returned 0x60 is not correct! Please check your wiring.\n"
+                + "bus voltage -0.1V under range\nbus voltage -2.7V under range\n"
+                + "count 9.00 pins\nEND\n",
             because: "both front ends must lower the same deferred-print sequence");
     }
 }
