@@ -1,6 +1,5 @@
 # expect: match
 # doc: docs/language/roadmap.md
-# tracked: PyMCU/PyMCU#488
 class M:
     def __init__(self):
         self.f = 2

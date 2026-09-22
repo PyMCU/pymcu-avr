@@ -1,6 +1,5 @@
 # expect: match
 # doc: docs/language/roadmap.md
-# tracked: PyMCU/PyMCU#488
 class Life:
     def __init__(self, seed):
         self.rng = seed

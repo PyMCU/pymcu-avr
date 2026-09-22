@@ -1,6 +1,5 @@
 # expect: match
 # doc: docs/language/roadmap.md
-# tracked: PyMCU/PyMCU#488
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8
 

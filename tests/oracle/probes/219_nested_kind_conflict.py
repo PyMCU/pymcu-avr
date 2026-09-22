@@ -1,6 +1,5 @@
-# expect: match
+# expect: refuse is first typed as numeric and is later given a str value
 # doc: docs/language/roadmap.md
-# tracked: PyMCU/PyMCU#488
 class Rec:
     def __init__(self):
         self.x = 5

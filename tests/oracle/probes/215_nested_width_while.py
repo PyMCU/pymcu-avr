@@ -1,6 +1,5 @@
 # expect: match
 # doc: docs/language/roadmap.md
-# tracked: PyMCU/PyMCU#488
 class Acc:
     def __init__(self):
         self.total = 0
