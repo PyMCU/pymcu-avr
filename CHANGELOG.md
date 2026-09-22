@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Fixed
+
+- **avr**: silent wrong code on parts whose SRAM does not start at 0x0100 -- every
+  absolute slot and array access past the Y+63 displacement window emitted
+  `0x0100 + offset` regardless of the chip. On the ATmega2560 (RAMSTART 0x0200)
+  those accesses land in extended I/O space: a store is lost to a peripheral
+  register and the load answers with whatever the register holds. All absolute
+  data-space addresses are now `RAMSTART + offset` from the device geometry.
+- **avr**: silent wrong code when an array outlived the call that created it --
+  `self.buf = bytearray(n)` retained by an instance, or any array whose address
+  reaches a global, memory through a pointer, a return value or a callee that
+  stashes its parameter. The call-tree overlay gave such an array a slot a
+  sibling subtree could reuse, so a later call's locals overwrote the retained
+  bytes (the Life program's 513-byte framebuffer aliased `step()`'s frame). The
+  backend now promotes object-lifetime arrays into the global region before
+  stack allocation.
+
 ### Performance
 
 - **avr**: a constant `delay_ms()`/`delay_us()` loop counts on as many registers as the
