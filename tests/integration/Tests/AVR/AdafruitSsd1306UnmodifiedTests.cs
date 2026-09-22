@@ -105,6 +105,11 @@ public class AdafruitSsd1306UnmodifiedTests
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(_hex);
+        // Hold SDA/SCL high the way a wired bus sits at idle -- the GPIO model
+        // drives PIN only from injected values, so without this the
+        // busio.I2C wiring check refuses the bus before the probe can NACK.
+        uno.PortC.SetPinValue(4, true);   // SDA
+        uno.PortC.SetPinValue(5, true);   // SCL
         uno.AddTwi(AvrTwi.TwiConfig, out var twi);
         twi.EventHandler = new TwiRecorder(twi, OledAddr, nackAll: true);
 

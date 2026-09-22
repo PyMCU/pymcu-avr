@@ -50,6 +50,11 @@ public class CpI2cNackTests
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(_hex);
+        // The GPIO model drives PIN only from injected values -- the internal
+        // pull-ups do not raise it -- so hold SDA/SCL high the way a wired bus
+        // sits at idle, or CircuitPython's busio.I2C wiring check refuses it.
+        uno.PortC.SetPinValue(4, true);   // SDA
+        uno.PortC.SetPinValue(5, true);   // SCL
         uno.AddTwi(AvrTwi.TwiConfig, out var twi);
         twi.EventHandler = new TwiRecorder(twi, 0x3C, nackAll);
         return uno;
