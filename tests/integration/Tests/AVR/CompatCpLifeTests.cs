@@ -41,10 +41,10 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 public abstract class CompatCpLifeBase(
     string fixture, int generations, double avrMaxMs = 20_000)
 {
-    private const byte OledAddr = 0x3C;
+    protected const byte OledAddr = 0x3C;
     private const int FrameBytes = 513;
     private readonly int _generations = generations;
-    private readonly double _avrMaxMs = avrMaxMs;
+    protected readonly double _avrMaxMs = avrMaxMs;
 
     // md5 of each vendored file, pinned so an accidental edit fails the test.
     private static readonly (string RelPath, string Md5)[] VendoredFiles =
@@ -62,7 +62,7 @@ public abstract class CompatCpLifeBase(
     private string _hex = null!;
     private string _pyHex = null!;
     private List<I2cTransaction> _oracle = null!;
-    private WireTrace _run = null!;
+    protected WireTrace _run = null!;
 
     // Sim-time (ms at 16 MHz) at which each recorded transaction completed --
     // the spacing of the 513-byte writes is the wall-clock of a generation.
@@ -226,3 +226,50 @@ public class CompatCpLifeNestedTests() : CompatCpLifeBase("compat-cp-life-nested
 [TestFixture]
 public class CompatCpLifeIdiomaticTests()
     : CompatCpLifeBase("compat-cp-life-idiomatic", generations: 30);
+
+/// <summary>
+/// The SAME Life program as <see cref="CompatCpLifeIdiomaticTests"/>, with the
+/// cell grids written the way a CircuitPython user writes them:
+/// <c>self.cells = [[0] * width for _ in range(height)]</c> and
+/// <c>self.cells[y][x]</c>. The compiler lowers each grid to ONE flat
+/// <c>uint8[256]</c> array, so the wire stream must be byte-identical to the
+/// hand-flattened fixture's -- <see cref="GridFirmware_SendsTheSameI2cTrafficAsTheFlatSpelling"/>
+/// records both on the emulator and compares transaction by transaction, and
+/// <see cref="Grid_LowersToOneFlatArray"/> greps the listing so the lowering
+/// cannot silently grow a row-object allocation.
+/// </summary>
+[TestFixture]
+public class CompatCpLifeGridTests()
+    : CompatCpLifeBase("compat-cp-life-grid", generations: 30)
+{
+    [Test]
+    public void GridFirmware_SendsTheSameI2cTrafficAsTheFlatSpelling()
+    {
+        var flatHex = PymcuCompiler.BuildFixture("compat-cp-life-idiomatic");
+        var flatRun = UnoTwiTrace.Record(flatHex, OledAddr, _run.Transactions.Count, maxMs: _avrMaxMs);
+        _run.Transactions.Count.Should().Be(253,
+            "30 generations plus init + seed draws must produce 253 I2C transactions");
+        I2cStreams.AssertEqual(flatRun.Transactions.ToList(), _run,
+            "list-of-rows vs hand-flattened bytearray");
+    }
+
+    [Test]
+    public void Grid_LowersToOneFlatArray()
+    {
+        // Each grid must be ONE contiguous W*H allocation -- the same .equ the
+        // flat bytearray spelling produces -- not W row objects.
+        var asmPath = Path.Combine(
+            PymcuCompiler.FixtureDir(Fixture), "dist", "firmware.gas.asm");
+        var asm = File.ReadAllText(asmPath);
+        foreach (var name in new[] { "life_cells", "life_next_cells" })
+        {
+            var equs = System.Text.RegularExpressions.Regex.Matches(
+                asm, $@"\.equ\s+{name},");
+            equs.Count.Should().Be(1, $"{name} must be one contiguous flat array");
+            // A row-object lowering would need per-row storage symbols; the
+            // flat lowering leaves exactly one symbol and nothing else.
+            System.Text.RegularExpressions.Regex.Matches(asm, $@"{name}_row\d+")
+                .Count.Should().Be(0, $"{name} must not allocate row objects");
+        }
+    }
+}

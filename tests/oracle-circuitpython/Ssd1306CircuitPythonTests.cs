@@ -130,3 +130,13 @@ public class CompatCpLifeOnCircuitPythonTests()
 public class CompatCpLifeIdiomaticOnCircuitPythonTests()
     : CircuitPythonOracleBase("compat-cp-life-idiomatic", expectedTransactions: 253,
         runsForever: true, avrMaxMs: 20_000);
+
+// The grid twin: `self.cells = [[0] * width for _ in range(height)]` and
+// `self.cells[y][x]` -- the list-of-rows spelling a CircuitPython user writes,
+// which the compiler lowers to the same flat arrays. Real CircuitPython runs
+// the same sources with true row objects; both must emit the identical wire
+// stream (253 transactions).
+[TestFixture]
+public class CompatCpLifeGridOnCircuitPythonTests()
+    : CircuitPythonOracleBase("compat-cp-life-grid", expectedTransactions: 253,
+        runsForever: true, avrMaxMs: 20_000);
