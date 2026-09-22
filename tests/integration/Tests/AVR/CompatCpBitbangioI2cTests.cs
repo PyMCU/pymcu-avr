@@ -13,7 +13,9 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// along; an ATmega has one TWI, so a board with two sensors at the same address needs this.
 ///
 /// The transfer is decoded out of the waveform on D2 and D3, which is the only place a
-/// bit-banged bus exists: there is no peripheral register to read it back from.
+/// bit-banged bus exists: there is no peripheral register to read it back from. No slave
+/// answers, so the address is NACKed -- the fixture doubles as the bitbang NACK test:
+/// the address still clocks out, then writeto() stops the bus and raises OSError.
 /// </summary>
 [TestFixture]
 public class CompatCpBitbangioI2cTests
@@ -89,12 +91,25 @@ public class CompatCpBitbangioI2cTests
     }
 
     [Test]
-    public void TheAddressAndThePayloadAreClockedOut()
+    public void TheAddressIsClockedOutAndNacked()
     {
+        // Nothing answers on the emulated bus: the pins this bitbang runs on are
+        // driven, not released, so the ACK slot always reads high. writeto() must
+        // stop and raise -- the payload never reaches the wire.
         var t = Run();
-        t.ClockedBits.Count.Should().BeGreaterThanOrEqualTo(18, "eight address bits, an ACK, eight data bits and an ACK");
+        t.ClockedBits.Count.Should().BeGreaterThanOrEqualTo(9, "eight address bits and the ACK slot the empty bus NACKs");
         Byte(t.ClockedBits, 0).Should().Be(0xD0, "0x68 shifted left with the write bit clear");
-        Byte(t.ClockedBits, 9).Should().Be(0xA5, "the payload");
+        t.ClockedBits[8].Should().Be(1, "no slave pulls SDA low, so the address is NACKed");
+    }
+
+    [Test]
+    public void TheNackedAddressRaisesOSError()
+    {
+        var uno = _session.Reset();
+        uno.RunToBreak(10_000_000);
+        uno.RunUntilSerial(uno.Serial, "No such device", maxMs: 500);
+        uno.Serial.Text.Should().Contain("E:OSError: [Errno 19] No such device",
+            "a NACKed address raises the way CircuitPython does");
     }
 
     [Test]
