@@ -19,6 +19,20 @@ public static class UnoTwiTrace
     /// </param>
     public static WireTrace Record(string hex, byte address, int stopAfterCount,
         double maxMs = 2000, double tailMs = 50, byte[]? readScript = null)
+        => Record(hex, twi =>
+        {
+            var r = new TwiRecorder(twi, address);
+            if (readScript != null)
+                foreach (var b in readScript) r.ReadBytes.Enqueue(b);
+            return r;
+        }, stopAfterCount, maxMs, tailMs);
+
+    /// <summary>
+    /// Same run with a caller-supplied bus device -- a register file for a
+    /// sensor whose driver validates chip id / calibration before streaming.
+    /// </summary>
+    public static WireTrace Record(string hex, Func<AvrTwi, ITwiRecorder> makeDevice,
+        int stopAfterCount, double maxMs = 2000, double tailMs = 50)
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(hex);
@@ -28,9 +42,7 @@ public static class UnoTwiTrace
         uno.PortC.SetPinValue(4, true);   // SDA
         uno.PortC.SetPinValue(5, true);   // SCL
         uno.AddTwi(AvrTwi.TwiConfig, out var twi);
-        var recorder = new TwiRecorder(twi, address);
-        if (readScript != null)
-            foreach (var b in readScript) recorder.ReadBytes.Enqueue(b);
+        var recorder = makeDevice(twi);
         twi.EventHandler = recorder;
 
         string? crash = null;

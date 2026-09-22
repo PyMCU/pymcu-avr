@@ -10,12 +10,19 @@ namespace PyMCU.TestKit;
 /// </summary>
 public sealed record WireTrace(List<I2cTransaction> Transactions, string? Crash);
 
+/// <summary>A TWI event handler that produces a recorded transaction stream.</summary>
+public interface ITwiRecorder : ITwiEventHandler
+{
+    List<I2cTransaction> Transactions { get; }
+    void Flush();
+}
+
 /// <summary>
 /// ACKs <paramref name="address"/> only; records transactions with boundaries.
 /// With <paramref name="nackAll"/> every connect is NACKed instead -- the dead-bus
 /// shape behind the SSD1306 field report, where no address ever answered.
 /// </summary>
-public sealed class TwiRecorder(AvrTwi twi, byte address, bool nackAll = false) : ITwiEventHandler
+public sealed class TwiRecorder(AvrTwi twi, byte address, bool nackAll = false) : ITwiRecorder
 {
     private readonly List<byte> _current = [];
     private byte _addr;
