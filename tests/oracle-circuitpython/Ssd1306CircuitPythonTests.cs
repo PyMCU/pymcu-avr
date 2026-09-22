@@ -25,10 +25,24 @@ namespace PyMCU.OracleCircuitPython;
 /// recorder decodes). Everything else -- driver sources, framebuffer content,
 /// transaction order -- is identical by construction.
 /// </summary>
-public abstract class CircuitPythonOracleBase(string fixture, int expectedTransactions)
+public abstract class CircuitPythonOracleBase(string fixture, int expectedTransactions,
+    bool runsForever = false, double avrMaxMs = 2_000)
 {
     protected readonly string Fixture = fixture;
     protected readonly int ExpectedTransactions = expectedTransactions;
+
+    /// <summary>
+    /// True when the fixture program ends in <c>while True: pass</c>: the Pico
+    /// run stops once <see cref="ExpectedTransactions"/> have been recorded
+    /// instead of waiting for the REPL prompt that never comes.
+    /// </summary>
+    protected readonly bool RunsForever = runsForever;
+
+    /// <summary>
+    /// Sim-time ceiling for the AVR run; a program with real <c>time.sleep</c>
+    /// calls between frames needs more than the 2 s default.
+    /// </summary>
+    protected readonly double AvrMaxMs = avrMaxMs;
 
     protected List<I2cTransaction> CPythonOracle = null!;
     protected CpRun CircuitPython = null!;
@@ -46,7 +60,8 @@ public abstract class CircuitPythonOracleBase(string fixture, int expectedTransa
         var codePy = CircuitPythonPico.ToCodePy(mainPy);
 
         sw.Restart();
-        CircuitPython = CircuitPythonPico.RunAutorun(snapshot, codePy);
+        CircuitPython = CircuitPythonPico.RunAutorun(
+            snapshot, codePy, RunsForever ? ExpectedTransactions : null);
         var cpMs = sw.ElapsedMilliseconds;
 
         CPythonOracle = OracleScript.Run(
@@ -54,7 +69,8 @@ public abstract class CircuitPythonOracleBase(string fixture, int expectedTransa
             Repo.VenvPython);
 
         var hex = FixtureCompiler.BuildFixture(Fixture);
-        AvrFirmware = UnoTwiTrace.Record(hex, address: 0x3C, stopAfterCount: CPythonOracle.Count);
+        AvrFirmware = UnoTwiTrace.Record(hex, address: 0x3C,
+            stopAfterCount: CPythonOracle.Count, maxMs: AvrMaxMs);
 
         TestContext.Progress.WriteLine(
             $"[{Fixture}] snapshot {snapshotMs} ms | circuitpython run {cpMs} ms " +
@@ -101,3 +117,8 @@ public class CompatCpFramebufTextLongOnCircuitPythonTests()
 [TestFixture]
 public class AdafruitSsd1306Unmodified64OnCircuitPythonTests()
     : CircuitPythonOracleBase("adafruit-ssd1306-unmodified-64", expectedTransactions: 50);
+
+[TestFixture]
+public class CompatCpLifeOnCircuitPythonTests()
+    : CircuitPythonOracleBase("compat-cp-life", expectedTransactions: 99,
+        runsForever: true, avrMaxMs: 20_000);

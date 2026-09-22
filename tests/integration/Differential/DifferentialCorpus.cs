@@ -141,6 +141,14 @@ public static class DifferentialCorpus
                 "the unoptimized build needs 2704 B of static data on a 2048 B part (the " +
                 "1025-byte framebuffer plus unoptimized temporaries); the optimized build " +
                 "is pinned by AdafruitSsd1306Unmodified64Tests and the CircuitPython oracle",
+            ["fixtures/compat-cp-life"] =
+                "the unoptimized build needs 2377 B of static data on a 2048 B part (the " +
+                "513-byte framebuffer, the two 256-byte cell arrays, the 256-byte arena and " +
+                "unoptimized temporaries); the optimized build is pinned by CompatCpLifeTests",
+            ["fixtures/compat-cp-life-nested"] =
+                "same shape as compat-cp-life: the unoptimized build's framebuffer, cell " +
+                "arrays, arena and unoptimized temporaries do not fit a 2048 B part; the " +
+                "optimized build is pinned by CompatCpLifeTests",
         };
 
     /// <summary>
