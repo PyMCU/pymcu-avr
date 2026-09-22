@@ -112,6 +112,15 @@ var profileOpt = new Option<string?>("--profile")
     DefaultValueFactory = _ => null
 };
 
+// RFC 0009 capability flag: the driver probes --help for this before handing over a
+// .mir whose functions carry Optional return tags. The backend moves a tag whenever
+// the IR carries one, so the flag itself changes nothing here -- it exists so the
+// probe can tell this binary from one that would drop the tag silently.
+var returnTagsOpt = new Option<bool>("--return-tags")
+{
+    Description = "Declare support for RFC 0009 Optional return tags (payload + member byte)"
+};
+
 var rootCmd = new RootCommand("pymcuc-avr — PyMCU AVR backend runner");
 rootCmd.Arguments.Add(irFileArg);
 rootCmd.Options.Add(outputOpt);
@@ -128,6 +137,7 @@ rootCmd.Options.Add(emitLineMapOpt);
 rootCmd.Options.Add(emitVarMapOpt);
 rootCmd.Options.Add(emitBlockMapOpt);
 rootCmd.Options.Add(profileOpt);
+rootCmd.Options.Add(returnTagsOpt);
 
 rootCmd.SetAction(pr =>
 {

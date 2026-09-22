@@ -196,6 +196,7 @@ public static class AvrEscapingArrays
                     case Call cl:
                         CallArgs(cl.Args, cl.FunctionName);
                         Kill(cl.Dst);
+                        if (cl.TagDst != null) Kill(cl.TagDst);
                         break;
                     case IndirectCall ic:
                         CallArgs(ic.Args, null);

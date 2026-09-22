@@ -62,6 +62,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private readonly Dictionary<string, int> _flashArraySizes = new();
     // Maps function name → list of parameter sizes (in bytes) for correct call-site arg loading.
     private Dictionary<string, List<int>> _functionParamSizes = new();
+    private Dictionary<string, DataType> _functionReturnTypes = new();
 
     // @extern symbols: these calls cross into avr-gcc-compiled code, which lays a 32-bit
     // first argument (and a 32-bit return) out the other way round from PyMCU's own convention.
@@ -1259,12 +1260,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         // Build function parameter size map for correct call-site arg loading.
         _functionParamSizes.Clear();
+        _functionReturnTypes.Clear();
         foreach (var func in program.Functions)
         {
             var sizes = new List<int>();
             foreach (var p in func.Params)
                 sizes.Add(_varSizes.TryGetValue(p, out int sz) ? sz : 1);
             _functionParamSizes[func.Name] = sizes;
+            _functionReturnTypes[func.Name] = func.ReturnType;
         }
 
         // @extern functions have no body, so they never appear in program.Functions. Their
@@ -1969,7 +1972,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             {
                 var si = func.Body[k];
                 if (si is DebugLine or InlineExpansionMarker) continue;
-                return si is Call { Dst: not NoneVal };
+                // A Call with a live TagDst is a passthrough even when the payload
+                // Dst is NoneVal: the tag byte is a second live-out the outlined
+                // subroutine would have to return through the same registers.
+                return si is Call { Dst: not NoneVal } or Call { TagDst: not null };
             }
             return false;
         }
@@ -2191,6 +2197,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
     }
 
+    // RFC 0009 section 4: the union-member tag byte of an Optional return rides in
+    // the register after the payload in the return run -- R25 after an 8-bit
+    // payload in R24, R22 after a 16-bit R24:R25, R20 after a 32-bit/float
+    // payload in R24,R25,R22,R23.
+    private static string TagReturnReg(DataType payloadType) => payloadType.SizeOf() switch
+    {
+        >= 4 => "R20",
+        2 => "R22",
+        _ => "R25",
+    };
+
     private void CompileReturn(Return r)
     {
         if (r.Value is not NoneVal)
@@ -2200,6 +2217,15 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 LoadFloatIntoRegs(r.Value);
             else
                 LoadIntoReg(r.Value, "R24", returnType);
+        }
+
+        // `return None` in a tagged function skips the payload load above, but the
+        // tag still has to reach the caller -- on that path it is the only byte
+        // the caller reads.
+        if (r.Tag != null)
+        {
+            var payloadType = _currentFunction?.ReturnType ?? GetValType(r.Value);
+            LoadIntoReg(r.Tag, TagReturnReg(payloadType), DataType.UINT8);
         }
 
         // Inject CLT before RET in every CanFail function's happy path.
@@ -2705,6 +2731,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             // reads byte0 from R24 and bytes 2-3 from R22:R23. Reading a C uint32_t that way
             // swapped its halves.
             StoreRegInto(cAbi && dstType.SizeOf() == 4 ? "R22" : "R24", call.Dst, dstType);
+        // RFC 0009: a call to a runtime-Optional function also receives the
+        // union-member byte, placed by the callee in the register after the
+        // payload in the return run. The callee's declared ReturnType, not
+        // GetValType(call.Dst), decides which register that is: a call whose
+        // payload is discarded (Dst NoneVal -- `if f() is None` binds only the
+        // tag) would otherwise read the byte out of the wrong register.
+        if (call.TagDst != null)
+        {
+            var calleeType = _functionReturnTypes.TryGetValue(call.FunctionName, out var rt)
+                ? rt
+                : dstType;
+            StoreRegInto(TagReturnReg(calleeType), call.TagDst, DataType.UINT8);
+        }
     }
 
     // Indirect call through a function pointer (ICALL Z on AVR).

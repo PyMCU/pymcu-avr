@@ -176,7 +176,7 @@ public static class AvrGpiorPromotion
     /// <summary>Rewrites every Val operand (sources and destinations) of an instruction.</summary>
     private static Instruction RewriteVals(Instruction instr, Func<Val, Val> f) => instr switch
     {
-        Return r => r with { Value = f(r.Value) },
+        Return r => r with { Value = f(r.Value), Tag = r.Tag == null ? null : f(r.Tag) },
         Unary u => u with { Src = f(u.Src), Dst = f(u.Dst) },
         Binary b => b with { Src1 = f(b.Src1), Src2 = f(b.Src2), Dst = f(b.Dst) },
         Copy c => c with { Src = f(c.Src), Dst = f(c.Dst) },
@@ -191,7 +191,7 @@ public static class AvrGpiorPromotion
         JumpIfLessOrEqual j => j with { Src1 = f(j.Src1), Src2 = f(j.Src2) },
         JumpIfGreaterThan j => j with { Src1 = f(j.Src1), Src2 = f(j.Src2) },
         JumpIfGreaterOrEqual j => j with { Src1 = f(j.Src1), Src2 = f(j.Src2) },
-        Call cl => cl with { Args = cl.Args.Select(f).ToList(), Dst = f(cl.Dst) },
+        Call cl => cl with { Args = cl.Args.Select(f).ToList(), Dst = f(cl.Dst), TagDst = cl.TagDst == null ? null : f(cl.TagDst) },
         IndirectCall ic => ic with { FuncAddr = f(ic.FuncAddr), Args = ic.Args.Select(f).ToList(), Dst = f(ic.Dst) },
         BitSet bs => bs with { Target = f(bs.Target) },
         BitClear bc => bc with { Target = f(bc.Target) },

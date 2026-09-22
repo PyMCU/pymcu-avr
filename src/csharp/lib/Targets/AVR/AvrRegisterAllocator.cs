@@ -108,7 +108,10 @@ public static class AvrRegisterAllocator
                     CountVal(u.Src);
                     CountVal(u.Dst);
                     break;
-                case Return r: CountVal(r.Value); break;
+                case Return r:
+                    CountVal(r.Value);
+                    if (r.Tag != null) CountVal(r.Tag);
+                    break;
                 case JumpIfZero jz: CountVal(jz.Condition); break;
                 case JumpIfNotZero jnz: CountVal(jnz.Condition); break;
                 case JumpIfEqual je:
@@ -153,6 +156,7 @@ public static class AvrRegisterAllocator
                 case JumpIfBitClear jbc: CountVal(jbc.Source); break;
                 case Call cl:
                     CountVal(cl.Dst);
+                    if (cl.TagDst != null) CountVal(cl.TagDst);
                     foreach (var a in cl.Args) CountVal(a);
                     break;
                 case ArrayLoad al:

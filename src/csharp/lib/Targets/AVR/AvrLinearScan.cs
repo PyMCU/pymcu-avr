@@ -70,7 +70,10 @@ public static class AvrLinearScan
                     VisitVal(u.Src, i);
                     VisitVal(u.Dst, i);
                     break;
-                case Return r: VisitVal(r.Value, i); break;
+                case Return r:
+                    VisitVal(r.Value, i);
+                    if (r.Tag != null) VisitVal(r.Tag, i);
+                    break;
                 case JumpIfZero jz: VisitVal(jz.Condition, i); break;
                 case JumpIfNotZero jnz: VisitVal(jnz.Condition, i); break;
                 case JumpIfEqual je:
@@ -115,6 +118,7 @@ public static class AvrLinearScan
                 case JumpIfBitClear jbc: VisitVal(jbc.Source, i); break;
                 case Call cl:
                     VisitVal(cl.Dst, i);
+                    if (cl.TagDst != null) VisitVal(cl.TagDst, i);
                     foreach (var a in cl.Args) VisitVal(a, i);
                     break;
                 case FlashLoadPtr flp:
