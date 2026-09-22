@@ -7,7 +7,8 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// <summary>
 /// The compat-cp-life-idiomatic program rewritten the way a CircuitPython user
 /// first writes the grid -- a list of rows indexed `cells[y][x]` -- in four
-/// spellings (tests/integration/fixtures/probes-life-lists/).
+/// spellings (tests/integration/fixtures/probes-life-lists/), plus seven small
+/// fixtures that pin the refusals around the construct.
 ///
 /// Three of the four spellings are now a compile-time 2-D grid lowered to ONE
 /// flat fixed array, so they build and run the same Life the flat fixture
@@ -21,6 +22,17 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 ///   (b2) `[bytearray(width) for _ in range(height)]` -- bytearray rows.
 ///   (b3) `tuple(bytearray(width) for _ in range(height))` -- tuple() over a
 ///        genexp stays refused: building a tuple needs a heap.
+///
+/// The refusal pins (c1..c7) name the construct and say why, each located
+/// file:line:col and identical on both front ends:
+///
+///   (c1) `[[0] * W] * H` -- H aliases of ONE row object.
+///   (c2) `take(g[y])` -- a row passed to a function is a view, not a value.
+///   (c3) `return g[y]` -- a row returned is a view, not a value.
+///   (c4) `b.slot = g[y]` -- a row stored in a field is a view, not a value.
+///   (c5) `g[y] = <new row>` -- a row cannot be rebound.
+///   (c6) `[[0] * cols() for ...]` -- non-constant dimensions.
+///   (c7) `r = g[y]` then `take(r)` -- a row alias escaping the block.
 /// </summary>
 [TestFixture]
 public class ProbesLifeListsTests
@@ -32,6 +44,21 @@ public class ProbesLifeListsTests
         "error: CompileError: tuple() is a Python builtin that PyMCU does not " +
         "provide: building a tuple at run time needs a heap. A tuple literal " +
         "works where the compiler can see all of its elements.";
+
+    private const string AliasedRowsDiagnostic =
+        "`[row] * H` creates H aliases of ONE row object";
+
+    private const string RowNotAValueDiagnostic =
+        "names a row of a 2-D grid -- a view into the flat array, not a list value";
+
+    private const string RowAliasEscapeDiagnostic =
+        "a row of a 2-D grid is a view into the flat array, not a value";
+
+    private const string RowRebindDiagnostic =
+        "not a variable that can be rebound";
+
+    private const string NonConstDimsDiagnostic =
+        "a grid's dimensions must be compile-time constants";
 
     // The probes run the same 30-generation Life as compat-cp-life-idiomatic,
     // so its CPython oracle is the expected stream for every accepted probe.
@@ -94,6 +121,41 @@ public class ProbesLifeListsTests
             "src/main.py:25:22", TupleDiagnostic);
 
     [Test]
+    public void C1_AliasedRowsRepeat_IsRefused() =>
+        AssertRefused("probes-life-lists/c1-aliased-rows",
+            "src/main.py:6:1", AliasedRowsDiagnostic);
+
+    [Test]
+    public void C2_RowPassedToFunction_IsRefused() =>
+        AssertRefused("probes-life-lists/c2-row-passed",
+            "src/main.py:8:1", RowNotAValueDiagnostic);
+
+    [Test]
+    public void C3_RowReturned_IsRefused() =>
+        AssertRefused("probes-life-lists/c3-row-returned",
+            "src/main.py:6:1", RowNotAValueDiagnostic);
+
+    [Test]
+    public void C4_RowStoredInField_IsRefused() =>
+        AssertRefused("probes-life-lists/c4-row-field",
+            "src/main.py:9:1", RowNotAValueDiagnostic);
+
+    [Test]
+    public void C5_RowRebound_IsRefused() =>
+        AssertRefused("probes-life-lists/c5-row-rebind",
+            "src/main.py:4:1", RowRebindDiagnostic);
+
+    [Test]
+    public void C6_NonConstantDims_IsRefused() =>
+        AssertRefused("probes-life-lists/c6-nonconst-dims",
+            "src/main.py:7:1", NonConstDimsDiagnostic);
+
+    [Test]
+    public void C7_RowAliasEscapes_IsRefused() =>
+        AssertRefused("probes-life-lists/c7-alias-escape",
+            "src/main.py:10:6", RowAliasEscapeDiagnostic);
+
+    [Test]
     public void BothFrontEnds_RefuseIdentically()
     {
         // Same span, same message on the Python-parser front end -- a diagnostic
@@ -103,5 +165,15 @@ public class ProbesLifeListsTests
         tupleBuild.Should().Throw<InvalidOperationException>()
             .Which.Message.Should().Contain("src/main.py:25:22")
             .And.Contain(TupleDiagnostic);
+
+        var aliased = () => PymcuCompiler.BuildFixturePyParser("probes-life-lists/c1-aliased-rows");
+        aliased.Should().Throw<InvalidOperationException>()
+            .Which.Message.Should().Contain("src/main.py:6:1")
+            .And.Contain(AliasedRowsDiagnostic);
+
+        var escaped = () => PymcuCompiler.BuildFixturePyParser("probes-life-lists/c7-alias-escape");
+        escaped.Should().Throw<InvalidOperationException>()
+            .Which.Message.Should().Contain("src/main.py:10:6")
+            .And.Contain(RowAliasEscapeDiagnostic);
     }
 }
