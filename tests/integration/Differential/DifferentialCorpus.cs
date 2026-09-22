@@ -159,6 +159,14 @@ public static class DifferentialCorpus
                 "optimizer would have removed -- plus one 17-byte slice buffer per show() " +
                 "site -- do not fit; the optimized build is pinned by AdafruitHt16k33Tests " +
                 "and the CircuitPython oracle",
+            ["fixtures/surfacecov-servo-servo"] =
+                "the unoptimized build needs 5148 B of static data on a 2048 B part (the " +
+                "whole-surface program's temporaries without the optimizer); it runs " +
+                "optimized through the surfacecov oracle pair",
+            ["fixtures/surfacecov-servo-continuous"] =
+                "the unoptimized build needs 3183 B of static data on a 2048 B part (the " +
+                "whole-surface program's temporaries without the optimizer); it runs " +
+                "optimized through the surfacecov oracle pair",
         };
 
     /// <summary>
