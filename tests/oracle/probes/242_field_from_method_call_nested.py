@@ -1,6 +1,5 @@
 # expect: match
 # doc: docs/language/roadmap.md
-# tracked: PyMCU/PyMCU#489
 class Dev:
     def __init__(self):
         for i in range(1):
