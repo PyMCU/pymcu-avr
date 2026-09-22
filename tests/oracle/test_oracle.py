@@ -178,6 +178,30 @@ class _Const:
         return item
 
 
+class _Ptr:
+    # Flat model of the SRAM the firmware sees: ptr(addr).value reads or writes
+    # one byte of a shared dict, so a probe can seed or observe it like memory.
+    _mem: dict[int, int] = {}
+
+    def __init__(self, address=0):
+        self.address = int(address)
+
+    @classmethod
+    def __class_getitem__(cls, _item):
+        return cls
+
+    def __add__(self, other):
+        return _Ptr(self.address + int(other))
+
+    @property
+    def value(self):
+        return _Ptr._mem.get(self.address, 0)
+
+    @value.setter
+    def value(self, v):
+        _Ptr._mem[self.address] = int(v) & 0xFF
+
+
 class FixedDict(dict):
     def __init__(self, capacity: int):
         super().__init__()
@@ -231,12 +255,13 @@ def install_cpython_shims() -> dict[str, types.ModuleType | None]:
     ]:
         setattr(types_mod, name, _Type(name, bits, signed))
     types_mod.const = _Const()
-    types_mod.ptr = _Type("ptr")
+    types_mod.ptr = _Ptr
     types_mod.bitcast = _bitcast
     types_mod.Callable = _Type("Callable")
     types_mod.WriteableBuffer = bytearray
     types_mod.ReadableBuffer = bytearray
     types_mod.inline = identity
+    types_mod.outline = identity
 
     exceptions_mod.CompileError = type("CompileError", (Exception,), {})
     ffi_mod.extern = extern
