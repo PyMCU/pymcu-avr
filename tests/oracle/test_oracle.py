@@ -326,7 +326,12 @@ def run_cpython(src: str, probe_name: str) -> str:
             except SystemExit:
                 pass
             except BaseException as exc:
-                print(f"E:{type(exc).__name__}")
+                # The unhandled report is `E:<Type>` plus ": <msg>" when the raise
+                # carried one -- the same shape the AVR exception runtime prints
+                # through __pymcu_exn_tail.
+                msg = str(exc)
+                print(f"E:{type(exc).__name__}: {msg}" if msg
+                      else f"E:{type(exc).__name__}")
     finally:
         restore_modules(previous)
     return buf.getvalue()
