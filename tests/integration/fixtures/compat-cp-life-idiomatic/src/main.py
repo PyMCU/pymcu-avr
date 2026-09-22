@@ -7,12 +7,6 @@
 # every 0.1 s. 32x8 cells of 4x4 pixels on the 128x32 panel, toroidal edges.
 # Runs GENERATIONS generations then parks in `while True: pass`, so every side
 # emits exactly GENERATIONS+2 framebuffer transactions.
-#
-# The LCG state is a LOCAL inside seed(), not the `self.rng` field the same
-# program would carry on CPython: a field bound to an unannotated __init__
-# parameter and written inside a nested loop is silently laid out as uint8
-# (Scan.cs only scans top-level method statements), which truncates the 31-bit
-# state to a byte. tests/integration/fixtures/probes-field-width pins the bug.
 import time
 
 import board
@@ -30,21 +24,21 @@ display = adafruit_ssd1306.SSD1306_I2C(128, 32, i2c)
 class Life:
     """Conway's Game of Life on a toroidal width x height grid of cells."""
 
-    def __init__(self, width, height):
+    def __init__(self, width, height, seed):
         self.width = width
         self.height = height
         self.cells = bytearray(width * height)
         self.next_cells = bytearray(width * height)
+        self.rng = seed
 
     def seed(self):
         # A small LCG in Python, not the random module: CPython, CircuitPython
         # and PyMCU all compute the same 31-bit sequence, so the worlds match.
-        rng = SEED
         for y in range(self.height):
             for x in range(self.width):
-                rng = (rng * 1103515245 + 12345) & 0x7FFFFFFF
+                self.rng = (self.rng * 1103515245 + 12345) & 0x7FFFFFFF
                 self.cells[y * self.width + x] = (
-                    1 if ((rng >> 16) & 3) == 0 else 0
+                    1 if ((self.rng >> 16) & 3) == 0 else 0
                 )
 
     def neighbours(self, x, y):
@@ -87,7 +81,7 @@ class Life:
         display.show()
 
 
-life = Life(32, 8)
+life = Life(32, 8, SEED)
 life.seed()
 life.draw(display)
 
