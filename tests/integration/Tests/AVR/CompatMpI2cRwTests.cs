@@ -38,18 +38,19 @@ public class CompatMpI2cRwTests
     }
 
     [Test]
-    public void Writeto_MultiByte_CompletesWithNoDevice()
+    public void Writeto_MultiByte_NoDevice_RaisesOSError()
     {
-        // No device attached -- SLA+W is NACK'd, but writeto completes without crashing.
-        // Firmware echoes 'W' (0x57) after the call.
+        // No device attached -- SLA+W is NACK'd, so writeto raises OSError the way
+        // MicroPython's rp2 port does. Uncaught, it reports E:OSError: [Errno 5] EIO
+        // on the UART before halting; it used to return silently.
         var uno = Sim();
         uno.RunUntilSerial(uno.Serial, "READY\n", maxMs: 300);
-        var after = uno.Serial.ByteCount;
 
         uno.Serial.InjectByte((byte)'W');
 
-        uno.RunUntilSerialBytes(uno.Serial, after + 1, maxMs: 5000);
-        uno.Serial.Bytes[after].Should().Be((byte)'W', "writeto completed and echoed 'W'");
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("EIO"), maxMs: 5000);
+        uno.Serial.Text.Should().Contain("E:OSError: [Errno 5] EIO",
+            "writeto raises OSError [Errno 5] EIO on the address NACK");
     }
 
     [Test]
@@ -68,19 +69,18 @@ public class CompatMpI2cRwTests
     }
 
     [Test]
-    public void ReadfromInto_NoDevice_Returns0()
+    public void ReadfromInto_NoDevice_RaisesOSError()
     {
-        // No device -- returns 0 (NACK on SLA+R). Buffer stays at initial values.
+        // No device -- the SLA+R NACK raises OSError, reported uncaught as
+        // E:OSError: [Errno 5] EIO. It used to return 0 as if the bus answered.
         var uno = Sim();
         uno.RunUntilSerial(uno.Serial, "READY\n", maxMs: 300);
-        var after = uno.Serial.ByteCount;
 
         uno.Serial.InjectByte((byte)'R');
 
-        // Expect: n=0, then 3 bytes from buf (uninitialised -- all zeros from bytearray)
-        uno.RunUntilSerialBytes(uno.Serial, after + 4, maxMs: 5000);
-        var resp = uno.Serial.Bytes.Skip(after).Take(4).ToArray();
-        resp[0].Should().Be(0, "readfrom_into returns 0 when device NACKs");
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("EIO"), maxMs: 5000);
+        uno.Serial.Text.Should().Contain("E:OSError: [Errno 5] EIO",
+            "readfrom_into raises OSError [Errno 5] EIO on the address NACK");
     }
 
     [Test]

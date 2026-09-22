@@ -1,5 +1,8 @@
 using FluentAssertions;
 using NUnit.Framework;
+using Avr8Sharp.TestKit.Boards;
+using Avr8Sharp.TestKit;
+using AVR8Sharp.Core.Peripherals;
 using PyMCU.TestKit;
 using System.Security.Cryptography;
 
@@ -89,5 +92,24 @@ public class AdafruitSsd1306UnmodifiedTests
     {
         _pyHex.Should().Be(_hex,
             "both front ends must compile the same sources to byte-identical firmware");
+    }
+
+    // The field report behind the NACK rescue (2026-09-21): an Uno and an SSD1306,
+    // the display dark, and a `try/except Exception` around the driver construction
+    // that never ran -- writeto ignored the TWI status, so the dead bus looked like
+    // a live one. With every address NACKed the I2CDevice probe must now raise
+    // OSError, the retry the same, and the ValueError it is converted into prints
+    // uncaught on the UART the way CircuitPython reports it.
+    [Test]
+    public void NackedBus_PrintsDeviceProbeFailure()
+    {
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(_hex);
+        uno.AddTwi(AvrTwi.TwiConfig, out var twi);
+        twi.EventHandler = new TwiRecorder(twi, OledAddr, nackAll: true);
+
+        uno.RunUntilSerial(uno.Serial, t => t.Contains("0x3c"), maxMs: 5000);
+        uno.Serial.Text.Should().Contain("E:ValueError: No I2C device at address: 0x3c",
+            "the uncaught report carries the probe's ValueError message, not just its type");
     }
 }
