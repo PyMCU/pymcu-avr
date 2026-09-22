@@ -22,6 +22,13 @@ public sealed class TwiRecorder(AvrTwi twi, byte address, bool nackAll = false) 
     private bool _write;
     private bool _open;
 
+    /// <summary>
+    /// Bytes the slave answers a read with, consumed in order. When the script
+    /// runs out the byte is 0xFF -- the same answer an unpadded responder gives.
+    /// The recorded transaction always holds the bytes the master actually read.
+    /// </summary>
+    public Queue<byte> ReadBytes { get; } = new();
+
     public List<I2cTransaction> Transactions { get; } = [];
 
     public void Start(bool repeated) => twi.CompleteStart();
@@ -50,8 +57,9 @@ public sealed class TwiRecorder(AvrTwi twi, byte address, bool nackAll = false) 
 
     public void ReadByte(bool ack)
     {
-        _current.Add(0xFF);
-        twi.CompleteRead(0xFF);
+        var data = ReadBytes.Count > 0 ? ReadBytes.Dequeue() : (byte)0xFF;
+        _current.Add(data);
+        twi.CompleteRead(data);
     }
 
     /// <summary>Closes a transaction still open when the run stops (no STOP seen).</summary>

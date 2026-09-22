@@ -12,8 +12,13 @@ namespace PyMCU.TestKit;
 /// </summary>
 public static class UnoTwiTrace
 {
+    /// <param name="readScript">
+    /// Bytes the slave answers read transactions with, in wire order; the tail
+    /// of a read past the script's end is 0xFF. Null means the all-0xFF answer
+    /// the recorder has always given.
+    /// </param>
     public static WireTrace Record(string hex, byte address, int stopAfterCount,
-        double maxMs = 2000, double tailMs = 50)
+        double maxMs = 2000, double tailMs = 50, byte[]? readScript = null)
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(hex);
@@ -24,6 +29,8 @@ public static class UnoTwiTrace
         uno.PortC.SetPinValue(5, true);   // SCL
         uno.AddTwi(AvrTwi.TwiConfig, out var twi);
         var recorder = new TwiRecorder(twi, address);
+        if (readScript != null)
+            foreach (var b in readScript) recorder.ReadBytes.Enqueue(b);
         twi.EventHandler = recorder;
 
         string? crash = null;
