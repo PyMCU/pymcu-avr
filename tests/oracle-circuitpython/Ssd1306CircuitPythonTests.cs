@@ -122,3 +122,11 @@ public class AdafruitSsd1306Unmodified64OnCircuitPythonTests()
 public class CompatCpLifeOnCircuitPythonTests()
     : CircuitPythonOracleBase("compat-cp-life", expectedTransactions: 99,
         runsForever: true, avrMaxMs: 20_000);
+
+// The idiomatic twin: class Life, LCG seed, monotonic() pacing, 30 generations
+// -> 32 shown frames -> 253 transactions. The 0.1 s per-generation pacing is
+// real time on the Pico, so the run takes ~3.5 s on top of boot.
+[TestFixture]
+public class CompatCpLifeIdiomaticOnCircuitPythonTests()
+    : CircuitPythonOracleBase("compat-cp-life-idiomatic", expectedTransactions: 253,
+        runsForever: true, avrMaxMs: 20_000);

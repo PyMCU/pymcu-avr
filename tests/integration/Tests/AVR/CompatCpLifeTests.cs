@@ -31,16 +31,20 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// Same oracle shape as <see cref="CompatCpFramebufTextTests"/>: the fixture's
 /// oracle.py runs the identical vendored sources under CPython against a fake
 /// I2C bus -- with <c>time.sleep</c> faked to a no-op and a sentinel exception
-/// that ends the program when the GENERATIONS+1-th framebuffer write is
-/// recorded, since the program's tail is <c>while True: pass</c>. The stream is
-/// 92 transactions: the zero-length probe, the init command burst, then six
-/// address-window command writes plus one 513-byte framebuffer write per
-/// shown generation (the initial seed plus 8 evolutions).
+/// that ends the program when the last expected framebuffer write is recorded,
+/// since the program's tail is <c>while True: pass</c>. The stream is
+/// 29 + 7 * (generations + 2) transactions: the zero-length probe, the init
+/// command burst, then six address-window command writes plus one 513-byte
+/// framebuffer write per shown frame (the init's own show, the seed draw and
+/// one draw per generation).
 /// </summary>
-public abstract class CompatCpLifeBase(string fixture)
+public abstract class CompatCpLifeBase(
+    string fixture, int generations, double avrMaxMs = 20_000)
 {
     private const byte OledAddr = 0x3C;
     private const int FrameBytes = 513;
+    private readonly int _generations = generations;
+    private readonly double _avrMaxMs = avrMaxMs;
 
     // md5 of each vendored file, pinned so an accidental edit fails the test.
     private static readonly (string RelPath, string Md5)[] VendoredFiles =
@@ -72,7 +76,7 @@ public abstract class CompatCpLifeBase(string fixture)
         _oracle = OracleScript.Run(
             Path.Combine(PymcuCompiler.FixtureDir(Fixture), "oracle", "oracle.py"),
             Path.Combine(PymcuCompiler.Root, ".venv", "bin", "python"));
-        (_stampMs, _run) = RecordWithStamps(_hex, _oracle.Count);
+        (_stampMs, _run) = RecordWithStamps(_hex, _oracle.Count, _avrMaxMs);
     }
 
     // ── Tests ───────────────────────────────────────────────────────────────
@@ -119,7 +123,7 @@ public abstract class CompatCpLifeBase(string fixture)
     [Test]
     public void TheSameThroughThePythonFrontEnd()
     {
-        var run = UnoTwiTrace.Record(_pyHex, OledAddr, _oracle.Count);
+        var run = UnoTwiTrace.Record(_pyHex, OledAddr, _oracle.Count, maxMs: _avrMaxMs);
         I2cStreams.AssertEqual(_oracle, run, "Python front end");
     }
 
@@ -139,7 +143,7 @@ public abstract class CompatCpLifeBase(string fixture)
             .Select((t, i) => (t, i))
             .Where(p => p.t.IsWrite && p.t.Data.Length == FrameBytes)
             .ToList();
-        frames.Count.Should().Be(10,
+        frames.Count.Should().Be(_generations + 2,
             "the wire carries __init__'s show, the seed draw, and GENERATIONS evolutions");
         var payloads = frames.Select(p => Convert.ToHexString(p.t.Data)).ToList();
         payloads.Distinct().Count().Should().BeGreaterThan(2,
@@ -160,7 +164,7 @@ public abstract class CompatCpLifeBase(string fixture)
     /// which each transaction closed, so the per-generation cost is reportable.
     /// </summary>
     private static (List<double> StampMs, WireTrace Trace) RecordWithStamps(
-        string hex, int stopAfterCount)
+        string hex, int stopAfterCount, double maxMs)
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(hex);
@@ -177,7 +181,7 @@ public abstract class CompatCpLifeBase(string fixture)
         string? crash = null;
         try
         {
-            const double stepMs = 10.0, maxMs = 20_000.0;
+            const double stepMs = 10.0;
             var elapsed = 0.0;
             while (recorder.Transactions.Count < stopAfterCount && elapsed < maxMs)
             {
@@ -205,7 +209,20 @@ public abstract class CompatCpLifeBase(string fixture)
 }
 
 [TestFixture]
-public class CompatCpLifeTests() : CompatCpLifeBase("compat-cp-life");
+public class CompatCpLifeTests() : CompatCpLifeBase("compat-cp-life", generations: 8);
 
 [TestFixture]
-public class CompatCpLifeNestedTests() : CompatCpLifeBase("compat-cp-life-nested");
+public class CompatCpLifeNestedTests() : CompatCpLifeBase("compat-cp-life-nested", generations: 8);
+
+/// <summary>
+/// The same Life on the same drivers, written the way a CircuitPython user
+/// writes it: a <c>Life</c> class holding <c>self.width</c>/<c>self.height</c>
+/// and the two bytearray grids, a <c>neighbours(x, y)</c> count over
+/// <c>range(-1, 2)</c>, nested row/column loops everywhere, a Python LCG for
+/// the seed (identical on every interpreter, unlike the random module), and
+/// <c>time.monotonic()</c> pacing one generation every 0.1 s. 30 generations
+/// so the "generation N" print every ten fires three times on the console.
+/// </summary>
+[TestFixture]
+public class CompatCpLifeIdiomaticTests()
+    : CompatCpLifeBase("compat-cp-life-idiomatic", generations: 30);
