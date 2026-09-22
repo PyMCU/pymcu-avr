@@ -1,7 +1,6 @@
 # Probe (b1): same program as (a) but the list-of-lists is built with literal
-# sizes, `[[0] * 32 for _ in range(8)]`, so both dimensions fold at compile
-# time. EXPECTED BUILD FAILURE: pins the diagnostic -- does the compiler still
-# refuse when the shape is fully known?
+# sizes, `[[0] * 32 for _ in range(8)]` -- both dimensions fold at compile
+# time. The grid lowers to one flat uint8[256] and runs the same Life.
 import time
 
 import board

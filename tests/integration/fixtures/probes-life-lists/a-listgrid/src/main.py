@@ -1,8 +1,9 @@
 # Probe (a): compat-cp-life-idiomatic rewritten with the grid a CircuitPython
 # user reaches for first -- a list of row lists, `self.cells[y][x]`, built by a
-# comprehension from the constructor arguments. EXPECTED BUILD FAILURE: this
-# fixture exists to pin the exact diagnostic the compiler emits for the
-# construct on both front ends; it is not a runnable program.
+# comprehension from the constructor arguments. The compiler lowers it to ONE
+# flat uint8[256] array -- the constructor arguments are literals at the only
+# call site, so both dimensions fold -- and the run sends the same I2C stream
+# as the hand-flattened fixture's oracle.
 import time
 
 import board

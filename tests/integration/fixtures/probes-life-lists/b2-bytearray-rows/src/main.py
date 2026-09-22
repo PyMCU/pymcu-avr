@@ -1,7 +1,7 @@
 # Probe (b2): same program as (a) but the rows are bytearrays held in a plain
-# list, `self.cells = [bytearray(width) for _ in range(height)]` -- each row is
-# already a fixed byte array; only the outer container is a list.
-# EXPECTED BUILD FAILURE: pins the diagnostic for the outer comprehension.
+# list, `self.cells = [bytearray(width) for _ in range(height)]` -- the
+# bytearray-row grid spelling. It lowers to one flat uint8[256] and runs the
+# same Life.
 import time
 
 import board
