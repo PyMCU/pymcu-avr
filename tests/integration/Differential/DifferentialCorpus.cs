@@ -149,6 +149,10 @@ public static class DifferentialCorpus
                 "same shape as compat-cp-life: the unoptimized build's framebuffer, cell " +
                 "arrays, arena and unoptimized temporaries do not fit a 2048 B part; the " +
                 "optimized build is pinned by CompatCpLifeTests",
+            ["fixtures/adafruit-bmp280-unmodified"] =
+                "the unoptimized build needs 2337 B of static data on a 2048 B part (the " +
+                "24-byte calibration buffer plus the driver's unoptimized temporaries); " +
+                "the optimized build is pinned by AdafruitBmp280UnmodifiedTests",
         };
 
     /// <summary>
