@@ -1,0 +1,12 @@
+# expect: refuse is first typed as str and is later given a numeric value
+# doc: docs/language/limitations.md
+class Rec:
+    def __init__(self):
+        self.x = "first"
+        self.x = 70000
+    def show(self):
+        print(self.x)
+
+r = Rec()
+r.show()
+print("END")
