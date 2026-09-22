@@ -99,6 +99,12 @@ field miscomputed with constant constructor args).
 - **avr**: a fused divmod refuses the fusion when both results share a register
 - **avr**: an array larger than 256 bytes addresses all of it
 - **avr**: a flash table larger than 256 bytes addresses all of it
+- **avr**: a `buf: bytearray` parameter indexed past offset 255 addresses all of it.
+  The named-array path already carried a 16-bit index (the entry above), but a pointer
+  parameter carries no element count, so the index was loaded as one byte and only the
+  carry reached Z's high half -- `buf[256]` read and wrote `buf[0]`. The same goes for a
+  constant index past 255 and for a runtime flash pointer `s[i]`. Seen as the SSD1306
+  framebuffer's 513-byte write repeating its control byte 256 bytes in.
 - two programs asked UART for baud 0 and got 1 Mbaud
 - **avr**: the build harness kills what it spawned, and stops timing out under load
 - **avr**: each suite run gets its own scratch, so two runs stop deleting each other
