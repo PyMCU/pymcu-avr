@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- **testkit**: `TwiRecorder` takes a `nackAll` option that NACKs every address phase, so a
+  fixture can exercise the no-device path without a slave on the bus.
+- **avr**: `fixtures/cp-i2c-nack` and `fixtures/mp-i2c-nack` — a CircuitPython and a
+  MicroPython program that write and read a NACKed address — with tests asserting the
+  `E:OSError` reports on UART.
+
 ### Fixed
 
 - **avr**: silent wrong code on parts whose SRAM does not start at 0x0100 -- every
@@ -18,6 +26,21 @@
   bytes (the Life program's 513-byte framebuffer aliased `step()`'s frame). The
   backend now promotes object-lifetime arrays into the global region before
   stack allocation.
+- **avr**: the exception-message tail (`__pymcu_exn_tail`) is reached from raw assembly,
+  not an IR call, so stack allocation never saw its locals — or its callees' — and the
+  link failed on any program whose unhandled raise carried a message. The backend now
+  walks the tail's call subtree and allocates every local it uses above the existing
+  high-water mark; the locals share main's dead frame at that point because the program
+  is already halting.
+- **avr**: `AdafruitSsd1306UnmodifiedTests` gains the field-report case — a display that
+  does not ACK reports `E:ValueError: No I2C device at address: 0x3c`, the message
+  upstream `adafruit_bus_device` raises.
+- **avr**: `CompatMpI2cRwTests` asserted a NACKed `writeto`/`readfrom_into` completed
+  silently; both now report `E:OSError: [Errno 5] EIO` the way MicroPython does.
+- **avr**: `CompatCpBitbangioI2cTests` assumed the payload always followed the address.
+  Nothing answers on the emulated bus, so the address is NACKed: the test now asserts the
+  address clocks out, the payload does not, and the UART reports
+  `E:OSError: [Errno 19] No such device`.
 
 ### Performance
 
