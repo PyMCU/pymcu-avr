@@ -4474,7 +4474,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("ADIW", "R30", $"{cIdx2.Value}");
             Emit("LD", "R24", "Z");
         }
-        else if (bl.Index is Constant cIdx3)
+        else if (bl.Index is Constant cIdx3 && cIdx3.Value <= 255)
         {
             // Scratch in R26 (X-low) + R1 (zero reg), never the R16/R17 the linear-scan
             // allocator hands out -- so a register-allocated value survives this load.
@@ -4483,11 +4483,27 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("ADC", "R31", "R1");
             Emit("LD", "R24", "Z");
         }
+        else if (bl.Index is Constant cIdx4)
+        {
+            // A constant index past 255 still has to carry its high byte into the add, or
+            // buffer[512] reads buffer[44]: LDI only takes an 8-bit immediate.
+            Emit("LDI", "R26", $"lo8({cIdx4.Value})");
+            Emit("LDI", "R27", $"hi8({cIdx4.Value})");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R27");
+            Emit("LD", "R24", "Z");
+        }
         else
         {
-            LoadIntoReg(bl.Index, "R26");
+            // A 16-bit index must reach the adder as a pair: loading it as one byte and
+            // adding only the carry against R1 (zero) drops the high half, so every byte
+            // past 256 aliases back into the first 256 -- the same aliasing ArrayLoad's
+            // NeedsWideIndex guards against, here keyed on the index's own width because a
+            // pointer param carries no element count.
+            bool wideIndex = GetValType(bl.Index).SizeOf() >= 2;
+            LoadIntoReg(bl.Index, "R26", wideIndex ? DataType.UINT16 : DataType.UINT8);
             Emit("ADD", "R30", "R26");
-            Emit("ADC", "R31", "R1");
+            Emit("ADC", "R31", wideIndex ? "R27" : "R1");
             Emit("LD", "R24", "Z");
         }
 
@@ -4530,7 +4546,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("ADIW", "R30", $"{cIdx2.Value}");
             Emit("ST", "Z", "R18");
         }
-        else if (bs.Index is Constant cIdx3)
+        else if (bs.Index is Constant cIdx3 && cIdx3.Value <= 255)
         {
             // Scratch in R26 (X-low) + R1 (zero reg), never the R16/R17 the linear-scan
             // allocator hands out -- so a register-allocated value survives this store.
@@ -4539,11 +4555,24 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("ADC", "R31", "R1");
             Emit("ST", "Z", "R18");
         }
+        else if (bs.Index is Constant cIdx4)
+        {
+            // Same as the load side: a constant index past 255 needs its high byte added
+            // to ZH, or the store wraps back onto the first 256 bytes.
+            Emit("LDI", "R26", $"lo8({cIdx4.Value})");
+            Emit("LDI", "R27", $"hi8({cIdx4.Value})");
+            Emit("ADD", "R30", "R26");
+            Emit("ADC", "R31", "R27");
+            Emit("ST", "Z", "R18");
+        }
         else
         {
-            LoadIntoReg(bs.Index, "R26");
+            // Same wide-index fix as the load side: a 16-bit index keeps its high byte in
+            // R27, or stores past offset 255 wrap back onto the first 256 bytes.
+            bool wideIndex = GetValType(bs.Index).SizeOf() >= 2;
+            LoadIntoReg(bs.Index, "R26", wideIndex ? DataType.UINT16 : DataType.UINT8);
             Emit("ADD", "R30", "R26");
-            Emit("ADC", "R31", "R1");
+            Emit("ADC", "R31", wideIndex ? "R27" : "R1");
             Emit("ST", "Z", "R18");
         }
     }
@@ -4698,9 +4727,13 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // (e.g. a const[str] passed by reference into a non-@inline subroutine). Mirrors
         // CompileArrayLoadFlash but with a register-held base instead of a fixed label.
         LoadIntoReg(flp.Ptr, "R30", DataType.UINT16);  // Z = base flash byte-address
-        LoadIntoReg(flp.Index, "R24");                 // index -> R24 (8-bit)
+        // The index carries its own width: a 16-bit index into a >256-byte flash string
+        // keeps its high byte in R25, or offsets past 255 wrap onto the first 256 bytes
+        // (the same aliasing the BytearrayLoad wide-index path guards against).
+        bool flpWide = GetValType(flp.Index).SizeOf() >= 2;
+        LoadIntoReg(flp.Index, "R24", flpWide ? DataType.UINT16 : DataType.UINT8);
         Emit("ADD", "R30", "R24");                     // Z += index
-        Emit("ADC", "R31", "R1");                      // propagate carry (R1 == 0)
+        Emit("ADC", "R31", flpWide ? "R25" : "R1");    // propagate carry (R1 == 0 for 8-bit)
         Emit("LPM", "R24", "Z");                       // load byte from flash
         StoreRegInto("R24", flp.Dst, DataType.UINT8);
     }
