@@ -1,0 +1,10 @@
+[project]
+name = "mega-ramstart"
+version = "0.1.0"
+dependencies = ["pymcu-stdlib"]
+
+[tool.pymcu]
+target = "atmega2560"
+frequency = 16000000
+sources = "src"
+entry = "main.py"
