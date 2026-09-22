@@ -1,5 +1,5 @@
-# expect: refuse undefined function
-# doc: docs/language/limitations.md:54
+# expect: match
+# doc: docs/language/roadmap.md
 s = "Hello World"
 print(s.upper())
 print("END")
