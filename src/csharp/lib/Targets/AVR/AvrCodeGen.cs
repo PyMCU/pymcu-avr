@@ -1031,6 +1031,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // and register allocators never see them and BSS shrinks accordingly.
         var gpiorPromotions = AvrGpiorPromotion.Apply(program, cfg);
 
+        // An array whose storage outlives the frame that made it -- an instance
+        // field array, or one whose address is stored into a global -- has object
+        // lifetime, not call lifetime. Promote it to the global region before the
+        // allocator runs, or a sibling call subtree's locals overlay its bytes.
+        AvrEscapingArrays.Apply(program);
+
         var allocator = new StackAllocator();
         var (offsets, maxStack) = allocator.Allocate(program);
         _stackLayout = offsets;
