@@ -153,6 +153,12 @@ public static class DifferentialCorpus
                 "the unoptimized build needs 2337 B of static data on a 2048 B part (the " +
                 "24-byte calibration buffer plus the driver's unoptimized temporaries); " +
                 "the optimized build is pinned by AdafruitBmp280UnmodifiedTests",
+            ["fixtures/adafruit-ht16k33"] =
+                "the unoptimized build needs 3192 B of static data on a 2048 B part: the " +
+                "driver's whole call graph inlines into main, so the temporaries the " +
+                "optimizer would have removed -- plus one 17-byte slice buffer per show() " +
+                "site -- do not fit; the optimized build is pinned by AdafruitHt16k33Tests " +
+                "and the CircuitPython oracle",
         };
 
     /// <summary>
