@@ -1,0 +1,22 @@
+# PGO workload for the unmodified Adafruit Seesaw driver (I2C @ 0x49).
+#
+# The slave ACKs 0x49 and answers every read byte with 0xFF -- so the HW_ID
+# read returns an id outside every known set and __init__ raises the deferred
+# f-string message:
+#   RuntimeError(f"Seesaw hardware ID returned 0x{self.chip_id:x} is not "
+#                "correct! Please check your wiring.")
+# The run stops when the four transactions leading to the raise have closed:
+#   probe (empty write), sw_reset, HW_ID write phase, HW_ID read phase.
+#
+# expect pins a prefix of the flattened stream (each transaction contributes
+# its address byte then its data bytes): probe `49`, reset `49 00 7f ff`, the
+# register write `49 00 01`, then the read `49 ff`.
+scenarios:
+  - name: seesaw-wrong-chip-raise
+    stimuli:
+      - {i2c_slave: 0x49}
+    run:
+      until_i2c_transactions: 4
+      max_ms: 2000
+    expect:
+      i2c_tx: "49 49 00 7f ff 49 00 01 49 ff"
