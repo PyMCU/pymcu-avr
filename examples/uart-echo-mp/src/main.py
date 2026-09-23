@@ -22,7 +22,7 @@ from pymcu.types import uint8
 def main():
     led  = Pin(13, Pin.OUT)
     uart = UART(0, 9600)
-    uart.println("READY")
+    uart.write("READY\n")
     while True:
         b: uint8 = uart.read()
         led.on()

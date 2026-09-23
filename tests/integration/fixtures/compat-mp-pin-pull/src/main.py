@@ -17,7 +17,7 @@ def main():
     btn  = Pin(2, Pin.IN, Pin.PULL_UP)
     uart = UART(0, 9600)
 
-    uart.println("READY")
+    uart.write("READY\n")
 
     # Initial read -- pull-up active, no external drive -> expect 0x01
     v: uint8 = btn.value()

@@ -10,7 +10,7 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// Verifies that machine.PWM from the pymcu-micropython compat layer
 /// correctly configures Timer0 Fast PWM on PD6 (OC0A) and sets OCR0A.
 ///
-/// Fixture: PWM("PD6").init() + duty(512) -- MicroPython's legacy duty() is 0..1023
+/// Fixture: PWM("PD6").init() + duty_u16(32768) -- upstream rp2 0..65535 scale
 ///   -> OCR0A = 128 (50% duty cycle)
 ///   -> TCCR0A has Fast PWM + COM0A1 bits set
 /// After setup the firmware sends 0x44 ('D') via machine.UART.
@@ -58,7 +58,7 @@ public class CompatMpPwmTests
     {
         var uno = Sim();
         uno.RunUntilSerialBytes(uno.Serial, 1, maxMs: 50);
-        uno.Data[OCR0A].Should().Be(127, "OCR0A = 127 after duty(512), 50 % on the 0..1023 scale: high for OCR + 1 counts");
+        uno.Data[OCR0A].Should().Be(127, "OCR0A = 127 after duty_u16(32768), 50 % on the 0..65535 scale: high for OCR + 1 counts");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ from pymcu.types import uint8
 def main():
     uart = UART(0, 9600)
     i2c = I2C()
-    uart.println("READY")
+    uart.write("READY\n")
 
     buf: uint8[3] = [0, 0, 0]
 

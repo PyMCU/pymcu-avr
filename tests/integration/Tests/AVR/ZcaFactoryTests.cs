@@ -9,9 +9,10 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// <summary>
 /// Integration tests for fixtures/zca-factory — an @inline factory that returns a
 /// ZCA instance (`make_adc(ch) -> ADC: return ADC(Pin(ch))`). The factory result's
-/// methods must inline; `pot = make_adc(14)` then `pot.read()` used to mangle to an
-/// undefined flattened symbol and fail at link. With A0 at ADC count 512, duty(512)
-/// on MicroPython's 0..1023 scale is 50 %, so OCR0A == 128, and 512 >> 2 == 128 is echoed.
+/// methods must inline; `pot = make_adc(14)` then `pot.read_u16()` used to mangle to an
+/// undefined flattened symbol and fail at link. With A0 at ADC count 512, read_u16() is
+/// 32768 and duty_u16(32768) on the upstream 0..65535 scale is 50 %, so OCR0A == 128,
+/// and 32768 >> 8 == 128 is echoed.
 /// </summary>
 [TestFixture]
 public class ZcaFactoryTests
@@ -30,6 +31,6 @@ public class ZcaFactoryTests
         uno.AddAdc(AvrAdc.AdcConfig, out var adc);
         adc.ChannelValues[0] = 512 / 1024.0 * 5.0;   // A0 == channel 0
         uno.RunUntilSerialBytes(uno.Serial, 4, maxMs: 4000);
-        uno.Data[OCR0A].Should().Be(127, "factory ADC read 512 is duty(512), 50 %: 128 of 256 counts high, OCR0A one less");
+        uno.Data[OCR0A].Should().Be(127, "factory ADC read 512 is duty_u16(32768), 50 %: 128 of 256 counts high, OCR0A one less");
     }
 }

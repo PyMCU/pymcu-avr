@@ -15,7 +15,7 @@ def main():
     led = PWM(Pin("PD6"))
     led.init()
     while True:
-        raw: uint16 = pot.read()
-        led.duty(raw)           # MicroPython's legacy duty() is 0..1023, the ADC's own scale
-        d: uint8 = uint8(raw >> 2)
-        uart.write(d)           # echo raw >> 2 (sync marker for tests)
+        raw: uint16 = pot.read_u16()
+        led.duty_u16(raw)       # read_u16() and duty_u16() share the 0..65535 scale
+        d: uint8 = uint8(raw >> 8)
+        uart.write(d)           # echo raw >> 8, the 8-bit duty (sync marker for tests)

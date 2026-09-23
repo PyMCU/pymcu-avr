@@ -14,7 +14,7 @@ from pymcu.types import uint8
 
 def main():
     uart = UART(0, 9600)
-    uart.println("READY")
+    uart.write("READY\n")
 
     line_buf: uint8[16] = bytearray(16)
     data_buf: uint8[3] = [0, 0, 0]

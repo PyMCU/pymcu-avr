@@ -2,13 +2,13 @@
 #
 # API:
 #   sensor = LM35(ADC("A0"))   # or LM35("A0") -- channel string also accepted
-#   sensor.read()              -- raw ADC count (0-1023)
+#   sensor.read()              -- raw ADC count on the read_u16 scale (0-65472)
 #   sensor.temperature()       -- degrees Celsius as float (e.g. 24.8)
 #
 # Conversion formula (5 V reference, 10-bit ADC):
 #   V_out  = ADC_raw * 5000.0 / 1024  (mV)
 #   Temp_C = V_out / 10.0             (LM35 outputs 10 mV/C)
-#   => Temp_C = ADC_raw * 0.4882813
+#   => Temp_C = ADC_raw * 0.4882813   (read_u16() >> 6 recovers the 10-bit count)
 
 from pymcu.types import uint16, inline
 from machine import ADC as _ADC
@@ -21,9 +21,9 @@ class LM35:
 
     @inline
     def read(self) -> uint16:
-        return self._adc.read()
+        return self._adc.read_u16()
 
     @inline
     def temperature(self) -> float:
-        raw: uint16 = self._adc.read()
+        raw: uint16 = self._adc.read_u16() >> 6
         return raw * 0.4882813

@@ -12,8 +12,9 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 ///
 /// Constructing ADC(Pin(14)) (int overload) before PWM(Pin("PD6")) (str overload)
 /// used to leak the int pin id into the PWM's pin name, mis-resolving the timer
-/// and emitting a stray RET. With A0 held at ADC count 512, duty(512) on
-/// MicroPython's 0..1023 scale is 50 %, so OCR0A == 128 -- proving both Pin overloads resolve
+/// and emitting a stray RET. With A0 held at ADC count 512, read_u16() is 32768 and
+/// duty_u16(32768) on the upstream 0..65535 scale is 50 %, so OCR0A == 128 -- proving
+/// both Pin overloads resolve
 /// independently and the ADC -> PWM chain works on the machine layer.
 /// </summary>
 [TestFixture]
@@ -39,6 +40,6 @@ public class AnalogInOutMpTests
     {
         var uno = SimWithA0(512);
         uno.RunUntilSerialBytes(uno.Serial, 20, maxMs: 4000);
-        uno.Data[OCR0A].Should().Be(127, "duty(512) on the 0..1023 scale is 50 %: 128 of 256 counts high, OCR0A one less");
+        uno.Data[OCR0A].Should().Be(127, "duty_u16(32768) on the 0..65535 scale is 50 %: 128 of 256 counts high, OCR0A one less");
     }
 }

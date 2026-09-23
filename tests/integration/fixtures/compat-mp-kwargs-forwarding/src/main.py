@@ -56,9 +56,9 @@ def main():
     plain.off()
     off_plain: uint8 = plain.value()
 
-    uart.println(f"g={on_low},{off_low}")
-    uart.println(f"h={on_plain},{off_plain}")
-    uart.println("DONE")
+    print(f"g={on_low},{off_low}")
+    print(f"h={on_plain},{off_plain}")
+    print("DONE")
 
     while True:
         pass

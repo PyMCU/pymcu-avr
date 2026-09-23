@@ -28,7 +28,7 @@ def main():
     uart = UART(0, 9600)
     pwm = PWM(Pin("PD6"), freq=1000)  # nearest bucket 976 Hz -> CS=0x03 (prescaler /64)
     pwm.init()
-    pwm.duty(128)                  # 50%: the channel has to be running to be non-inverting
+    pwm.duty_u16(8192)             # ~12.5%: the channel has to be running to be non-inverting
     pwm.freq(100)                  # nearest bucket 61 Hz -> CS=0x05 (prescaler /1024)
     uart.write(0x46)               # 'F' done marker
     while True:

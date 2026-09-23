@@ -5,10 +5,10 @@ using Avr8Sharp.TestKit.Boards;
 namespace PyMCU.IntegrationTests.Tests.AVR;
 
 /// <summary>
-/// The machine.PWM spellings MicroPython programs use (pymcu-micropython#6): duty() on the
-/// legacy 0..1023 scale, duty_ns() and the duty_ns= keyword, init(freq=, duty_u16=), invert=1,
-/// and the getters after a runtime set. Before this duty(512) arrived as a uint8 and switched
-/// the output off, the other three spellings were refused, and duty_u16(runtime) read back 0.
+/// The machine.PWM spellings MicroPython rp2 programs use (pymcu-micropython#6): duty_u16()
+/// on the 0..65535 scale with its getter, duty_ns() and the duty_ns= keyword,
+/// init(freq=, duty_u16=), invert=1, and the getters after a runtime set. Before this
+/// duty_u16(runtime) read back 0 and the ns spellings were refused.
 /// </summary>
 [TestFixture]
 public class CompatMpPwmSurfaceTests
@@ -43,8 +43,8 @@ public class CompatMpPwmSurfaceTests
     }
 
     [Test]
-    public void Duty_IsTheLegacy1023Scale()
-        => Checkpoint(2).Data[OCR0A].Should().Be(127, "duty(512) is 50 %");
+    public void DutyU16_ProgramsTheCompareRegister()
+        => Checkpoint(2).Data[OCR0A].Should().Be(127, "duty_u16(32768) is 50 %");
 
     [Test]
     public void DutyNs_DerivesFromTheFrequency()
@@ -67,6 +67,6 @@ public class CompatMpPwmSurfaceTests
     {
         var uno = Checkpoint(6);
         uno.RunUntilSerial(uno.Serial, "END\n", maxMs: 300);
-        uno.Serial.Text.Should().Contain("512\n16384\n8192\n");
+        uno.Serial.Text.Should().Contain("32768\n16384\n8192\n");
     }
 }

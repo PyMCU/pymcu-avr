@@ -27,10 +27,10 @@ def on_press(pin: Pin):
 
 btn.irq(on_press, Pin.IRQ_FALLING)
 
-uart.println("PIN IRQ MP")
+uart.write("PIN IRQ MP\n")
 
 while True:
     if flag == 1:
         flag = 0
         led.toggle()
-        uart.println("PRESSED")
+        uart.write("PRESSED\n")

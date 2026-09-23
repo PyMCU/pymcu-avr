@@ -16,7 +16,7 @@ uart     = UART(0, 9600)
 led      = Pin(13, Pin.OUT)
 sensor   = DHT22(Pin(2, Pin.IN))
 
-uart.println("DHT22 ready")
+uart.write("DHT22 ready\n")
 
 while True:
     sensor.measure()

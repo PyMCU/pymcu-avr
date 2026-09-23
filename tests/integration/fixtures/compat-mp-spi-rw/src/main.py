@@ -16,7 +16,7 @@ from pymcu.types import uint8
 def main():
     uart = UART(0, 9600)
     spi = SPI()
-    uart.println("READY")
+    uart.write("READY\n")
 
     out_buf: uint8[3] = [0xAA, 0xBB, 0xCC]
     in_buf: uint8[3] = [0, 0, 0]

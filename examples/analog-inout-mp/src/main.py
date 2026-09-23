@@ -2,7 +2,7 @@
 # compatibility layer (machine).
 #
 # Reads a potentiometer on A0, drives the PWM duty on D6 (OC0A) with it directly
-# (MicroPython's legacy duty() is 0..1023, the ADC's own scale) and echoes the
+# (read_u16() and duty_u16() share the upstream 0..65535 scale) and echoes the
 # 8-bit duty over UART. Exercises machine.ADC, machine.PWM (both Pin
 # overloads -- Pin(14) int for A0 and Pin("PD6") string) and machine.UART.
 from machine import Pin, ADC, PWM, UART
@@ -16,7 +16,7 @@ def main():
     led.init()
 
     while True:
-        sensor: uint16 = pot.read()      # 0..1023
-        led.duty(sensor)                 # pwm.duty(adc.read()), the MicroPython idiom
-        out: uint8 = uint8(sensor >> 2)  # the 8-bit duty the timer runs at
+        sensor: uint16 = pot.read_u16()  # 0..65535
+        led.duty_u16(sensor)             # pwm.duty_u16(adc.read_u16()), the rp2 idiom
+        out: uint8 = uint8(sensor >> 8)  # the 8-bit duty the timer runs at
         uart.write(out)                  # echo it (sync marker for tests)
