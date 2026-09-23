@@ -237,7 +237,13 @@ public static class AvrRegisterAllocator
             if (val is not Variable v) return;
             useCount.TryGetValue(v.Name, out long count);
             useCount[v.Name] = count + weight;
-            varTypes[v.Name] = v.Type;
+            // A union payload var is read at member width under tag dispatch: `a` can
+            // be FLOAT at the call dst and INT16 at a narrowed print. Last-write-wins
+            // here sized it 2 bytes, won a pair home, and the 4-register float store
+            // then spilled over the next variable's registers (RFC 0009). Keep the
+            // widest type any use claims so the home covers every access.
+            if (!varTypes.TryGetValue(v.Name, out var prev) || SizeOfType(v.Type) > SizeOfType(prev))
+                varTypes[v.Name] = v.Type;
         }
     }
 }

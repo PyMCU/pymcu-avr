@@ -38,7 +38,13 @@ public static class AvrLinearScan
         {
             if (val is not Temporary t) return;
             if (intervals.TryGetValue(t.Name, out var iv))
+            {
                 iv.LastUse = i;
+                // A temp that shows up at different widths (a union payload read at
+                // member width under tag dispatch) must be homed for the widest use;
+                // first-write-wins could grant a byte slot to a 16-bit access.
+                if (t.Type.SizeOf() > iv.Type.SizeOf()) iv.Type = t.Type;
+            }
             else
                 intervals[t.Name] = new LiveInterval { Name = t.Name, Type = t.Type, Def = i, LastUse = i };
         }
