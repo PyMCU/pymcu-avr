@@ -469,7 +469,7 @@
    "violations": []
   },
   "114_callable_field_dispatch_through_self": {
-   "rc": 1,
+   "rc": 0,
    "violations": []
   },
   "115_module_level_function_list_dispatch_without_callable_refused": {
@@ -609,14 +609,14 @@
   "146_dunder_eq_le_sub_mul": {
    "rc": 0,
    "violations": [
+    "canfail|read-never-written|main|'tmp_26_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
     "canfail|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "canfail|read-never-written|main|'tmp_30_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "generate|read-never-written|main|'tmp_26_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
     "generate|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "generate|read-never-written|main|'tmp_30_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "optimize|read-never-written|main|'tmp_26_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
     "optimize|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "optimize|read-never-written|main|'tmp_30_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "unify-widths|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "unify-widths|read-never-written|main|'tmp_30_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame"
+    "unify-widths|read-never-written|main|'tmp_26_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "unify-widths|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame"
    ]
   },
   "147_dunder_str_refused": {
@@ -3236,6 +3236,80 @@
   "super-outlined": {
    "rc": 0,
    "violations": []
+  },
+  "surfacecov-74hc595": {
+   "rc": 1,
+   "violations": []
+  },
+  "surfacecov-bus-device": {
+   "rc": 0,
+   "violations": []
+  },
+  "surfacecov-debouncer": {
+   "rc": 0,
+   "violations": []
+  },
+  "surfacecov-dht": {
+   "rc": 1,
+   "violations": []
+  },
+  "surfacecov-ds18x20": {
+   "rc": 1,
+   "violations": []
+  },
+  "surfacecov-hcsr04": {
+   "rc": 0,
+   "violations": []
+  },
+  "surfacecov-irremote": {
+   "rc": 1,
+   "violations": []
+  },
+  "surfacecov-mcp3xxx": {
+   "rc": 0,
+   "violations": []
+  },
+  "surfacecov-neopixel": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "surfacecov-pcf8574": {
+   "rc": 0,
+   "violations": []
+  },
+  "surfacecov-servo-continuous": {
+   "rc": 1,
+   "violations": []
+  },
+  "surfacecov-servo-servo": {
+   "rc": 0,
+   "violations": []
+  },
+  "surfacecov-tcs34725-a": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline1.integration_time__setter.cycles' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "surfacecov-tcs34725-b": {
+   "rc": 0,
+   "violations": [
+    "canfail|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_1_0' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_1_1' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_1_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_2_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
   },
   "t-flag-demo": {
    "rc": 0,
