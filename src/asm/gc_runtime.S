@@ -14,17 +14,22 @@
 ;   _heap_end        Exclusive end of usable heap.
 ;
 ; Object layout (header immediately BEFORE the user pointer):
-;   +0  mark byte  : bit7 = GC mark flag; bits[6:0] spare
+;   +0  mark byte  : bit7 = GC mark flag; bit6 = payload holds GC_REFs
+;                    (a list[list[T]]: elements are inner-list user_ptrs)
 ;   +1  size byte  : payload length 0-255 bytes
 ;   +2..N+1  payload
+;
+; List payload layout (both scalar and ref-bearing lists):
+;   +0  count (u8)   +1  capacity (u8)   +2.. elements
 ;
 ; user_ptr = &header + 2   (value stored in a GC_REF variable)
 ;
 ; Public API:
-;   gc_init    — initialise GC state; call once from main prologue
-;   gc_alloc   — R24:R25 = payload size; returns user_ptr in R24:R25
-;                (0x0000 on permanent OOM after one collection attempt)
-;   gc_collect — mark + compact (also called internally by gc_alloc on OOM)
+;   gc_init       — initialise GC state; call once from main prologue
+;   gc_alloc      — R24:R25 = payload size; returns user_ptr in R24:R25
+;                   (0x0000 on permanent OOM after one collection attempt)
+;   gc_alloc_refs — same, but sets the ref-bearing header flag (bit6)
+;   gc_collect    — mark + compact (also called internally by gc_alloc on OOM)
 ;
 ; Calling convention notes:
 ;   _gc_update_ss uses R16-R21, R26-R27 only; R22-R25 survive the call.
@@ -130,6 +135,26 @@ _gai_fail:
     RET
 
 ; ---------------------------------------------------------------------------
+; gc_alloc_refs  --  gc_alloc, then set bit6 in the mark byte: the payload is
+; an array of GC_REFs, so the mark phase must trace it and compaction must
+; rewrite its slots when the referents move (a list[list[T]]'s inner lists
+; are reachable ONLY through the outer payload -- the shadow stack never
+; names them).
+; ---------------------------------------------------------------------------
+gc_alloc_refs:
+    CALL    gc_alloc
+    MOV     R16, R24
+    OR      R16, R25
+    BREQ    _garf_done                  ; OOM: no object to flag
+    MOVW    R30, R24                    ; Z = user_ptr
+    SBIW    R30, 2                      ; Z = header
+    LD      R16, Z
+    ORI     R16, 0x40                   ; bit6 = ref-bearing payload
+    ST      Z, R16
+_garf_done:
+    RET
+
+; ---------------------------------------------------------------------------
 ; gc_collect  --  run a full mark-then-compact GC cycle.
 ; ---------------------------------------------------------------------------
 gc_collect:
@@ -141,6 +166,7 @@ gc_collect:
     CLI
     PUSH    R18                         ; preserve across the mark/compact calls
     CALL    _gc_do_mark
+    CALL    _gc_trace_refs              ; mark what ref-bearing payloads reach
     CALL    _gc_do_compact
     POP     R18
     OUT     0x3F, R18                   ; restore SREG (re-enables interrupts iff they were on)
@@ -214,6 +240,111 @@ _gdm_done:
     RET
 
 ; ---------------------------------------------------------------------------
+; _gc_trace_refs  --  mark objects reachable through ref-bearing payloads.
+;
+; The shadow-stack walk marks what named variables point at. A list[list[T]]'s
+; inner lists are reachable only as user_ptrs inside the outer payload, so a
+; second walk is needed: for every live object flagged bit6, mark each element
+; slot ([0, count) -- payload+2 + i*2) that addresses the heap. New marks can
+; themselves flag ref-bearing objects (a list three levels deep), so the pass
+; repeats until a full sweep marks nothing.
+;
+; A garbage slot that lands inside [heap_start, heap_top) can set a mark bit
+; on a byte that is not a header -- the same exposure the root walk already
+; accepts for a corrupted root, bounded by the same range check. Slots at or
+; past count are never scanned: they hold stale bytes, not live refs.
+;
+; Y is the caller's frame pointer under the PyMCU ABI -- saved around the walk.
+; Clobbers: R16-R25, R30-R31.
+; ---------------------------------------------------------------------------
+_gc_trace_refs:
+    PUSH    R28
+    PUSH    R29
+_gtr_pass:
+    CLR     R24                         ; R24 = changed flag
+    LDS     R16, _gc_heap_top_lo
+    LDS     R17, _gc_heap_top_hi        ; R17:R16 = scan limit
+    LDI     R28, lo8(_heap_start)
+    LDI     R29, hi8(_heap_start)       ; Y = object cursor
+
+_gtr_obj:
+    CP      R28, R16
+    CPC     R29, R17
+    BRSH    _gtr_pass_done              ; cursor >= heap_top
+
+    LD      R18, Y                      ; mark byte
+    LDD     R19, Y+1                    ; size byte
+    ; total_size = size + 2 (16-bit; same wrap fix as the compact cursor)
+    MOV     R20, R19
+    CLR     R21
+    SUBI    R20, lo8(-2)
+    SBCI    R21, hi8(-2)                ; R21:R20 = total
+
+    SBRS    R18, 7
+    RJMP    _gtr_next                   ; not live
+    SBRS    R18, 6
+    RJMP    _gtr_next                   ; payload holds no refs
+
+    LDD     R22, Y+2                    ; element count
+    CLR     R23                         ; i = 0
+
+_gtr_slot:
+    CP      R23, R22
+    BRSH    _gtr_next                   ; scanned [0, count)
+
+    ; Z = Y + 4 + i*2  (2-byte header + count + pad + slot)
+    MOVW    R30, R28
+    MOV     R25, R23
+    LSL     R25                         ; i*2 (count <= 126 for 2-byte slots)
+    SUBI    R25, lo8(-4)                ; +4
+    ADD     R30, R25
+    CLR     R25
+    ADC     R31, R25
+
+    LD      R18, Z+                     ; slot lo
+    LD      R19, Z                      ; slot hi  (R19:R18 = maybe-ptr)
+
+    MOV     R25, R18
+    OR      R25, R19
+    BREQ    _gtr_slot_next              ; null
+
+    LDI     R25, lo8(_heap_start)
+    CP      R18, R25
+    LDI     R25, hi8(_heap_start)
+    CPC     R19, R25
+    BRLO    _gtr_slot_next              ; below heap
+
+    CP      R18, R16
+    CPC     R19, R17
+    BRSH    _gtr_slot_next              ; at/past heap_top
+
+    ; Mark the target: header at user_ptr - 2
+    MOVW    R30, R18
+    SBIW    R30, 2
+    LD      R25, Z
+    SBRC    R25, 7
+    RJMP    _gtr_slot_next              ; already marked
+    ORI     R25, 0x80
+    ST      Z, R25
+    LDI     R24, 1                      ; pass marked something new
+
+_gtr_slot_next:
+    INC     R23
+    RJMP    _gtr_slot
+
+_gtr_next:
+    ADD     R28, R20
+    ADC     R29, R21                    ; cursor += total
+    RJMP    _gtr_obj
+
+_gtr_pass_done:
+    TST     R24
+    BRNE    _gtr_pass                   ; marks propagate one level per pass
+    POP     R29
+    POP     R28
+    RET
+
+; ---------------------------------------------------------------------------
 ; _gc_do_compact  --  compact live objects toward _heap_start.
 ;
 ; Y = read cursor (src), starts at _heap_start
@@ -277,6 +408,14 @@ _gdc_loop:
     CPC     R23, R25
     BREQ    _gdc_copy                   ; same address, no fixup
 
+    ; _gc_update_ss also rewrites matching slots inside ref-bearing payloads.
+    ; It walks two regions -- the finalized run [_heap_start, Z) and the
+    ; unprocessed run [Y, heap_top) -- so publish the cursors it needs.
+    STS     _gc_fix_dst_lo, R30
+    STS     _gc_fix_dst_hi, R31
+    STS     _gc_fix_src_lo, R28
+    STS     _gc_fix_src_hi, R29
+
     PUSH    R16                         ; save heap_top lo
     PUSH    R17                         ; save heap_top hi
     PUSH    R19                         ; save size byte
@@ -296,10 +435,11 @@ _gdc_copy:
     MOVW    R26, R28                    ; X = Y (src)
     MOV     R22, R20                    ; R22 = byte counter (total_size)
 
-    ; Header: write mark=0, then size byte
+    ; Header: clear the mark bit, keep bit6 (the ref-bearing flag rides along
+    ; to the new location -- the fixup walk only scans payloads so flagged).
     LD      R23, X+                     ; consume src mark byte
-    CLR     R23
-    ST      Z+, R23                     ; write mark byte = 0
+    ANDI    R23, 0x40
+    ST      Z+, R23                     ; write mark byte = flag only
     LD      R23, X+                     ; consume + copy size byte
     ST      Z+, R23
     SUBI    R22, 2                      ; subtract 2 header bytes from counter
@@ -379,6 +519,93 @@ _guss_next:
     RJMP    _guss_loop
 
 _guss_done:
+    ; A moved object's other references live inside ref-bearing payloads:
+    ; a list[list[T]] that holds the moved list as an element. Rewrite those
+    ; too, over the regions _gc_fix_dst/_gc_fix_src bound.
+    CALL    _gc_update_heap
+    RET
+
+; ---------------------------------------------------------------------------
+; _gc_update_heap  --  rewrite GC_REF slots inside ref-bearing payloads.
+;
+; In:  R23:R22 = old_user_ptr, R25:R24 = new_user_ptr (both preserved).
+; Covers the finalized run [_heap_start, _gc_fix_dst) and the unprocessed run
+; [_gc_fix_src, _gc_heap_top): at the instant a mid-compaction move calls
+; this, every live object's payload sits in exactly one of the two. Slots at
+; or past a list's count hold stale bytes, not live refs -- only [0, count)
+; is scanned, and only objects flagged bit6 qualify: a scalar list's payload
+; is data, and a value byte there that happens to equal old_user_ptr must not
+; be "fixed".
+;
+; Y/Z are the compact loop's live cursors under the PyMCU ABI -- saved, used,
+; restored. Clobbers R16-R21, R26-R27.
+; ---------------------------------------------------------------------------
+_gc_update_heap:
+    PUSH    R28
+    PUSH    R29
+    PUSH    R30
+    PUSH    R31
+    ; Region A: [_heap_start, _gc_fix_dst) -- finalized objects.
+    LDI     R28, lo8(_heap_start)
+    LDI     R29, hi8(_heap_start)       ; Y = cursor
+    LDS     R16, _gc_fix_dst_lo
+    LDS     R17, _gc_fix_dst_hi         ; R17:R16 = region end
+    RCALL   _guh_walk
+    ; Region B: [_gc_fix_src, _gc_heap_top) -- objects not yet moved.
+    LDS     R28, _gc_fix_src_lo
+    LDS     R29, _gc_fix_src_hi
+    LDS     R16, _gc_heap_top_lo
+    LDS     R17, _gc_heap_top_hi
+    RCALL   _guh_walk
+    POP     R31
+    POP     R30
+    POP     R29
+    POP     R28
+    RET
+
+; _guh_walk: scan objects at Y while Y < R17:R16. For each with bit6 set,
+; compare each element slot (payload+2 + i*2, count at payload+0) against
+; R23:R22 and store R25:R24 on a match. Clobbers R18-R21, R30-R31;
+; Y advances (it is the cursor).
+_guh_walk:
+_guh_obj:
+    CP      R28, R16
+    CPC     R29, R17
+    BRSH    _guh_done                   ; cursor >= region end
+
+    LD      R18, Y                      ; mark byte
+    SBRS    R18, 6
+    RJMP    _guh_next                   ; payload holds no refs
+
+    LDD     R18, Y+2                    ; element count
+    MOVW    R30, R28
+    ADIW    R30, 4                      ; Z = first element slot
+
+_guh_slot:
+    TST     R18
+    BREQ    _guh_next                   ; scanned [0, count)
+    LD      R19, Z                      ; slot lo
+    LDD     R20, Z+1                    ; slot hi  (R20:R19)
+    CP      R19, R22
+    CPC     R20, R23
+    BRNE    _guh_skipw
+    ST      Z,   R24                    ; rewrite to new_user_ptr
+    STD     Z+1, R25
+_guh_skipw:
+    ADIW    R30, 2
+    DEC     R18
+    RJMP    _guh_slot
+
+_guh_next:
+    LDD     R19, Y+1                    ; size byte -> total R20:R19
+    CLR     R20
+    SUBI    R19, lo8(-2)
+    SBCI    R20, hi8(-2)
+    ADD     R28, R19
+    ADC     R29, R20                    ; cursor += total
+    RJMP    _guh_obj
+
+_guh_done:
     RET
 
 ; ---------------------------------------------------------------------------
@@ -397,5 +624,13 @@ gc_list_fixup:
     MOVW    R18, R22                    ; R19:R18 = new (temp)
     MOVW    R22, R24                    ; R23:R22 = old
     MOVW    R24, R18                    ; R25:R24 = new
+    ; No collection is in progress: the payload-fixup walk sees the whole heap
+    ; as the unprocessed region and an empty finalized run.
+    LDI     R16, lo8(_heap_start)
+    STS     _gc_fix_dst_lo, R16
+    STS     _gc_fix_src_lo, R16
+    LDI     R16, hi8(_heap_start)
+    STS     _gc_fix_dst_hi, R16
+    STS     _gc_fix_src_hi, R16
     CALL    _gc_update_ss
     RET

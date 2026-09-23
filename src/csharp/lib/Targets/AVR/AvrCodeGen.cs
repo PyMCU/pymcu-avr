@@ -4860,6 +4860,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     //   _gc_ss_top_addr   : 1 byte     (current shadow-stack depth)
     //   _gc_heap_top_lo   : 1 byte     (lo byte of GC heap write pointer)
     //   _gc_heap_top_hi   : 1 byte     (hi byte of GC heap write pointer)
+    //   _gc_fix_dst       : 2 bytes    (dst cursor, bounds the finalized region
+    //                        for the payload-pointer fixup walk)
+    //   _gc_fix_src       : 2 bytes    (src cursor, bounds the unprocessed region)
     //   _heap_start       : start of GC-managed heap
     //   _heap_end         : 0x0880 (leaves ~127 bytes for hardware SP call stack)
     // -------------------------------------------------------------------------
@@ -4869,13 +4872,19 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         int ssTopAddr = ssBase + 128;   // 1 byte after 64-entry shadow stack
         int heapTopLo = ssTopAddr + 1;
         int heapTopHi = heapTopLo + 1;
-        int heapStart = heapTopHi + 1;
+        int fixDstLo = heapTopHi + 1;
+        int fixSrcLo = fixDstLo + 2;
+        int heapStart = fixSrcLo + 2;
 
         EmitRaw($"; --- GC Runtime SRAM Layout ---");
         EmitRaw($".equ _gc_ss_base,     _stack_base + {ssBase}");
         EmitRaw($".equ _gc_ss_top_addr, _stack_base + {ssTopAddr}");
         EmitRaw($".equ _gc_heap_top_lo, _stack_base + {heapTopLo}");
         EmitRaw($".equ _gc_heap_top_hi, _stack_base + {heapTopHi}");
+        EmitRaw($".equ _gc_fix_dst_lo,  _stack_base + {fixDstLo}");
+        EmitRaw($".equ _gc_fix_dst_hi,  _stack_base + {fixDstLo + 1}");
+        EmitRaw($".equ _gc_fix_src_lo,  _stack_base + {fixSrcLo}");
+        EmitRaw($".equ _gc_fix_src_hi,  _stack_base + {fixSrcLo + 1}");
         EmitRaw($".equ _heap_start,     _stack_base + {heapStart}");
         EmitRaw($".equ _heap_end,       0x0880");
         EmitRaw($"; Shadow stack: {ssBase}..{ssBase + 127} ({128} bytes)");
@@ -4892,10 +4901,12 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // Result user_ptr is returned in R24:R25.
     private void CompileGcAlloc(GcAlloc ga)
     {
-        EmitComment("gc_alloc");
+        EmitComment(ga.Refs ? "gc_alloc_refs" : "gc_alloc");
         LoadIntoReg(ga.Size, "R24", DataType.UINT16);   // load size lo into R24 (hi stays R25)
         CLR_R25IfNeeded(ga.Size);                        // R25 = 0 for 1-byte sizes
-        Emit("CALL", "gc_alloc");
+        // Refs payloads (list[list[T]]) get the ref-bearing header flag so the
+        // collector traces and relocates the pointers inside them.
+        Emit("CALL", ga.Refs ? "gc_alloc_refs" : "gc_alloc");
         StoreRegInto("R24", ga.Dst, DataType.GC_REF);   // store returned user_ptr (R24:R25)
     }
 
