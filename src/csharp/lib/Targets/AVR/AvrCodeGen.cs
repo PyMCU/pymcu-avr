@@ -2254,7 +2254,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     {
         if (r.Value is not NoneVal)
         {
-            var returnType = _currentFunction?.ReturnType ?? GetValType(r.Value);
+            var declared = _currentFunction?.ReturnType;
+            // A declared type StringToDataType cannot map (`-> tuple`, `-> list[T]`,
+            // `-> array.array`) stays UNKNOWN -- 1 byte -- while the value the body
+            // returns is a GC pointer. Marshal by the value's width then: sizing the
+            // return run from UNKNOWN handed the caller only the pointer's low byte.
+            var returnType = declared == null || declared == DataType.UNKNOWN
+                ? GetValType(r.Value)
+                : declared.Value;
             if (r.Tag != null)
             {
                 // RFC 0009 phase 3: the payload is the widest member's storage and a
@@ -2282,7 +2289,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // the caller reads.
         if (r.Tag != null)
         {
-            var payloadType = _currentFunction?.ReturnType ?? GetValType(r.Value);
+            var declaredTag = _currentFunction?.ReturnType;
+            var payloadType = declaredTag == null || declaredTag == DataType.UNKNOWN
+                ? GetValType(r.Value)
+                : declaredTag.Value;
             LoadIntoReg(r.Tag, TagReturnReg(payloadType), DataType.UINT8);
         }
 
