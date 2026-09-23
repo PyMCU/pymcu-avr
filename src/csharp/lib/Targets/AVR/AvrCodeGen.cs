@@ -161,7 +161,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private void EmitComment(string c) => _assembly.Add(AvrAsmLine.MakeComment(c));
     private void EmitRaw(string t) => _assembly.Add(AvrAsmLine.MakeRaw(t));
 
-    private static string ResolveAddress(Val val)
+    private string ResolveAddress(Val val)
     {
         switch (val)
         {
@@ -177,17 +177,28 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
     }
 
+    // IR names carry characters avr-as cannot take in a symbol -- `$` (the
+    // RFC 0009 `<name>$tag` union-tag slot) is a statement separator to it.
+    // The rename map keeps the emitted spelling injective: `x$tag` becomes
+    // `x_tag`, and a real `x_tag` that lands on the same spelling gets an
+    // underscore prefix until its symbol is free again.
+    private readonly Dictionary<string, string> _asmRenames = new();
+    private readonly HashSet<string> _asmUsed = new();
+
     /// <summary>
     /// An assembler symbol from an IR name. Dots become underscores; a name that would
     /// start with a digit is prefixed so avr-as does not see <c>.equ 0</c> (unrolled
     /// <c>coeff__N</c> slots, or a shortening Replace that left a bare index).
     /// </summary>
-    private static string AsmSymbol(string name)
+    private string AsmSymbol(string name)
     {
-        var s = name.Replace('.', '_');
+        if (_asmRenames.TryGetValue(name, out var renamed)) return renamed;
+        var s = name.Replace('.', '_').Replace('$', '_');
         if (s.Length == 0) return s;
         if (!(char.IsLetter(s[0]) || s[0] == '_'))
-            return "_v" + s;
+            s = "_v" + s;
+        while (!_asmUsed.Add(s)) s = "_" + s;
+        _asmRenames[name] = s;
         return s;
     }
 
@@ -2208,12 +2219,45 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         _ => "R25",
     };
 
+    // Load a tagged-union return payload: the member's bytes into the low bytes of
+    // the WIDEST member's register run. A float payload run is byte0-first at R22
+    // (the GCC order StoreFloatFromRegs reads back); an integer run is byte0-first
+    // at R24. The member keeps its own width -- bytes above it are don't-care.
+    private void LoadUnionPayloadIntoRegs(Val val, DataType memberType, DataType widestType)
+    {
+        if (memberType == DataType.FLOAT) { LoadFloatIntoRegs(val); return; }
+        if (widestType == DataType.FLOAT)
+        {
+            // Float run: byte0..3 live in R22,R23,R24,R25 -- base R22 with the
+            // member's own width lands its bytes in the low payload positions.
+            LoadIntoReg(val, "R22", memberType);
+            return;
+        }
+        LoadIntoReg(val, "R24", memberType);
+    }
+
     private void CompileReturn(Return r)
     {
         if (r.Value is not NoneVal)
         {
             var returnType = _currentFunction?.ReturnType ?? GetValType(r.Value);
-            if (returnType == DataType.FLOAT)
+            if (r.Tag != null)
+            {
+                // RFC 0009 phase 3: the payload is the widest member's storage and a
+                // return reports the member index in the tag. A constant tag names
+                // the member being returned -- its bytes go into the LOW payload
+                // registers at the member's own width, raw (never a numeric
+                // conversion: the caller re-reads them as that member, not as the
+                // widest type). A non-constant tag means the value being forwarded
+                // is already a whole union payload, so it loads at the widest width.
+                DataType memberType =
+                    r.Tag is Constant tc && _currentFunction?.ReturnMembers is { } rm
+                        && tc.Value >= 0 && tc.Value < rm.Count
+                    ? DataTypeExtensions.StringToDataType(rm[(int)tc.Value])
+                    : returnType;
+                LoadUnionPayloadIntoRegs(r.Value, memberType, returnType);
+            }
+            else if (returnType == DataType.FLOAT)
                 LoadFloatIntoRegs(r.Value);
             else
                 LoadIntoReg(r.Value, "R24", returnType);
