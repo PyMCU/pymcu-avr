@@ -224,7 +224,10 @@ class FakeI2C:
 
 
 class FakeSPI:
-    def __init__(self, sck=None, mosi=None, miso=None):
+    # Real busio.SPI names the kwargs MOSI/MISO (uppercase); some callers pass
+    # them positionally or as lowercase, so accept all spellings.
+    def __init__(self, sck=None, mosi=None, miso=None, *,
+                 clock=None, MOSI=None, MISO=None):
         self._locked = False
         self.frequency = None
     def try_lock(self):
@@ -285,22 +288,47 @@ class FakePWMOut:
 
 
 class FakePulseIn:
-    """pulseio.PulseIn fed by the fixture's pulse_reply width list."""
+    """pulseio.PulseIn fed by the fixture's pulse scripts.
+
+    Two script shapes, both keyed by capture-pin name:
+
+    * ``pulse_reply`` (per-trigger replies, HC-SR04 style): ``resume()``
+      consumes one scripted width into the pending list, the next trigger's
+      reply. A pin with an exhausted script captures nothing and the caller's
+      timeout path runs, exactly like the firmware's.
+    * ``pulse_frames`` (whole frames, DHT/IR style): the pin's scripted frames
+      deliver in order -- the first at construction (the capture is armed from
+      then on, and a real receiver has often already seen its burst by the
+      time the program asks) and each next frame on ``resume()`` -- the call
+      that re-arms a drained capture. ``clear()`` only empties the buffer: a
+      ``clear(); resume()`` pair (adafruit_dht's measure preamble) delivers one
+      frame, not two.
+
+    The pending list survives ``pause()``: pausing stops new captures, it does
+    not empty the buffer -- ``while self.pulse_in: popleft()`` after
+    ``pause()`` is the drain idiom both callers use."""
     def __init__(self, pin, maxlen=2, idle_state=0):
         self._pin = pin
         self._maxlen = maxlen
-        self._queue = list(_CFG.get("pulse_widths_us", []))
+        name = getattr(pin, "name", str(pin))
+        frames = _CFG.get("pulse_frames", {})
+        self._frames = [list(f) for f in frames.get(name, [])]
+        queues = _CFG.get("pulse_queues", {})
+        self._queue = queues.get(name, list(_CFG.get("pulse_widths_us", [])))
+        self._pending = []
         self._paused = True
+        # An armed capture that already has a scripted frame sees it land at
+        # once; pulse_queues widths wait for resume() as before.
+        if self._frames:
+            self._pending = [((w * 2) & 0xFFFF) >> 1 for w in self._frames.pop(0)]
     def __len__(self):
-        return 1 if (self._queue and not self._paused) else 0
+        return len(self._pending)
     def __bool__(self):
         return len(self) > 0
     def __getitem__(self, i):
-        if not self._queue:
-            return 0
-        return self._queue[0] if i == 0 else 0
+        return self._pending[i] if 0 <= i < len(self._pending) else 0
     def popleft(self):
-        return self._queue.pop(0) if self._queue else 0
+        return self._pending.pop(0) if self._pending else 0
     @property
     def maxlen(self):
         return self._maxlen
@@ -308,10 +336,18 @@ class FakePulseIn:
     def paused(self):
         return 1 if self._paused else 0
     def clear(self):
-        pass
+        self._pending = []
     def pause(self):
         self._paused = True
     def resume(self, trigger_duration=0):
+        # The AVR capture ISR timestamps edges off a free-running 16-bit timer
+        # at 2 ticks/us and stores delta>>1, so a pulse longer than 32768 us
+        # wraps -- 70000 us lands as ((140000)&0xffff)>>1 = 4464.
+        if self._frames:
+            self._pending = [((w * 2) & 0xFFFF) >> 1 for w in self._frames.pop(0)]
+        elif self._queue:
+            w = self._queue.pop(0)
+            self._pending = [((w * 2) & 0xFFFF) >> 1]
         self._paused = False
     def deinit(self):
         pass
@@ -319,6 +355,155 @@ class FakePulseIn:
         return self
     def __exit__(self, *a):
         self.deinit()
+
+
+def _ow_crc8(data):
+    """1-Wire CRC-8 (maxim poly, reversed 0x8C) -- the same algorithm
+    adafruit_onewire.crc8 and a real DS18B20 run."""
+    crc = 0
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = ((crc >> 1) ^ 0x8C) if (crc & 1) else (crc >> 1)
+            crc &= 0xFF
+    return crc
+
+
+class _OneWireSlave:
+    """A scripted 1-Wire slave, bit level, DS18B20 shape.
+
+    Answers the protocol adafruit_onewire drives: reset presence, ROM command
+    (MATCH 0x55 / SKIP 0xCC / SEARCH 0xF0 -- the search triple per position:
+    slave serves bit then ~bit then reads the master's choice), then one
+    function byte: CONVERT 0x44 (read slots answer 0x00 `convert_busy_reads`
+    times, then 0xFF = done), READ_SCRATCH 0xBE (serves the nine scratchpad
+    bytes LSB-first), WRITE_SCRATCH 0x4E (takes TH, TL, CONFIG and rewrites
+    the CRC). fixture.json's "onewire" object keys one spec per pin name.
+    """
+    def __init__(self, spec):
+        self.rom = bytes(spec["rom"])
+        self.scratch = bytearray(spec["scratch"])
+        self.busy = int(spec.get("convert_busy_reads", 0))
+        self._reset()
+
+    def _reset(self):
+        self._wbuf = 0
+        self._wbits = 0
+        self._rqueue = []
+        self._state = "cmd"     # cmd | match | func | wr3 | conv | idle
+        self._match = []
+        self._search_pos = 0
+        self._search_pair = None
+        self._wr = []
+        self._conv = -1
+
+    def reset(self):
+        # Upstream reset() returns True when the bus stayed high (no device
+        # pulled it low). A scripted slave always answers presence -> False.
+        self._reset()
+        return False
+
+    def write_bit(self, b):
+        b &= 1
+        if self._state == "search":
+            if self._search_pair:
+                return          # write during the pair: malformed, ignore
+            mybit = (self.rom[self._search_pos >> 3] >> (self._search_pos & 7)) & 1
+            if b != mybit:
+                self._state = "idle"     # a different device's turn; silent
+            else:
+                self._search_pos += 1
+                if self._search_pos == 64:
+                    self._state = "func"
+            return
+        self._wbuf |= b << self._wbits
+        self._wbits += 1
+        if self._wbits == 8:
+            self._on_byte(self._wbuf)
+            self._wbuf = 0
+            self._wbits = 0
+
+    def read_bit(self):
+        if self._state == "search":
+            if self._search_pair is None:
+                bit = (self.rom[self._search_pos >> 3] >> (self._search_pos & 7)) & 1
+                self._search_pair = [bit, 1 - bit]
+            if self._search_pair:
+                b = self._search_pair.pop(0)
+                if not self._search_pair:
+                    self._search_pair = None
+                return b
+            return 1
+        if self._rqueue:
+            return self._rqueue.pop(0)
+        # A CONVERT leaves the device answering 0x00 while it works, then
+        # 0xFF -- the shape `while buf[0] == 0: readinto(buf, end=1)` polls.
+        if self._state == "func" and self._conv >= 0:
+            byte = 0x00 if self._conv > 0 else 0xFF
+            if self._conv > 0:
+                self._conv -= 1
+            for i in range(8):
+                self._rqueue.append((byte >> i) & 1)
+            return self._rqueue.pop(0)
+        return 1    # nothing to say: the released bus reads high
+
+    def _on_byte(self, byte):
+        st = self._state
+        if st == "cmd":
+            if byte == 0x55:            # MATCH_ROM
+                self._state = "match"
+                self._match = []
+            elif byte == 0xF0:          # SEARCH_ROM
+                self._state = "search"
+                self._search_pos = 0
+                self._search_pair = None
+            elif byte == 0xCC:          # SKIP_ROM
+                self._state = "func"
+            else:
+                self._state = "idle"
+        elif st == "match":
+            self._match.append(byte)
+            if len(self._match) == 8:
+                self._state = "func" if bytes(self._match) == self.rom else "idle"
+        elif st == "func":
+            # Once ROM-matched the device stays addressed until the next
+            # reset, so function bytes keep arriving back-to-back.
+            if byte == 0x44:            # CONVERT
+                self._conv = self.busy
+            elif byte == 0xBE:          # READ_SCRATCH
+                self._conv = -1
+                for bb in self.scratch:
+                    for i in range(8):
+                        self._rqueue.append((bb >> i) & 1)
+            elif byte == 0x4E:          # WRITE_SCRATCH: TH, TL, CONFIG
+                self._state = "wr3"
+                self._wr = []
+        elif st == "wr3":
+            self._wr.append(byte)
+            if len(self._wr) == 3:
+                self.scratch[2] = self._wr[0]
+                self.scratch[3] = self._wr[1]
+                self.scratch[4] = self._wr[2]
+                self.scratch[8] = _ow_crc8(self.scratch[:8])
+                self._state = "func"
+
+
+class FakeOneWire:
+    """onewireio.OneWire: bit-level access to the pin's scripted slave. A pin
+    with no "onewire" entry is an empty bus -- reset() reports nobody."""
+    def __init__(self, pin):
+        name = getattr(pin, "name", str(pin))
+        spec = _CFG.get("onewire", {}).get(name)
+        self._slave = _OneWireSlave(spec) if spec else None
+    def reset(self):
+        if self._slave is None:
+            return True
+        return self._slave.reset()
+    def read_bit(self):
+        return 1 if self._slave is None else self._slave.read_bit()
+    def write_bit(self, value):
+        if self._slave is not None:
+            self._slave.write_bit(value)
 
 
 class FakePulseOut:
@@ -445,6 +630,10 @@ def _install(cfg, scriptdir):
     pulseio.PulseOut = FakePulseOut
     sys.modules["pulseio"] = pulseio
 
+    onewireio = types.ModuleType("onewireio")
+    onewireio.OneWire = FakeOneWire
+    sys.modules["onewireio"] = onewireio
+
     analogio = types.ModuleType("analogio")
     analogio.AnalogIn = FakeAnalogIn
     analogio.AnalogOut = FakeAnalogOut
@@ -467,8 +656,10 @@ def _install(cfg, scriptdir):
     supervisor = types.ModuleType("supervisor")
     _tick = [0]
     def _ticks_ms():
-        _tick[0] = (_tick[0] + 1) % (1 << 29)
-        return _tick[0]
+        # A real millis() reads the same value every call within the same ms --
+        # it advances with time, not per read. time.sleep() below is what moves
+        # it, matching the simulator where delay_ms burns real clock ticks.
+        return _tick[0] % (1 << 29)
     supervisor.ticks_ms = _ticks_ms
     sys.modules["supervisor"] = supervisor
 
@@ -489,9 +680,19 @@ def _install(cfg, scriptdir):
     cpt.ReadableBuffer = typing.Union[bytes, bytearray, memoryview]
     cpt.WriteableBuffer = typing.Union[bytearray, memoryview]
     sys.modules["circuitpython_typing"] = cpt
+    cpt_io = types.ModuleType("circuitpython_typing.io")
+    class _ROValueIO:
+        @property
+        def value(self):
+            return 0.0
+    cpt_io.ROValueIO = _ROValueIO
+    sys.modules["circuitpython_typing.io"] = cpt_io
 
-    # time.sleep burns only the budget, never the answer.
-    _time.sleep = lambda *_a, **_kw: None
+    # time.sleep burns the fake clock the same way delay_ms burns the real one,
+    # so a program that spaces calls by sleeping sees the ticks it slept past.
+    def _sleep(seconds=0):
+        _tick[0] += int(seconds * 1000)
+    _time.sleep = _sleep
 
 
 def run_here(oracle_file):
@@ -504,11 +705,21 @@ def run_here(oracle_file):
     # i2c addresses may be written "0x49" in json
     if "i2c" in cfg:
         cfg["i2c"] = [int(a, 16) if isinstance(a, str) else a for a in cfg["i2c"]]
-    # pulse_reply widths feed FakePulseIn in order
+    # pulse_reply widths feed FakePulseIn, queued per ECHO pin (the sim fires a
+    # reply only when its own trigger pin falls); an explicit pulse_widths_us
+    # list remains the flat fallback for pins with no entry.
     if "pulse_reply" in cfg:
+        queues = {}
+        for r in cfg["pulse_reply"]:
+            n = r.get("count", -1)
+            queues.setdefault(r["echo"], []).extend(
+                [r["width_us"]] * (n if n > 0 else 1))
+        cfg["pulse_queues"] = queues
         cfg["pulse_widths_us"] = [r["width_us"] for r in cfg["pulse_reply"]
                                   for _ in range(r.get("count", -1) if r.get("count", -1) > 0 else 1)]
-    _install(cfg, os.path.join(fixture, "oracle"))
+    # read_script resolves against the fixture root, matching the sim side
+    # (surfacerun joins it to the fixture.json directory).
+    _install(cfg, fixture)
 
     builtins.print = _py_print
 

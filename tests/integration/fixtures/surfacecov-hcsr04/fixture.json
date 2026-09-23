@@ -1,0 +1,33 @@
+{
+ "pulse_reply": [
+  {
+   "trigger": "D4",
+   "echo": "D2",
+   "delay_us": 150,
+   "width_us": 1000,
+   "count": 1
+  },
+  {
+   "trigger": "D4",
+   "echo": "D2",
+   "delay_us": 150,
+   "width_us": 580,
+   "count": 1
+  },
+  {
+   "trigger": "D4",
+   "echo": "D2",
+   "delay_us": 150,
+   "width_us": 70000,
+   "count": 1
+  },
+  {
+   "trigger": "D7",
+   "echo": "D2",
+   "delay_us": 150,
+   "width_us": 430,
+   "count": 1
+  }
+ ],
+ "max_ms": 8000
+}

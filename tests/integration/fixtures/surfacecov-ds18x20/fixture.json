@@ -1,0 +1,33 @@
+{
+ "pins_high": [
+  "D3"
+ ],
+ "onewire": {
+  "D2": {
+   "rom": [
+    40,
+    85,
+    170,
+    18,
+    52,
+    86,
+    120,
+    205
+   ],
+   "scratch": [
+    94,
+    255,
+    75,
+    70,
+    127,
+    255,
+    6,
+    16,
+    141
+   ],
+   "convert_busy_reads": 2
+  }
+ },
+ "max_ms": 30000,
+ "expect_build_fail": "no storage behind them, so it cannot be indexed at run time"
+}

@@ -1,0 +1,11 @@
+{
+ "i2c": [
+  "0x29"
+ ],
+ "read_script": "readscript.txt",
+ "pins_high": [
+  "A4",
+  "A5"
+ ],
+ "max_ms": 30000
+}

@@ -1,0 +1,5 @@
+305fa32a88700ee9592f73d7ed5edc1d  adafruit_pcf8574.py
+d41d8cd98f00b204e9800998ecf8427e  adafruit_bus_device/__init__.py
+2451d2fdd1ea8bf925976763e7781b4f  adafruit_bus_device/i2c_device.py
+d78273b262908517d1425d0a5961dd21  adafruit_bus_device/spi_device.py
+fe5b4d3b0591cb7742de98b76aaca2fd  src/main.py

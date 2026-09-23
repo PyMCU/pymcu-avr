@@ -1,0 +1,2 @@
+e954871c131ad4d9b42ed383f449ce88  adafruit_dht.py
+3e0f494c4537a2abe6df358fbbf62dac  src/main.py

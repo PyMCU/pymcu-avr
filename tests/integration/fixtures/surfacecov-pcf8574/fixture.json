@@ -1,0 +1,12 @@
+{
+ "i2c": [
+  "0x20",
+  "0x21"
+ ],
+ "read_script": "readscript.txt",
+ "pins_high": [
+  "A4",
+  "A5"
+ ],
+ "max_ms": 8000
+}

@@ -1,0 +1,9 @@
+{
+  "spi": true,
+  "read_script": "readscript.txt",
+  "max_ms": 8000,
+  "known_divergence": {
+    "reason": "AnalogIn.value is declared `-> int` = int16, so the [0,65535] stretch wraps negative for reads >511 (voltage prints -1.04/-0.0 vs CPython 2.26/3.3). Documented PyMCU int width, not a miscompile.",
+    "lines": [30, 34]
+  }
+}

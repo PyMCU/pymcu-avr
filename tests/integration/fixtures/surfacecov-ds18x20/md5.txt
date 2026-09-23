@@ -1,0 +1,5 @@
+69428f19a252deb15cff1ff56ac8d474  adafruit_ds18x20.py
+d41d8cd98f00b204e9800998ecf8427e  adafruit_onewire/__init__.py
+4ad3c651872ab744d8ffb3064785f32c  adafruit_onewire/bus.py
+0092c11d7837994454c35eae9c9375ed  adafruit_onewire/device.py
+a90fecc9c38fbbc50739d8ff88f3bf61  src/main.py
