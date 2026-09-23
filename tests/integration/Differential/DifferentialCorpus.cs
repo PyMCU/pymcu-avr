@@ -95,7 +95,14 @@ public static class DifferentialCorpus
     /// PyMCU (pymcu-avr#6), which is why both came out together.
     /// </remarks>
     public static readonly IReadOnlyDictionary<string, string> KnownDivergences =
-        new Dictionary<string, string>();
+        new Dictionary<string, string>
+        {
+            ["fixtures/held-write-anon"] =
+                "PyMCU#183: the write through a method on a field holding a nameless " +
+                "instance lands in the unoptimized build (GPIOR1=7) while the optimized " +
+                "build folds the constructor's value instead (GPIOR1=0); " +
+                "HeldInstanceWriteTests pins the failure on the wire",
+        };
 
     /// <summary>
     /// Peephole axis. Same contract as <see cref="KnownDivergences"/>, for the programs whose
@@ -167,6 +174,32 @@ public static class DifferentialCorpus
                 "the unoptimized build needs 3183 B of static data on a 2048 B part (the " +
                 "whole-surface program's temporaries without the optimizer); it runs " +
                 "optimized through the surfacecov oracle pair",
+            ["fixtures/surfacecov-debouncer"] =
+                "the unoptimized build needs 2401 B of static data on a 2048 B part (the " +
+                "whole-surface program's temporaries without the optimizer); it runs " +
+                "optimized through the surfacecov oracle pair",
+            ["fixtures/surfacecov-tcs34725-a"] =
+                "the unoptimized build needs 2197 B of static data on a 2048 B part (the " +
+                "whole-surface program's temporaries without the optimizer); it runs " +
+                "optimized through the surfacecov oracle pair",
+            ["fixtures/surfacecov-tcs34725-b"] =
+                "the unoptimized build needs 4277 B of static data on a 2048 B part (the " +
+                "whole-surface program's temporaries without the optimizer); it runs " +
+                "optimized through the surfacecov oracle pair",
+            ["fixtures/surfacecov-dht"] =
+                "byte-identical upstream adafruit_dht.py annotates `Union[int, float, " +
+                "None]`, which PyMCU refuses by design -- neither build exists; the " +
+                "fixture pins the refusal as XBUILD-FAIL in the surfacecov sweep",
+            ["fixtures/surfacecov-ds18x20"] =
+                "byte-identical upstream adafruit_onewire/bus.py indexes a compile-time " +
+                "tuple at run time, which PyMCU refuses by design -- neither build " +
+                "exists; the fixture pins the refusal as XBUILD-FAIL in the surfacecov " +
+                "sweep",
+            ["fixtures/surfacecov-irremote"] =
+                "byte-identical upstream adafruit_irremote.py defines a generator METHOD " +
+                "(`yield` inside NonblockingGenericDecode.read), which PyMCU refuses by " +
+                "design -- neither build exists; the fixture pins the refusal as " +
+                "XBUILD-FAIL in the surfacecov sweep",
         };
 
     /// <summary>
