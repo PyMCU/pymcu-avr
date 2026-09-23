@@ -53,9 +53,9 @@ class AvrBackendPlugin(BackendPlugin):
             return adjacent
 
         # 2. Development fallback: dotnet publish output.
-        # package_dir = .../extensions/pymcu-backend-avr/src/python/pymcu/backend/avr
-        # repo_root   = package_dir / ../../../../../../..  (7 levels up)
-        repo_root = package_dir.parents[6]
+        # package_dir = .../src/python/pymcu/backend/avr
+        # repo_root   = package_dir / ../../../..  (4 levels up)
+        repo_root = package_dir.parents[4]
         dev_path = repo_root / "build" / "bin" / binary_name
         if dev_path.exists():
             cls._ensure_signed(dev_path)
