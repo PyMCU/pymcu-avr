@@ -1,4 +1,4 @@
-# expect: divergence docs/language/type-system.md:20
+# expect: match
 # doc: docs/language/type-system.md:20
 def check(a: int, b: int, c: int) -> bool:
     return a < b < c

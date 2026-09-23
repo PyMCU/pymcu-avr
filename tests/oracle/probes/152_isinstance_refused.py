@@ -1,6 +1,5 @@
 # expect: match
-# tracked: #386
-# doc: isinstance() folds at compile time since #424; the remaining mismatch is #386 (a computed bool prints 1, CPython prints True)
+# doc: isinstance() folds at compile time since #424; the bool it yields prints True now (#386 closed)
 class Base:
     def __init__(self, v: int) -> None:
         self.v = v

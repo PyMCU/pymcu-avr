@@ -1,4 +1,4 @@
-# expect: divergence docs/language/type-system.md:20
+# expect: match
 # doc: docs/language/roadmap.md:41
 # `x in <name bound to an instance>` dispatches __contains__ -- pinned by
 # LinuxNotInABoundUname and the dunder-methods/outline-dunders fixtures;

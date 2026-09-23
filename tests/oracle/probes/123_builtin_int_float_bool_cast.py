@@ -1,4 +1,4 @@
-# expect: divergence docs/language/type-system.md:20
+# expect: match
 # doc: LANGUAGE_ROADMAP.md:79
 def to_int(x: float) -> int:
     return int(x)

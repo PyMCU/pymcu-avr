@@ -1,4 +1,4 @@
-# expect: divergence docs/language/type-system.md:20
+# expect: match
 # doc: docs/language/roadmap.md:41
 x = None
 print(x is None)
