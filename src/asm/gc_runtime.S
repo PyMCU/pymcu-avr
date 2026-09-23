@@ -366,6 +366,12 @@ _gtr_pass_done:
 ; using PUSH/POP before/after the call.
 ; ---------------------------------------------------------------------------
 _gc_do_compact:
+    ; Y (R28:R29) is the caller's frame pointer under the PyMCU ABI; every local
+    ; access in generated code is LDD/STD Y+offset. The compaction cursor below
+    ; uses Y as a spare pair, so save and restore it -- without this, the first
+    ; collection leaves the caller reading and writing through a destroyed base.
+    PUSH    R28
+    PUSH    R29
     LDI     R28, lo8(_heap_start)
     LDI     R29, hi8(_heap_start)       ; Y = src = _heap_start
     LDI     R30, lo8(_heap_start)
@@ -383,10 +389,11 @@ _gdc_loop:
     LD      R18, Y                      ; mark byte
     LDD     R19, Y+1                    ; size byte
 
-    ; total_size = size + 2  (R20 = lo, R21 = hi=0 since max total = 257)
+    ; total_size = size + 2  (R21:R20; max 257, so the hi byte must carry)
     MOV     R20, R19
-    SUBI    R20, lo8(-2)                ; R20 = size + 2
     CLR     R21
+    SUBI    R20, lo8(-2)                ; R20 += 2
+    SBCI    R21, hi8(-2)                ; R21 += carry (1 iff size >= 254)
 
     ; --- Is object live? ---
     SBRS    R18, 7                      ; bit7 set = live
@@ -424,10 +431,11 @@ _gdc_loop:
     POP     R17
     POP     R16                         ; restore heap_top
 
-    ; Recompute total_size (R19 survived PUSH/POP)
+    ; Recompute total_size (R19 survived PUSH/POP); 16-bit, as above
     MOV     R20, R19
-    SUBI    R20, lo8(-2)
     CLR     R21
+    SUBI    R20, lo8(-2)
+    SBCI    R21, hi8(-2)
 
 _gdc_copy:
     ; Copy total_size bytes from Y to Z, clearing the mark bit in the header.
@@ -467,10 +475,16 @@ _gdc_skip:
 _gdc_done:
     STS     _gc_heap_top_lo, R30
     STS     _gc_heap_top_hi, R31        ; reset heap_top = Z
+    POP     R29
+    POP     R28                         ; restore the caller's frame pointer
     RET
 
 ; ---------------------------------------------------------------------------
-; _gc_update_ss  --  update shadow-stack variable slots holding old_user_ptr.
+; _gc_update_ss  --  update every slot holding old_user_ptr: shadow-stack
+; variable slots AND element slots inside ref-bearing list payloads. The heap
+; half runs through _gc_update_heap over the two regions _gc_fix_dst /
+; _gc_fix_src bound; outside a collection gc_list_fixup sets both to
+; _heap_start, which walks the heap as one region.
 ; In:  R23:R22 = old_user_ptr (hi:lo)   — NOT clobbered
 ;      R25:R24 = new_user_ptr (hi:lo)   — NOT clobbered
 ; Clobbers: R16, R17, R18, R19, R20, R21, R26, R27
