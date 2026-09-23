@@ -3,11 +3,13 @@
 # Verifies the MicroPython I2C.scan() deviation:
 #   MicroPython: scan() -> list[int]  (heap allocated)
 #   PyMCU:       scan(buf, max_count) -> uint8 count; caller owns buffer
+#   The no-arg scan() refuses (CompileError) -- upstream's list return needs
+#   a heap this target does not have.
 #
 # Protocol (command-driven loop):
 #   Boot: "READY\n"
 #   Cmd 'S' (0x53): scan(buf, 8) -> send count byte, then count address bytes
-#   Cmd 'C' (0x43): scan() -> send count byte only (count-only backward compat)
+#   Cmd 'C' (0x43): scan(buf, 8) -> send count byte only (count-only read)
 
 from machine import I2C, UART
 from pymcu.types import uint8
@@ -30,5 +32,5 @@ def main():
                 uart.write(buf[j])
                 j = j + 1
         if cmd == 67:
-            c: uint8 = i2c.scan()
+            c: uint8 = i2c.scan(buf, 8)
             uart.write(c)

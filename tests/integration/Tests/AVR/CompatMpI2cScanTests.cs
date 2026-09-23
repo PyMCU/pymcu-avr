@@ -14,8 +14,8 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 ///   - MicroPython: i2c.scan() -> list[int]  (heap allocated, variable length)
 ///   - PyMCU:       i2c.scan(buf, max_count) -> uint8 count; caller provides buffer
 ///
-/// The no-arg overload i2c.scan() still exists for backward compat and returns
-/// only the device count (no addresses stored).
+/// The no-arg scan() refuses at compile time: upstream's list return needs a
+/// heap this target does not have.
 /// </summary>
 [TestFixture]
 public class CompatMpI2cScanTests
@@ -85,9 +85,10 @@ public class CompatMpI2cScanTests
     }
 
     [Test]
-    public void ScanCountOnly_BackwardCompat_NoDevices()
+    public void ScanCountOnly_NoDevices()
     {
-        // i2c.scan() (no-arg overload) still returns count, no buffer.
+        // 'C' asks for the count only: scan(buf, 8) still runs the full scan,
+        // the fixture just does not send the address bytes back.
         var uno = Sim();
         uno.RunUntilSerial(uno.Serial, "READY\n", maxMs: 300);
         var after = uno.Serial.ByteCount;
