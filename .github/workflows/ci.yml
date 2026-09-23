@@ -401,6 +401,81 @@ jobs:
           retention-days: 15
 
   # ---------------------------------------------------------------------------
+  # IR verifier ratchet: compile every fixture, example and oracle probe with
+  # PYMCU_VERIFY_IR=1 and diff the warnings against tools/verify_ir_baseline.json.
+  # The corpus legitimately violates a few invariants today (some probes exist to
+  # pin down a known miscompile), so the job is a ratchet, not a clean gate: it
+  # fails only on NEW violation signatures or NEW compile failures. Tighten the
+  # baseline with `python tools/verify_ir.py --write-baseline`.
+  # ---------------------------------------------------------------------------
+  verify-ir:
+    name: IR Verifier Ratchet
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: pymcu-avr
+
+    steps:
+      - name: Checkout pymcu-avr
+        uses: actions/checkout@v4
+        with:
+          path: pymcu-avr
+
+      # submodules: recursive because compat-* probes import the
+      # pymcu-micropython / pymcu-circuitpython layers that live in
+      # PyMCU/external.
+      - name: Checkout pymcu monorepo
+        uses: actions/checkout@v4
+        with:
+          repository: PyMCU/PyMCU
+          ref: main
+          path: PyMCU
+          submodules: recursive
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: PyMCU/global.json
+
+      - name: Build compiler and backend
+        run: |
+          dotnet publish ../PyMCU/src/compiler/PyMCU.csproj -c Release -o ../PyMCU/build/bin --nologo
+          dotnet publish src/csharp/cli/PyMCU.Backend.AVR.Cli.csproj -c Release -o build/bin --nologo
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Same install list as the oracle job: the corpus compiles the oracle
+      # probes, and the compat-* ones only build when both compatibility
+      # layers are present.
+      - name: Install Python dependencies
+        run: |
+          uv venv .venv
+          uv pip install --python .venv pymcu-sdk
+          uv pip install --python .venv -e ../PyMCU/lib
+          uv pip install --python .venv pymcu-avr-toolchain-wasi
+          uv pip install --python .venv -e ../PyMCU
+          uv pip install --python .venv questionary
+          uv pip install --python .venv -e . --no-deps
+          uv pip install --python .venv -e ../PyMCU/external/pymcu-micropython
+          uv pip install --python .venv -e ../PyMCU/external/pymcu-circuitpython
+
+      - name: Run the IR verifier corpus
+        env:
+          PYMCU_BIN: ${{ github.workspace }}/pymcu-avr/.venv/bin/pymcu
+          PYMCU_BACKEND_BINARY: avr=${{ github.workspace }}/pymcu-avr/build/bin/pymcuc-avr
+        run: .venv/bin/python tools/verify_ir.py --jobs 4
+
+  # ---------------------------------------------------------------------------
   # CircuitPython oracle: the SSD1306 fixtures' I2C streams from real
   # CircuitPython 10.3.1 on the emulated Pico (RP2040Sharp) must match the
   # CPython oracle and the PyMCU AVR firmware byte for byte. RP2040Sharp is a
