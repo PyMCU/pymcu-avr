@@ -7,5 +7,13 @@
   "A4",
   "A5"
  ],
- "max_ms": 30000
+ "max_ms": 30000,
+ "known_divergence": {
+  "lines": [
+   6,
+   8,
+   10
+  ],
+  "reason": "color_raw's sum exceeds int16 on AVR (8203528 wraps to 11528) and lux/color_temperature inherit the wrapped intermediates -- the documented PyMCU int-width limitation, same family as surfacecov-mcp3xxx. Reproduces identically under bin-main."
+ }
 }
