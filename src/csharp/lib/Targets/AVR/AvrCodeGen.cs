@@ -2984,6 +2984,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // been collapsed to a raw constant by copy-forwarding, and a constant's type is
         // its magnitude — storing `0x12` through a ptr[uint16] must still write 2 bytes.
         DataType accessType = si.Elem != DataType.UINT8 ? si.Elem : GetValType(si.Src);
+        // A float CONSTANT through a float pointer has no LoadIntoReg arm -- it fell
+        // through to name lookup, found no variable, and stored the stale register
+        // contents (a float field write through a slot pointer wrote 0.0). The float
+        // register layout holds b0..b3 in R22..R25, so the stores walk those instead
+        // of the uint32 layout's R24,R25,R22,R23.
+        if (si.Src is FloatConstant && accessType == DataType.FLOAT)
+        {
+            LoadFloatIntoRegs(si.Src);
+            Emit("ST", "X+", "R22");
+            Emit("ST", "X+", "R23");
+            Emit("ST", "X+", "R24");
+            Emit("ST", "X",  "R25");
+            return;
+        }
         LoadIntoReg(si.Src, "R24", accessType);
         int accessSize = accessType.SizeOf();
         if (accessSize == 4)
