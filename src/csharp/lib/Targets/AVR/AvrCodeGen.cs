@@ -82,6 +82,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private int _bssSize;
     private int _argSpillBytes;  // bytes of the fixed SRAM region for >R16..R25 overflow arguments
     private bool _needsGc;      // mirrors program.NeedsGc for use in CompileFunction
+    private List<string> _gcRefGlobals = new();  // GC_REF global slots: permanent GC roots
     // A Return in the entry function survived the optimizer's CFG pass, so the
     // program has at least one reachable ending: emit the shared __pymcu_halt
     // block those returns jump to. Never set for a body that cannot fall
@@ -1193,6 +1194,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 $"static data needs {maxStack} bytes but {LayoutChip()} has {sramAvailable} bytes of SRAM " +
                 $"(and the call stack needs {stackReserve} of them). Reduce array sizes or pick a chip with more RAM.");
         _needsGc = program.NeedsGc;
+        _gcRefGlobals = program.Globals.Where(g => g.Type == DataType.GC_REF)
+                                     .Select(g => g.Name).ToList();
         _needsHalt = false;
         _varSizes = allocator.VariableSizes;
         _bssSize = program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum();
@@ -1844,7 +1847,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 Emit("BRNE", bssLoop);
                 EmitLabel(bssEnd);
             }
-            if (_needsGc) Emit("CALL", "gc_init");
+            if (_needsGc)
+            {
+                Emit("CALL", "gc_init");
+                // Global GC_REF slots are roots for the program's whole life: no
+                // function may scope one's liveness to a call (a __module_init that
+                // unrooted its globals on the way out left their slots pointing at
+                // freed memory after the first collection). Seed them here, once,
+                // before any __module_init call binds an object to the slot. BSS is
+                // already zeroed, so every seeded slot reads null until then.
+                foreach (var gname in _gcRefGlobals)
+                    EmitShadowStackPush(GetGcRefSramAddr(gname), gname);
+            }
         }
 
         if (!func.IsInterrupt && func.Name != "main" && func.Params.Count > 0)
@@ -5260,6 +5274,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         };
 
         int sramAddr = GetGcRefSramAddr(varName);
+        EmitShadowStackPush(sramAddr, varName);
+    }
+
+    // Push the SRAM address of a GC_REF slot onto the shadow stack and bump the
+    // depth counter. Shared by per-function GcRoot and the one-time global seed
+    // in main's prologue.
+    private void EmitShadowStackPush(int sramAddr, string varName)
+    {
         EmitComment($"gc_root push: {varName} @ 0x{sramAddr:X4}");
 
         // X = _gc_ss_base; index = _gc_ss_top_addr (1 byte); X += index*2
