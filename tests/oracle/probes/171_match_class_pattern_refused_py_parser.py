@@ -1,6 +1,5 @@
-# expect: refuse match pattern MatchClass
+# expect: match
 # doc: https://github.com/PyMCU/PyMCU/issues/440
-# frontend: py-parser
 class Point:
     def __init__(self, x: int, y: int) -> None:
         self.x = x
