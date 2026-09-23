@@ -15,7 +15,7 @@
 #
 # Reduced from adafruit_pcf8574.py's PCF8574.get_pin() / DigitalInOut.switch_to_output().
 #
-# Expected UART output: MF 1 END
+# Expected UART output: MF True END
 import pinlib
 from pymcu.types import uint8
 from pymcu.hal.uart import UART

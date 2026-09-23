@@ -5,9 +5,8 @@
 # overloading), __call__ (a callable instance), __bool__ (truthiness) and
 # __enter__/__exit__ (with, including the value `as` binds).
 #
-# One divergence from CPython, deliberate and shared with every comparison in
-# PyMCU: `in`, `==` and `<` yield the integer the dunder returned, so they print
-# 1/0 where CPython prints True/False.
+# `in`, `==` and `<` print True/False exactly as CPython does: `in` coerces the
+# dunder's result to bool, and the comparisons' results carry bool evidence.
 #
 # Not supported (each one a compile error, never a wrong number):
 # interpolating an instance (no runtime __str__), the __iter__/__next__ loop
@@ -15,8 +14,8 @@
 #
 # Expected UART output:
 #   DUN
-#   len=3 idx=5 in=1
-#   eq=0 lt=1 add=7 call=5
+#   len=3 idx=5 in=True
+#   eq=False lt=True add=7 call=5
 #   set=8
 #   f0 t1
 #   with=3

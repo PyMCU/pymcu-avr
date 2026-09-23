@@ -31,7 +31,7 @@ public class RomfsProtocolTests
         "111\n" +                // seek(-4,2) then read(1)[0]='o'
         "13\n" +                 // os.stat("data.txt")[6]
         "data.txt\n" +           // os.listdir()
-        "1\n" +                  // run-time-position read: len(read(2))>=0
+        "True\n" +               // run-time-position read: len(read(2))>=0
         "END\n";
 
     private static SimSession _session = null!;

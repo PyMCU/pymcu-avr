@@ -15,7 +15,7 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 public class MethodFactoryReturnsClassTests
 {
     /// <summary>
-    /// The discriminating value is 1 (True): the write only reaches o.written if the method
+    /// The discriminating value is True: the write only reaches o.written if the method
     /// call correctly dispatched on the receiver get_pin returned.
     /// </summary>
     [Test]
@@ -25,6 +25,6 @@ public class MethodFactoryReturnsClassTests
             PymcuCompiler.BuildFixture("method-factory-returns-class")).Reset();
         uno.RunUntilSerial(uno.Serial, "END\n", maxMs: 400);
 
-        uno.Serial.Text.Should().Contain("MF\n1\nEND\n");
+        uno.Serial.Text.Should().Contain("MF\nTrue\nEND\n");
     }
 }

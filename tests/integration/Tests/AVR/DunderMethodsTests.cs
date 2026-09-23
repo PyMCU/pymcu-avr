@@ -26,7 +26,7 @@ public class DunderMethodsTests
     {
         var uno = Sim();
         uno.RunUntilSerial(uno.Serial, "END\n", maxMs: 3000);
-        uno.Serial.Should().ContainLine("len=3 idx=5 in=1");
+        uno.Serial.Should().ContainLine("len=3 idx=5 in=True");
     }
 
     [Test]
@@ -34,7 +34,7 @@ public class DunderMethodsTests
     {
         var uno = Sim();
         uno.RunUntilSerial(uno.Serial, "END\n", maxMs: 3000);
-        uno.Serial.Should().ContainLine("eq=0 lt=1 add=7 call=5");
+        uno.Serial.Should().ContainLine("eq=False lt=True add=7 call=5");
     }
 
     [Test]
