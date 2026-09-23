@@ -21,7 +21,7 @@ public class NestedKeywordAlarmTests
 
             ta = alarm.time.TimeAlarm(monotonic_time=time.monotonic() + 5)
             pa = alarm.pin.PinAlarm(pin=board.D2, value=False, pull=True)
-            GPIOR0.value = alarm.sleep_until_alarms(ALARMS)
+            GPIOR0.value = alarm.light_sleep_until_alarms(ALARMS)
             asm("BREAK")
             """.Replace("ALARMS", withPinAlarm ? "ta, pa" : "ta");
         var config = """

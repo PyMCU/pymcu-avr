@@ -3,7 +3,7 @@
 # `alarm.py` names its module-level singleton `time`, to give CircuitPython's
 # `alarm.time.TimeAlarm` spelling. A user's plain `import time` against that name was
 # enough to file `alarm` itself as an instance, so the dotted call
-# `alarm.sleep_until_alarms(ta)` was given the receiver offset a method gets and bound its
+# `alarm.light_sleep_until_alarms(ta)` was given the receiver offset a method gets and bound its
 # first argument to the SECOND parameter. `alarm0` was then bound to nothing, and the first
 # read of it inside the library was reported as a name that is not defined -- naming a
 # parameter written in the signature two lines above, in a file the user never opened.
@@ -24,7 +24,7 @@ pin_alarm = alarm.pin.PinAlarm(pin=board.D2, value=False, pull=True)
 
 
 def main() -> None:
-    wake = alarm.sleep_until_alarms(time_alarm, pin_alarm)
+    wake = alarm.light_sleep_until_alarms(time_alarm, pin_alarm)
     print(wake)
     print("done")
     while True:

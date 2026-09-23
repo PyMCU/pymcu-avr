@@ -12,7 +12,7 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 ///
 /// `alarm.py` names its module-level singleton `time`, to give CircuitPython's
 /// `alarm.time.TimeAlarm` spelling. A user's plain `import time` against that name was enough to
-/// file `alarm` itself as an instance, so the dotted call `alarm.sleep_until_alarms(ta, pa)` was
+/// file `alarm` itself as an instance, so the dotted call `alarm.light_sleep_until_alarms(ta, pa)` was
 /// given the receiver offset a method gets and bound its first argument to the SECOND parameter.
 /// `alarm0` was bound to nothing, and the first read of it inside the library was reported as a
 /// name that is not defined -- naming a parameter written in the signature two lines above.

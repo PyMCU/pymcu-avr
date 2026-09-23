@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace PyMCU.IntegrationTests.Tests.AVR;
 
 /// <summary>
-/// fixtures/compat-cp-alarm (pymcu-circuitpython#20): sleep_until_alarms waits on more than
+/// fixtures/compat-cp-alarm (pymcu-circuitpython#20): light_sleep_until_alarms waits on more than
 /// one alarm and says which fired. It took one alarm and returned a constant 0.
 ///
 /// A TimeAlarm also starts the millisecond time base itself now: the build starts that clock
