@@ -1130,6 +1130,39 @@
    "rc": 1,
    "violations": []
   },
+  "270_union_three_member_return": {
+   "rc": 0,
+   "violations": []
+  },
+  "271_union_inferred_return": {
+   "rc": 0,
+   "violations": []
+  },
+  "272_union_match_dispatch": {
+   "rc": 0,
+   "violations": []
+  },
+  "273_union_no_none_two_member": {
+   "rc": 0,
+   "violations": []
+  },
+  "274_union_five_member_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "275_union_instance_members_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "276_union_field_forwarding": {
+   "rc": 0,
+   "violations": [
+    "canfail|storage-width|main|'b_v' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'b_v' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'b_v' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'b_v' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": [
@@ -1181,6 +1214,21 @@
     "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "adafruit-dht-unmodified": {
+   "rc": 0,
+   "violations": [
+    "canfail|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._pulses_to_binary.binary' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._pulses_to_binary.bit_inx' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
   },
   "adafruit-example-shape": {
