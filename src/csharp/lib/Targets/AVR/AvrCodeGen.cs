@@ -62,6 +62,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private readonly Dictionary<string, int> _flashArraySizes = new();
     // Maps function name → list of parameter sizes (in bytes) for correct call-site arg loading.
     private Dictionary<string, List<int>> _functionParamSizes = new();
+    // RFC 0009 section 10: argument indexes that carry a union member tag byte
+    // (Function.TagParams). Null for an ordinary signature. Call sites and the
+    // callee prologue assign argument locations with the same set.
+    private Dictionary<string, HashSet<int>?> _functionTagParams = new();
     private Dictionary<string, DataType> _functionReturnTypes = new();
 
     // @extern symbols: these calls cross into avr-gcc-compiled code, which lays a 32-bit
@@ -726,15 +730,30 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // R2..R15 home pool is never touched by the calling convention, so live variables survive calls.
     private readonly record struct ArgLoc(bool IsReg, string Reg, int SpillOffset, int Size);
 
+    // tagIndexes (RFC 0009 section 10): the argument indexes that carry a union member
+    // tag byte. A tag sits immediately after its payload in the argument run. When the
+    // payload is a 1-byte register argument the tag rides the payload's own slot -- the
+    // slot reserves two registers but a 1-byte payload only occupies the low one, so the
+    // tag loads into the high byte and costs no extra register pair. A wider payload
+    // fills its slot, so the tag takes the next slot (or spill byte) like an ordinary arg.
     private static List<ArgLoc> AssignArgLocations(IReadOnlyList<int> sizes, out int spillBytes,
-                                                  bool cAbi = false)
+                                                  bool cAbi = false, IReadOnlySet<int>? tagIndexes = null)
     {
         var locs = new List<ArgLoc>(sizes.Count);
         int top = 25;
         int spill = 0;
         bool spilling = false;
-        foreach (int sz in sizes)
+        for (int argIdx = 0; argIdx < sizes.Count; argIdx++)
         {
+            int sz = sizes[argIdx];
+            if (tagIndexes != null && tagIndexes.Contains(argIdx) && sz == 1
+                && locs.Count > 0 && locs[^1].IsReg && locs[^1].Size == 1)
+            {
+                // Shared slot: the tag is the payload slot's high byte.
+                int payloadBase = int.Parse(locs[^1].Reg[1..]);
+                locs.Add(new ArgLoc(true, "R" + (payloadBase + 1), 0, 1));
+                continue;
+            }
             int slots = sz >= 4 ? 4 : 2;
             if (!spilling)
             {
@@ -1326,6 +1345,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         // Build function parameter size map for correct call-site arg loading.
         _functionParamSizes.Clear();
+        _functionTagParams.Clear();
         _functionReturnTypes.Clear();
         foreach (var func in program.Functions)
         {
@@ -1333,6 +1353,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             foreach (var p in func.Params)
                 sizes.Add(_varSizes.TryGetValue(p, out int sz) ? sz : 1);
             _functionParamSizes[func.Name] = sizes;
+            _functionTagParams[func.Name] = func.TagParams != null
+                ? new HashSet<int>(func.TagParams) : null;
             _functionReturnTypes[func.Name] = func.ReturnType;
         }
 
@@ -1394,7 +1416,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     : cl.Args.Select(a => GetValType(a).SizeOf()).ToList();
                 try
                 {
-                    AssignArgLocations(sizes.Take(cl.Args.Count).ToList(), out int sb);
+                    AssignArgLocations(sizes.Take(cl.Args.Count).ToList(), out int sb,
+                        tagIndexes: _functionTagParams.GetValueOrDefault(cl.FunctionName));
                     if (sb > _argSpillBytes) _argSpillBytes = sb;
                 }
                 catch { /* over-budget call; the per-call emit reports it with the right diagnostic */ }
@@ -1946,7 +1969,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             var paramSizes = _functionParamSizes.TryGetValue(func.Name, out var fps)
                 ? fps
                 : func.Params.Select(p => _varSizes.TryGetValue(p, out var psz0) ? psz0 : 1).ToList();
-            var argLocs = AssignArgLocations(paramSizes, out _);
+            var argLocs = AssignArgLocations(paramSizes, out _,
+                tagIndexes: _functionTagParams.GetValueOrDefault(func.Name));
             for (var k = 0; k < func.Params.Count; k++)
             {
                 var pname = func.Params[k];
@@ -2804,7 +2828,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             argSizes.Add(ps != null && k < ps.Count ? ps[k] : GetValType(call.Args[k]).SizeOf());
         // A call into C follows avr-gcc's layout for a 32-bit first argument and 32-bit return.
         bool cAbi = _externSymbols.Contains(call.FunctionName);
-        var argLocs = AssignArgLocations(argSizes, out _, cAbi);
+        var argLocs = AssignArgLocations(argSizes, out _, cAbi,
+            tagIndexes: _functionTagParams.GetValueOrDefault(call.FunctionName));
 
         // Arguments past R16 go to PyMCU's own SRAM overflow region, which a PyMCU callee reads
         // and a C one knows nothing about: avr-gcc keeps going down to R8 and then uses the
