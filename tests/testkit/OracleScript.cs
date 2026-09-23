@@ -36,4 +36,38 @@ public static class OracleScript
 
         return I2cTransaction.ParseStream(stdout);
     }
+
+    /// <summary>
+    /// Runs an oracle script and returns its stdout split into lines -- the
+    /// shape non-I2C oracles (UART text) need.
+    /// </summary>
+    public static List<string> RunLines(string oracleScriptPath, string pythonExe)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = pythonExe,
+            Arguments = oracleScriptPath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        using var proc = Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start oracle python process.");
+        var stdoutTask = Task.Run(() => proc.StandardOutput.ReadToEnd());
+        var stderrTask = Task.Run(() => proc.StandardError.ReadToEnd());
+        if (!proc.WaitForExit(60_000))
+        {
+            proc.Kill(entireProcessTree: true);
+            throw new TimeoutException("oracle.py did not finish within 60 s");
+        }
+        var stdout = stdoutTask.GetAwaiter().GetResult();
+        var stderr = stderrTask.GetAwaiter().GetResult();
+        if (proc.ExitCode != 0)
+            throw new InvalidOperationException(
+                $"oracle script failed (exit {proc.ExitCode}):\n{stdout}\n{stderr}");
+
+        return stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                     .Select(l => l.TrimEnd('\r'))
+                     .ToList();
+    }
 }

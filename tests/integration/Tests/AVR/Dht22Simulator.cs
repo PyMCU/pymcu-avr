@@ -84,6 +84,13 @@ internal sealed class Dht22Simulator
         // 40 data bits (MSB first per byte)
         foreach (var b in new[] { humInt, humDec, tempInt, tempDec, checksum })
             SendByte(b);
+
+        // End of frame: the sensor holds the line LOW ~50 us then releases to the
+        // pull-up. The release edge is what timestamps this final low for an
+        // edge-counting capture -- without it the frame is one interval short and the
+        // ring never scrolls the two ACK pulses off its front.
+        _sim.RunMilliseconds(0.05);
+        _port.SetPinValue(_bit, true);
     }
 
     private void WaitForStartSignalEnd()
