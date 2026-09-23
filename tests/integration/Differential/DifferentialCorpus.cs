@@ -171,9 +171,16 @@ public static class DifferentialCorpus
                 "whole-surface program's temporaries without the optimizer); it runs " +
                 "optimized through the surfacecov oracle pair",
             ["fixtures/surfacecov-servo-continuous"] =
-                "the unoptimized build needs 3183 B of static data on a 2048 B part (the " +
-                "whole-surface program's temporaries without the optimizer); it runs " +
-                "optimized through the surfacecov oracle pair",
+                "ContinuousServo's throttle setter reaches the PWM duty path, which the " +
+                "compiler reports as recursive (function 'set_duty_u16') and PyMCU " +
+                "refuses recursion by design -- neither build exists; the fixture pins " +
+                "the refusal as XBUILD-FAIL in the surfacecov sweep",
+            ["fixtures/surfacecov-74hc595"] =
+                "byte-identical upstream adafruit_74hc595.py initialises self._device to " +
+                "None and later assigns an SPIDevice instance to it: under RFC 0009 the " +
+                "field is a tagged union and an instance has no member slot, which PyMCU " +
+                "refuses by design -- neither build exists; the fixture pins the refusal " +
+                "as XBUILD-FAIL in the surfacecov sweep",
             ["fixtures/surfacecov-debouncer"] =
                 "the unoptimized build needs 2401 B of static data on a 2048 B part (the " +
                 "whole-surface program's temporaries without the optimizer); it runs " +
@@ -187,8 +194,9 @@ public static class DifferentialCorpus
                 "whole-surface program's temporaries without the optimizer); it runs " +
                 "optimized through the surfacecov oracle pair",
             ["fixtures/surfacecov-dht"] =
-                "byte-identical upstream adafruit_dht.py annotates `Union[int, float, " +
-                "None]`, which PyMCU refuses by design -- neither build exists; the " +
+                "byte-identical upstream adafruit_dht.py assigns a `uint8` into a slot " +
+                "declared `Union[int, float, None]`, a member the union does not " +
+                "declare, which PyMCU refuses by design -- neither build exists; the " +
                 "fixture pins the refusal as XBUILD-FAIL in the surfacecov sweep",
             ["fixtures/surfacecov-ds18x20"] =
                 "byte-identical upstream adafruit_onewire/bus.py indexes a compile-time " +

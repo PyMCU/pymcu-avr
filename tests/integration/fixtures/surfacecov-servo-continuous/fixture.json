@@ -1,4 +1,4 @@
 {
  "max_ms": 4000,
- "expect_build_fail": "return gives None at run time on a reached path"
+ "expect_build_fail": "is recursive"
 }
