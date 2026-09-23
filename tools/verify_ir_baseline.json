@@ -558,8 +558,8 @@
   "134_string_concatenation_literals": {
    "rc": 0,
    "violations": [
-    "generate|write-exceeds-slot|main|copy 259 -> var 's' (UINT8): value 259 cannot fit UINT8",
-    "unify-widths|write-exceeds-slot|main|copy 259 -> var 's' (UINT8): value 259 cannot fit UINT8"
+    "generate|write-exceeds-slot|main|copy 260 -> var 's' (UINT8): value 260 cannot fit UINT8",
+    "unify-widths|write-exceeds-slot|main|copy 260 -> var 's' (UINT8): value 260 cannot fit UINT8"
    ]
   },
   "135_string_equality_comparison": {
