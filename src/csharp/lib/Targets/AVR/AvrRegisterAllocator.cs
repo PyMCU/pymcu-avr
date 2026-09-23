@@ -237,12 +237,18 @@ public static class AvrRegisterAllocator
             if (val is not Variable v) return;
             useCount.TryGetValue(v.Name, out long count);
             useCount[v.Name] = count + weight;
-            // A union payload var is read at member width under tag dispatch: `a` can
-            // be FLOAT at the call dst and INT16 at a narrowed print. Last-write-wins
-            // here sized it 2 bytes, won a pair home, and the 4-register float store
-            // then spilled over the next variable's registers (RFC 0009). Keep the
-            // widest type any use claims so the home covers every access.
-            if (!varTypes.TryGetValue(v.Name, out var prev) || SizeOfType(v.Type) > SizeOfType(prev))
+            // A variable is viewed at several types: a union payload is read at
+            // member width under tag dispatch (RFC 0009: FLOAT at the call dst,
+            // INT16 at a narrowed print), and a GC_REF list pointer appears as
+            // UINT16 in the address arithmetic element loads emit (`lst + i*2`).
+            // Last-write-wins sized the union var 2 bytes (its float store then
+            // spilled over the next variable's registers) or made a heap pointer
+            // eligible for an R2-R15 home (stale the moment compaction relocates
+            // the object). Once a name is seen as GC_REF or FUNCREF that view
+            // sticks; otherwise keep the widest type any use claims.
+            if (!varTypes.TryGetValue(v.Name, out var prev)
+                || (prev != DataType.GC_REF && prev != DataType.FUNCREF
+                    && SizeOfType(v.Type) > SizeOfType(prev)))
                 varTypes[v.Name] = v.Type;
         }
     }

@@ -90,6 +90,32 @@ public class AvrRegisterPriorityTests
     }
 
     [Fact]
+    public void GcRefSeenAsUint16_NeverRegisterHomed()
+    {
+        // A GC_REF variable is also viewed as UINT16 by the address arithmetic
+        // the IR emits for element loads (`lst + i*2`). If the u16 view is the
+        // last one CountVal records, the variable becomes eligible for an
+        // R2-R15 home -- and a register-cached heap pointer goes stale the
+        // moment compaction moves the object. The GC_REF view must stick.
+        var prog = new ProgramIR();
+        var lst = new Variable("lst", DataType.GC_REF);
+        prog.Functions.Add(new Function
+        {
+            Name = "main",
+            Body =
+            {
+                new Copy(new Constant(0), lst),                                  // GC_REF view
+                new Binary(BinaryOp.Add,
+                    new Variable("lst", DataType.UINT16),
+                    new Constant(2), new Temporary("t0", DataType.UINT16)), // u16 view wins last write
+                new Return(new Constant(0)),
+            },
+        });
+        var homes = AvrRegisterAllocator.Allocate(prog);
+        Assert.False(homes.ContainsKey("lst"));
+    }
+
+    [Fact]
     public void Compile_ProfilePath_ChangesEmittedAsm()
     {
         var asmPlain = Compile(null);
