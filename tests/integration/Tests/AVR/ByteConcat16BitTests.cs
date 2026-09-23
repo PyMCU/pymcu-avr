@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+using System.Collections.Generic;
+using System.Linq;
 using FluentAssertions;
 using NUnit.Framework;
 using Avr8Sharp.TestKit.Boards;
@@ -40,29 +42,35 @@ public class ByteConcat16BitTests
             PymcuCompiler.FixtureDir("byte-concat-16bit"), "dist", "debug", "firmware.asm"));
 
         // A widened 32-bit temporary reaches the frame as four back-to-back STD Y+n
-        // stores to ascending offsets. The fixture has exactly one genuine 32-bit
-        // value (big * 256); each of the three concatenations added a group of its own
-        // before the fix.
+        // stores to ascending offsets, one per byte and so one per register (the
+        // backend keeps a value's bytes in distinct registers). Two adjacent 16-bit
+        // frame locals can produce four ascending stores too, but their registers
+        // repeat (R24,R25,R24,R25) -- distinctness is what separates the shapes.
+        // The fixture has exactly one genuine 32-bit value (big * 256); each of the
+        // three concatenations added a group of its own before the fix.
         CountFrameSpills(asm, 4).Should().Be(1,
             "only big * 256 needs 32 bits — the byte concatenations must not widen");
     }
 
     /// <summary>Number of runs of <paramref name="width"/> or more back-to-back
-    /// <c>STD Y+n</c> stores to ascending offsets: one multi-byte value spilled.</summary>
+    /// <c>STD Y+n</c> stores to ascending offsets through distinct registers:
+    /// one multi-byte value spilled.</summary>
     private static int CountFrameSpills(string asm, int width)
     {
         int spills = 0, run = 0, prev = -1;
+        var runRegs = new List<string>();
         foreach (var raw in asm.Split('\n'))
         {
             string line = raw.Trim();
             if (line.Length == 0 || line.StartsWith(';')) continue;
 
-            var m = System.Text.RegularExpressions.Regex.Match(line, @"^STD\s+Y\+(\d+),");
-            if (!m.Success) { run = 0; prev = -1; continue; }
+            var m = System.Text.RegularExpressions.Regex.Match(line, @"^STD\s+Y\+(\d+),\s*R(\d+)");
+            if (!m.Success) { run = 0; prev = -1; runRegs.Clear(); continue; }
 
             int offset = int.Parse(m.Groups[1].Value);
-            run = offset == prev + 1 ? run + 1 : 1;
-            if (run == width) spills++;
+            if (offset == prev + 1) { run++; runRegs.Add(m.Groups[2].Value); }
+            else { run = 1; runRegs.Clear(); runRegs.Add(m.Groups[2].Value); }
+            if (run == width && runRegs.Distinct().Count() == width) spills++;
             prev = offset;
         }
         return spills;
