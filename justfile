@@ -20,3 +20,11 @@ test-oracle:
         -c Release -o "{{repo_root}}/build/oracle" --nologo
     "{{repo_root}}/.venv/bin/python" -m pytest "{{repo_root}}/tests/oracle" -q
     PYMCU_PY_PARSER=1 "{{repo_root}}/.venv/bin/python" -m pytest "{{repo_root}}/tests/oracle" -q
+
+# ─── verify ─────────────────────────────────────────────────────────────────
+# IR verifier corpus run: every fixture, example and oracle probe through
+# `pymcu build` with PYMCU_VERIFY_IR=1, diffed against the ratchet baseline in
+# tools/verify_ir_baseline.json. Run it BEFORE bisecting a miscompilation: when
+# the verifier already sees the violation, the message names the guilty pass.
+verify:
+    "{{repo_root}}/.venv/bin/python" "{{repo_root}}/tools/verify_ir.py"

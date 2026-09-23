@@ -1,0 +1,3449 @@
+{
+ "programs": {
+  "001_if_elif_else": {
+   "rc": 0,
+   "violations": []
+  },
+  "002_while_break_continue": {
+   "rc": 0,
+   "violations": []
+  },
+  "003_range_runtime_bound": {
+   "rc": 0,
+   "violations": []
+  },
+  "004_range_counter_width_16": {
+   "rc": 0,
+   "violations": []
+  },
+  "005_range_signed_descending": {
+   "rc": 0,
+   "violations": []
+  },
+  "006_for_fixed_array": {
+   "rc": 0,
+   "violations": []
+  },
+  "007_for_list_literal": {
+   "rc": 0,
+   "violations": []
+  },
+  "008_for_named_tuple_long": {
+   "rc": 0,
+   "violations": []
+  },
+  "009_for_string_list": {
+   "rc": 0,
+   "violations": []
+  },
+  "010_for_pair_list": {
+   "rc": 0,
+   "violations": []
+  },
+  "011_enumerate_list": {
+   "rc": 0,
+   "violations": []
+  },
+  "012_enumerate_range_runtime": {
+   "rc": 0,
+   "violations": []
+  },
+  "013_zip_lists": {
+   "rc": 0,
+   "violations": []
+  },
+  "014_reversed_list": {
+   "rc": 0,
+   "violations": []
+  },
+  "015_reversed_range": {
+   "rc": 0,
+   "violations": []
+  },
+  "016_match_literal_or_wildcard": {
+   "rc": 0,
+   "violations": []
+  },
+  "017_match_guard": {
+   "rc": 0,
+   "violations": []
+  },
+  "018_match_sequence": {
+   "rc": 0,
+   "violations": [
+    "canfail|read-never-written|main|'pair__0' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape",
+    "canfail|read-never-written|main|'pair__1' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape",
+    "optimize|read-never-written|main|'pair__0' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape",
+    "optimize|read-never-written|main|'pair__1' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape"
+   ]
+  },
+  "019_match_capture": {
+   "rc": 0,
+   "violations": []
+  },
+  "020_function_defaults_keywords": {
+   "rc": 0,
+   "violations": []
+  },
+  "021_keyword_only_defaults": {
+   "rc": 0,
+   "violations": []
+  },
+  "022_tuple_multireturn_inline": {
+   "rc": 0,
+   "violations": []
+  },
+  "023_top_level_script": {
+   "rc": 0,
+   "violations": []
+  },
+  "024_class_fields_methods": {
+   "rc": 0,
+   "violations": []
+  },
+  "025_property_setter": {
+   "rc": 0,
+   "violations": []
+  },
+  "026_nested_class_constants": {
+   "rc": 0,
+   "violations": []
+  },
+  "027_enum_constants": {
+   "rc": 1,
+   "violations": []
+  },
+  "028_inheritance_super_defaults": {
+   "rc": 0,
+   "violations": []
+  },
+  "029_with_context": {
+   "rc": 0,
+   "violations": []
+  },
+  "030_multi_with_context": {
+   "rc": 0,
+   "violations": []
+  },
+  "031_assert_true": {
+   "rc": 0,
+   "violations": []
+  },
+  "032_global_access": {
+   "rc": 0,
+   "violations": []
+  },
+  "033_nonlocal_inline": {
+   "rc": 0,
+   "violations": []
+  },
+  "034_try_except_else_finally": {
+   "rc": 0,
+   "violations": []
+  },
+  "035_except_tuple": {
+   "rc": 0,
+   "violations": []
+  },
+  "036_except_as_args": {
+   "rc": 0,
+   "violations": []
+  },
+  "037_raise_method_caller": {
+   "rc": 0,
+   "violations": []
+  },
+  "038_unhandled_raise": {
+   "rc": 0,
+   "violations": []
+  },
+  "039_integer_promotion": {
+   "rc": 0,
+   "violations": []
+  },
+  "040_int_cast_wrap": {
+   "rc": 0,
+   "violations": []
+  },
+  "041_signed_unsigned_compare": {
+   "rc": 0,
+   "violations": []
+  },
+  "042_floor_div_mod_negative": {
+   "rc": 0,
+   "violations": []
+  },
+  "043_true_division_float": {
+   "rc": 0,
+   "violations": []
+  },
+  "044_divide_zero_caught": {
+   "rc": 0,
+   "violations": []
+  },
+  "045_fstring_stream_formats": {
+   "rc": 0,
+   "violations": []
+  },
+  "046_fstring_float_stream": {
+   "rc": 0,
+   "violations": []
+  },
+  "047_print_bytearray": {
+   "rc": 0,
+   "violations": []
+  },
+  "048_print_array_slice": {
+   "rc": 0,
+   "violations": []
+  },
+  "049_print_obj_slice": {
+   "rc": 0,
+   "violations": []
+  },
+  "050_print_float_rounding": {
+   "rc": 0,
+   "violations": []
+  },
+  "051_many_arguments": {
+   "rc": 0,
+   "violations": []
+  },
+  "052_in_not_in": {
+   "rc": 0,
+   "violations": []
+  },
+  "053_is_none": {
+   "rc": 0,
+   "violations": []
+  },
+  "054_divmod_builtin": {
+   "rc": 0,
+   "violations": []
+  },
+  "055_bitcast_builtin": {
+   "rc": 0,
+   "violations": []
+  },
+  "056_hex_bin_str_pow": {
+   "rc": 0,
+   "violations": []
+  },
+  "057_sum_any_all": {
+   "rc": 0,
+   "violations": []
+  },
+  "058_bytes_literal": {
+   "rc": 0,
+   "violations": []
+  },
+  "059_bytearray_mutation": {
+   "rc": 0,
+   "violations": []
+  },
+  "060_int_from_bytes": {
+   "rc": 0,
+   "violations": []
+  },
+  "061_raw_string": {
+   "rc": 0,
+   "violations": []
+  },
+  "062_extended_unpacking": {
+   "rc": 0,
+   "violations": []
+  },
+  "063_nested_list_comprehension": {
+   "rc": 0,
+   "violations": []
+  },
+  "064_comprehension_filter": {
+   "rc": 1,
+   "violations": []
+  },
+  "065_class_instance_comprehension": {
+   "rc": 1,
+   "violations": []
+  },
+  "066_class_list_parameter_instances": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline1.total.s' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "067_class_list_parameter_numbers": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline1.total.s' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "068_class_bytearray_field": {
+   "rc": 0,
+   "violations": []
+  },
+  "069_str_join_constant": {
+   "rc": 0,
+   "violations": []
+  },
+  "070_str_join_runtime_buffer": {
+   "rc": 0,
+   "violations": []
+  },
+  "071_slice_read": {
+   "rc": 0,
+   "violations": []
+  },
+  "072_slice_assign": {
+   "rc": 0,
+   "violations": []
+  },
+  "073_slice_iter_runtime_bounds": {
+   "rc": 0,
+   "violations": []
+  },
+  "074_lambda_no_capture": {
+   "rc": 0,
+   "violations": []
+  },
+  "075_dunder_arithmetic_comparison": {
+   "rc": 0,
+   "violations": [
+    "canfail|read-never-written|main|'c_v' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape",
+    "generate|read-never-written|main|'c_v' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape",
+    "optimize|read-never-written|main|'c_v' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape",
+    "unify-widths|read-never-written|main|'c_v' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape"
+   ]
+  },
+  "076_len_bool_truth_name": {
+   "rc": 0,
+   "violations": []
+  },
+  "077_bool_truth_field": {
+   "rc": 0,
+   "violations": []
+  },
+  "078_two_index_get_set": {
+   "rc": 0,
+   "violations": []
+  },
+  "079_class_attribute_instance_read": {
+   "rc": 0,
+   "violations": []
+  },
+  "080_descriptor_get_set": {
+   "rc": 0,
+   "violations": []
+  },
+  "081_extern_decorator_refuse_without_symbol": {
+   "rc": 1,
+   "violations": []
+  },
+  "082_name_guard": {
+   "rc": 0,
+   "violations": []
+  },
+  "083_triple_quoted_string": {
+   "rc": 0,
+   "violations": []
+  },
+  "084_heap_list": {
+   "rc": 0,
+   "violations": [
+    "canfail|one-storage-key|main|'main.xs' collides with declared storage 'xs': one source name is resolving to two keys"
+   ]
+  },
+  "085_closed_dict_set_literals": {
+   "rc": 0,
+   "violations": []
+  },
+  "086_fixed_dict": {
+   "rc": 0,
+   "violations": []
+  },
+  "087_fstring_value": {
+   "rc": 0,
+   "violations": []
+  },
+  "088_generator_for": {
+   "rc": 0,
+   "violations": []
+  },
+  "089_type_inference_unannotated": {
+   "rc": 0,
+   "violations": []
+  },
+  "090_nested_zca_field_method": {
+   "rc": 0,
+   "violations": []
+  },
+  "091_optional_default_none": {
+   "rc": 0,
+   "violations": []
+  },
+  "092_module_constants_reassign": {
+   "rc": 0,
+   "violations": []
+  },
+  "093_import_inside_try": {
+   "rc": 0,
+   "violations": []
+  },
+  "094_match_dotted_name": {
+   "rc": 0,
+   "violations": []
+  },
+  "095_while_else": {
+   "rc": 0,
+   "violations": []
+  },
+  "096_for_else": {
+   "rc": 0,
+   "violations": []
+  },
+  "097_break_continue_unrolled": {
+   "rc": 0,
+   "violations": []
+  },
+  "098_range_membership": {
+   "rc": 0,
+   "violations": []
+  },
+  "099_async_run": {
+   "rc": 0,
+   "violations": []
+  },
+  "100_range_value_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "101_runtime_slice_read_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "102_inline_fstring_expr_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "103_dict_comprehension_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "104_set_comprehension_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "105_generator_expression_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "106_yield_in_method_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "107_yield_expression_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "108_multiple_inheritance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "109_recursion_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "110_orphan_function_annotated_instance_param": {
+   "rc": 0,
+   "violations": []
+  },
+  "111_orphan_function_unannotated_instance_param_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "112_orphan_function_self_named_param_outside_class": {
+   "rc": 0,
+   "violations": []
+  },
+  "113_method_attached_to_class_after_definition": {
+   "rc": 1,
+   "violations": []
+  },
+  "114_callable_field_dispatch_through_self": {
+   "rc": 1,
+   "violations": []
+  },
+  "115_module_level_function_list_dispatch_without_callable_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "116_staticmethod_through_class_and_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "117_classmethod_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "118_nested_inline_function_closes_over_self": {
+   "rc": 0,
+   "violations": []
+  },
+  "119_factory_function_returns_instance_same_file": {
+   "rc": 0,
+   "violations": []
+  },
+  "120_super_method_with_subclass_field_and_constant_args": {
+   "rc": 0,
+   "violations": []
+  },
+  "121_builtin_abs_min_max": {
+   "rc": 0,
+   "violations": []
+  },
+  "121_field_read_before_reachable_write": {
+   "rc": 0,
+   "violations": []
+  },
+  "122_builtin_round_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "123_builtin_int_float_bool_cast": {
+   "rc": 0,
+   "violations": []
+  },
+  "124_builtin_chr_ord_hex_bin": {
+   "rc": 0,
+   "violations": []
+  },
+  "125_builtin_oct_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "126_len_array_and_string": {
+   "rc": 0,
+   "violations": []
+  },
+  "127_chr_across_function_return_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "128_shift_variable_amount": {
+   "rc": 0,
+   "violations": []
+  },
+  "129_bitwise_on_signed": {
+   "rc": 0,
+   "violations": []
+  },
+  "130_comparison_chain": {
+   "rc": 0,
+   "violations": []
+  },
+  "131_augmented_assignment_all_operators": {
+   "rc": 0,
+   "violations": []
+  },
+  "132_annotated_width_wraps_vs_cpython_bigint": {
+   "rc": 0,
+   "violations": [
+    "generate|write-exceeds-slot|main|copy 300 -> var 'echo.x' (UINT8): value 300 cannot fit UINT8",
+    "unify-widths|write-exceeds-slot|main|copy 300 -> var 'echo.x' (UINT8): value 300 cannot fit UINT8"
+   ]
+  },
+  "133_folded_overflow_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "134_string_concatenation_literals": {
+   "rc": 0,
+   "violations": [
+    "generate|write-exceeds-slot|main|copy 259 -> var 's' (UINT8): value 259 cannot fit UINT8",
+    "unify-widths|write-exceeds-slot|main|copy 259 -> var 's' (UINT8): value 259 cannot fit UINT8"
+   ]
+  },
+  "135_string_equality_comparison": {
+   "rc": 0,
+   "violations": []
+  },
+  "136_fstring_alignment_specs_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "137_str_upper_lower_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "138_str_strip_startswith_find_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "139_in_on_string": {
+   "rc": 0,
+   "violations": []
+  },
+  "140_string_slice_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "141_nested_loop_break_continue": {
+   "rc": 0,
+   "violations": []
+  },
+  "142_ternary_expression": {
+   "rc": 0,
+   "violations": []
+  },
+  "143_walrus_operator": {
+   "rc": 0,
+   "violations": []
+  },
+  "144_pass_statement": {
+   "rc": 0,
+   "violations": []
+  },
+  "145_nested_function_without_inline_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "146_dunder_eq_le_sub_mul": {
+   "rc": 0,
+   "violations": [
+    "canfail|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "canfail|read-never-written|main|'tmp_30_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "generate|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "generate|read-never-written|main|'tmp_30_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "optimize|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "optimize|read-never-written|main|'tmp_30_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "unify-widths|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "unify-widths|read-never-written|main|'tmp_30_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame"
+   ]
+  },
+  "147_dunder_str_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "148_dunder_contains": {
+   "rc": 0,
+   "violations": []
+  },
+  "149_dunder_call": {
+   "rc": 0,
+   "violations": []
+  },
+  "150_dunder_iter_next_protocol_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "151_class_attribute_write": {
+   "rc": 0,
+   "violations": []
+  },
+  "152_isinstance_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "153_list_for_over_heap_list": {
+   "rc": 0,
+   "violations": [
+    "canfail|one-storage-key|main|'main.xs' collides with declared storage 'xs': one source name is resolving to two keys",
+    "canfail|one-storage-key|main|'main.xs' collides with declared storage 'xs': one source name is resolving to two keys"
+   ]
+  },
+  "154_list_index_method_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "155_tuple_indexing": {
+   "rc": 0,
+   "violations": []
+  },
+  "156_dict_membership_in": {
+   "rc": 0,
+   "violations": []
+  },
+  "157_nested_try_except": {
+   "rc": 0,
+   "violations": []
+  },
+  "158_bare_reraise": {
+   "rc": 0,
+   "violations": []
+  },
+  "159_user_exception_class": {
+   "rc": 0,
+   "violations": []
+  },
+  "160_exception_crosses_inline_boundary": {
+   "rc": 0,
+   "violations": []
+  },
+  "161_args_star_compile_time": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline1.total.s' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "162_kwargs_double_star_key_access": {
+   "rc": 0,
+   "violations": []
+  },
+  "163_positional_only_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "164_positional_only_unenforced_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "165_default_arg_from_global": {
+   "rc": 0,
+   "violations": []
+  },
+  "166_type_annotation_ignored_at_runtime": {
+   "rc": 0,
+   "violations": []
+  },
+  "167_inline_vs_plain_function": {
+   "rc": 0,
+   "violations": []
+  },
+  "168_match_tuple_pattern_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "169_match_tuple_pattern_wrongcode_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "170_match_class_pattern_default_frontend": {
+   "rc": 0,
+   "violations": []
+  },
+  "171_match_class_pattern_refused_py_parser": {
+   "rc": 0,
+   "violations": []
+  },
+  "172_import_as_module_alias": {
+   "rc": 0,
+   "violations": []
+  },
+  "173_import_star": {
+   "rc": 0,
+   "violations": []
+  },
+  "174_name_main_idiom": {
+   "rc": 0,
+   "violations": []
+  },
+  "175_chip_conditional": {
+   "rc": 0,
+   "violations": []
+  },
+  "176_sys_implementation_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "177_asyncio_sleep_loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "178_asyncio_gather_await_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "179_raise_from_reraise_outer_message": {
+   "rc": 0,
+   "violations": []
+  },
+  "180_future_import_is_a_noop": {
+   "rc": 0,
+   "violations": []
+  },
+  "181_raise_message_fstring_int_and_float": {
+   "rc": 0,
+   "violations": []
+  },
+  "182_raise_message_float_only": {
+   "rc": 0,
+   "violations": []
+  },
+  "183_raise_message_int_only": {
+   "rc": 0,
+   "violations": []
+  },
+  "184_bufparam_u16_index": {
+   "rc": 0,
+   "violations": []
+  },
+  "185_bufparam_dyn_index": {
+   "rc": 0,
+   "violations": []
+  },
+  "186_bufparam_copy_loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "187_bufparam_signed_index": {
+   "rc": 0,
+   "violations": []
+  },
+  "188_bufparam_aug_assign": {
+   "rc": 0,
+   "violations": []
+  },
+  "189_bufparam_aug_assign_const": {
+   "rc": 0,
+   "violations": []
+  },
+  "190_bufparam_const_index_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "191_bufparam_len_loop_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "192_flash_str_param_u16_index": {
+   "rc": 0,
+   "violations": []
+  },
+  "193_flash_table_computed_init": {
+   "rc": 0,
+   "violations": []
+  },
+  "194_flash_table_literal_300": {
+   "rc": 0,
+   "violations": []
+  },
+  "195_named_sram_past_255": {
+   "rc": 0,
+   "violations": []
+  },
+  "196_ptr_arith_u16_offset": {
+   "rc": 0,
+   "violations": []
+  },
+  "197_buf_self_field_marshal": {
+   "rc": 0,
+   "violations": []
+  },
+  "198_buf_self_field_variant": {
+   "rc": 0,
+   "violations": []
+  },
+  "199_buf_nested_member_marshal": {
+   "rc": 0,
+   "violations": []
+  },
+  "200_buf_memoryview_slice_arg": {
+   "rc": 0,
+   "violations": []
+  },
+  "201_buf_slice_arg": {
+   "rc": 0,
+   "violations": []
+  },
+  "202_buf_ptr_forward": {
+   "rc": 0,
+   "violations": []
+  },
+  "203_buf_outlined_call": {
+   "rc": 0,
+   "violations": []
+  },
+  "204_buf_outline_dedup": {
+   "rc": 0,
+   "violations": []
+  },
+  "205_buf_bare_local_ok": {
+   "rc": 0,
+   "violations": []
+  },
+  "206_buf_global_ok": {
+   "rc": 0,
+   "violations": []
+  },
+  "207_array_array_param": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline1.total.s' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "208_list_param_sum": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline1.total.s' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "209_bytes_literal_arg_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "210_bytes_empty_arg_refused": {
+   "rc": 0,
+   "violations": []
+  },
+  "211_nested_field_width": {
+   "rc": 0,
+   "violations": []
+  },
+  "212_nested_width_if": {
+   "rc": 0,
+   "violations": []
+  },
+  "213_nested_width_for": {
+   "rc": 0,
+   "violations": []
+  },
+  "214_nested_width_nested_for": {
+   "rc": 0,
+   "violations": []
+  },
+  "215_nested_width_while": {
+   "rc": 0,
+   "violations": []
+  },
+  "216_nested_width_try": {
+   "rc": 0,
+   "violations": []
+  },
+  "217_nested_width_with": {
+   "rc": 0,
+   "violations": []
+  },
+  "218_nested_float_field": {
+   "rc": 0,
+   "violations": []
+  },
+  "219_nested_kind_conflict": {
+   "rc": 1,
+   "violations": []
+  },
+  "220_field_in_branch_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "221_field_in_loop_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "222_global_nested_annot_ok": {
+   "rc": 0,
+   "violations": []
+  },
+  "223_global_nested_unannot_ok": {
+   "rc": 0,
+   "violations": []
+  },
+  "224_nested_bytearray_field_ok": {
+   "rc": 0,
+   "violations": []
+  },
+  "225_list_module_level_rw": {
+   "rc": 0,
+   "violations": []
+  },
+  "226_list_direct_reads": {
+   "rc": 0,
+   "violations": []
+  },
+  "227_list_param_elem_read": {
+   "rc": 0,
+   "violations": []
+  },
+  "228_list_param_append": {
+   "rc": 0,
+   "violations": []
+  },
+  "229_optional_tagged_return": {
+   "rc": 0,
+   "violations": []
+  },
+  "229_super_init_nested_if": {
+   "rc": 0,
+   "violations": []
+  },
+  "230_optional_early_return_narrowing": {
+   "rc": 0,
+   "violations": []
+  },
+  "230_super_init_nested_try": {
+   "rc": 0,
+   "violations": []
+  },
+  "231_super_init_if_else": {
+   "rc": 0,
+   "violations": []
+  },
+  "232_helper_chain_depth2": {
+   "rc": 0,
+   "violations": []
+  },
+  "233_helper_chain_depth3": {
+   "rc": 0,
+   "violations": []
+  },
+  "234_helper_in_loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "235_helper_chain_in_loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "236_kind_conflict_init_toplevel": {
+   "rc": 1,
+   "violations": []
+  },
+  "237_kind_conflict_init_nested": {
+   "rc": 1,
+   "violations": []
+  },
+  "238_kind_conflict_init_strfirst": {
+   "rc": 1,
+   "violations": []
+  },
+  "239_init_widen_still_ok": {
+   "rc": 0,
+   "violations": []
+  },
+  "240_kind_conflict_located": {
+   "rc": 1,
+   "violations": []
+  },
+  "241_field_from_method_call": {
+   "rc": 0,
+   "violations": []
+  },
+  "242_field_from_method_call_nested": {
+   "rc": 0,
+   "violations": []
+  },
+  "243_field_from_annotated_method_call": {
+   "rc": 0,
+   "violations": []
+  },
+  "244_super_init_nested_if_slot": {
+   "rc": 0,
+   "violations": []
+  },
+  "245_super_init_nested_try_slot": {
+   "rc": 0,
+   "violations": []
+  },
+  "246_helper_chain_slot": {
+   "rc": 0,
+   "violations": []
+  },
+  "247_helper_chain_widen": {
+   "rc": 0,
+   "violations": []
+  },
+  "248_grid_listcomp": {
+   "rc": 0,
+   "violations": []
+  },
+  "249_grid_bytearray_rows": {
+   "rc": 0,
+   "violations": []
+  },
+  "250_grid_field_ctor_dims": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline1.total.t' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "251_grid_row_alias": {
+   "rc": 0,
+   "violations": []
+  },
+  "252_grid_row_loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "253_grid_const_dims": {
+   "rc": 0,
+   "violations": []
+  },
+  "254_grid_aliased_repeat_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "255_grid_nonconst_dims_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "256_grid_row_passed_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "257_grid_row_returned_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "258_grid_row_field_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "259_grid_row_rebind_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "260_grid_row_append_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "261_grid_slice_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "262_grid_row_slice_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "263_grid_row_cmp_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "264_grid_in_row_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "265_grid_two_index_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "266_grid_alias_escape_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "267_grid_alias_rebind_loop_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "268_grid_append_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "269_grid_outlined_arg_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "adafruit-bmp280-unmodified": {
+   "rc": 0,
+   "violations": [
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "adafruit-example-shape": {
+   "rc": 0,
+   "violations": []
+  },
+  "adafruit-ht16k33": {
+   "rc": 0,
+   "violations": []
+  },
+  "adafruit-seesaw-analog": {
+   "rc": 0,
+   "violations": []
+  },
+  "adafruit-seesaw-unmodified": {
+   "rc": 0,
+   "violations": []
+  },
+  "adafruit-ssd1306-unmodified": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'display_height' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'display_width' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.set_pixel.index' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "adafruit-ssd1306-unmodified-64": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'display_height' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'display_width' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.set_pixel.index' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "adc-interrupt": {
+   "rc": 0,
+   "violations": []
+  },
+  "adc-read": {
+   "rc": 0,
+   "violations": []
+  },
+  "adc-temp": {
+   "rc": 0,
+   "violations": []
+  },
+  "adc-two-pins": {
+   "rc": 0,
+   "violations": []
+  },
+  "analog-inout": {
+   "rc": 0,
+   "violations": []
+  },
+  "analog-inout-mp": {
+   "rc": 0,
+   "violations": []
+  },
+  "arena-high-water": {
+   "rc": 0,
+   "violations": []
+  },
+  "arena-in-init": {
+   "rc": 0,
+   "violations": []
+  },
+  "arena-in-init-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "arena-module-level": {
+   "rc": 0,
+   "violations": []
+  },
+  "arena-overflow": {
+   "rc": 0,
+   "violations": []
+  },
+  "array-array-as-list": {
+   "rc": 0,
+   "violations": []
+  },
+  "array-ops": {
+   "rc": 0,
+   "violations": []
+  },
+  "array-past-256": {
+   "rc": 0,
+   "violations": []
+  },
+  "array-runtime-init": {
+   "rc": 0,
+   "violations": []
+  },
+  "asm-constraints": {
+   "rc": 0,
+   "violations": []
+  },
+  "asm-fstring": {
+   "rc": 0,
+   "violations": []
+  },
+  "asm-triple-quote": {
+   "rc": 0,
+   "violations": []
+  },
+  "async-create-task": {
+   "rc": 0,
+   "violations": []
+  },
+  "async-gather-direct": {
+   "rc": 0,
+   "violations": []
+  },
+  "async-gather-shadowed-names": {
+   "rc": 0,
+   "violations": []
+  },
+  "async-global-then-await": {
+   "rc": 0,
+   "violations": []
+  },
+  "async-loop-local": {
+   "rc": 0,
+   "violations": []
+  },
+  "async-sleep-float": {
+   "rc": 0,
+   "violations": []
+  },
+  "async-task-local-object": {
+   "rc": 0,
+   "violations": []
+  },
+  "async-timebase": {
+   "rc": 0,
+   "violations": []
+  },
+  "attiny84-blink": {
+   "rc": 0,
+   "violations": []
+  },
+  "augmented-sreg": {
+   "rc": 0,
+   "violations": []
+  },
+  "base-call-returns-class": {
+   "rc": 0,
+   "violations": []
+  },
+  "bitcast": {
+   "rc": 0,
+   "violations": []
+  },
+  "bitwise-ops": {
+   "rc": 0,
+   "violations": []
+  },
+  "blink": {
+   "rc": 0,
+   "violations": []
+  },
+  "bmp280": {
+   "rc": 0,
+   "violations": []
+  },
+  "board-pin-number": {
+   "rc": 0,
+   "violations": []
+  },
+  "bool-protocol": {
+   "rc": 0,
+   "violations": []
+  },
+  "break-edges": {
+   "rc": 0,
+   "violations": []
+  },
+  "buffer-extend-loop-flash-bound": {
+   "rc": 0,
+   "violations": []
+  },
+  "buffer-grown-by-extend": {
+   "rc": 0,
+   "violations": []
+  },
+  "buffer-param": {
+   "rc": 0,
+   "violations": []
+  },
+  "builtin-bool": {
+   "rc": 0,
+   "violations": []
+  },
+  "builtin-ops": {
+   "rc": 0,
+   "violations": []
+  },
+  "button-debounce": {
+   "rc": 0,
+   "violations": []
+  },
+  "byte-concat-16bit": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytearray-call-arg": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytearray-field-init": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytearray-method-call-arg": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytearray-param": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytearray-param-wide-index": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytearray-return": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytearray-size-from-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytes-literal": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytes-literal-arg": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytes-ops": {
+   "rc": 0,
+   "violations": []
+  },
+  "bytes-param": {
+   "rc": 0,
+   "violations": []
+  },
+  "callable-array": {
+   "rc": 0,
+   "violations": []
+  },
+  "callbacks": {
+   "rc": 0,
+   "violations": []
+  },
+  "checksum": {
+   "rc": 0,
+   "violations": []
+  },
+  "clamp-filter": {
+   "rc": 0,
+   "violations": []
+  },
+  "class-body-fit-grows-buffer": {
+   "rc": 0,
+   "violations": []
+  },
+  "class-dict-lookup": {
+   "rc": 0,
+   "violations": []
+  },
+  "class-object-call": {
+   "rc": 0,
+   "violations": []
+  },
+  "class-param-function": {
+   "rc": 0,
+   "violations": []
+  },
+  "classmethod-cv": {
+   "rc": 0,
+   "violations": []
+  },
+  "classmethod-cv-imported": {
+   "rc": 0,
+   "violations": []
+  },
+  "comma-tuple-assign": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-alarm": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-analogio-full-scale": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-annotated-i2c-param": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-attiny85-blink": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-bitbangio-i2c": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-board-buses": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-busio-parameters": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-busio-uart-buffer": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-countio": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-digitalio-direction": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-framebuf-text": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "compat-cp-framebuf-text-long": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "compat-cp-gpio": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-introspection": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-keypad": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-life": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|draw|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "compat-cp-life-grid": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline2.neighbours.n' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline4.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "compat-cp-life-idiomatic": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline2.neighbours.n' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline4.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "compat-cp-life-nested": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|draw|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "compat-cp-microcontroller": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-neopixel": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "compat-cp-neopixel-write": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pull-none": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pulseio-capture": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pulseio-carrier": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pulseio-ir-nec": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pulseio-maxlen-sram": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pulseio-maxlen-sram-max": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pwmio": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pwmio-deinit": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pwmio-exact-duty": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pwmio-frequency": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-pwmio-timebase": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-rainbowio": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-rotaryio": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-servo-angle": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-supervisor": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-time": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-time-and-watchdog": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-time-sleep-folds": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-value-toggle": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-with-as-method": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-blink-toggle": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-i2c-rw": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-i2c-scan": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-kwargs-forwarding": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-pin": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-pin-pull": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-pwm": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-pwm-freq": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-pwm-surface": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-spi-rw": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-timer": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'_led_state' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "compat-mp-timer-freq": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-uart-readline": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-utime": {
+   "rc": 0,
+   "violations": []
+  },
+  "cond-import-gpio": {
+   "rc": 0,
+   "violations": []
+  },
+  "cond-tuple-return": {
+   "rc": 0,
+   "violations": []
+  },
+  "const-fold-min-div": {
+   "rc": 0,
+   "violations": [
+    "generate|write-exceeds-slot|main|copy 128 -> var 'main.f8q' (INT8): value 128 cannot fit INT8",
+    "generate|write-exceeds-slot|main|copy 32768 -> var 'main.f16q' (INT16): value 32768 cannot fit INT16",
+    "unify-widths|write-exceeds-slot|main|copy 128 -> var 'main.f8q' (INT8): value 128 cannot fit INT8",
+    "unify-widths|write-exceeds-slot|main|copy 32768 -> var 'main.f16q' (INT16): value 32768 cannot fit INT16"
+   ]
+  },
+  "const-for-tuple-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "const-or-branch": {
+   "rc": 0,
+   "violations": []
+  },
+  "const-seq-index": {
+   "rc": 0,
+   "violations": []
+  },
+  "constant-retired-by-a-load": {
+   "rc": 0,
+   "violations": []
+  },
+  "counter-in-loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "cp-i2c-nack": {
+   "rc": 0,
+   "violations": []
+  },
+  "cross-module-inheritance": {
+   "rc": 0,
+   "violations": []
+  },
+  "ctor-calls-own-method": {
+   "rc": 0,
+   "violations": []
+  },
+  "ctrl-flow-stress": {
+   "rc": 0,
+   "violations": []
+  },
+  "cycle-timing": {
+   "rc": 0,
+   "violations": []
+  },
+  "deep-calls": {
+   "rc": 0,
+   "violations": []
+  },
+  "def-main-end": {
+   "rc": 0,
+   "violations": []
+  },
+  "default-constructor": {
+   "rc": 0,
+   "violations": [
+    "generate|read-never-written|main|'tmp_25' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "unify-widths|read-never-written|main|'tmp_25' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame"
+   ]
+  },
+  "delay-outline": {
+   "rc": 0,
+   "violations": []
+  },
+  "delay-test": {
+   "rc": 0,
+   "violations": []
+  },
+  "delay-through-locals": {
+   "rc": 0,
+   "violations": []
+  },
+  "descriptor-class-attribute": {
+   "rc": 0,
+   "violations": []
+  },
+  "descriptor-obj-type": {
+   "rc": 0,
+   "violations": []
+  },
+  "descriptor-self-on-imported-class": {
+   "rc": 0,
+   "violations": []
+  },
+  "descriptor-setter-any-value": {
+   "rc": 0,
+   "violations": []
+  },
+  "descriptor-setter-augassign": {
+   "rc": 0,
+   "violations": []
+  },
+  "dht-sensor": {
+   "rc": 0,
+   "violations": []
+  },
+  "dht-sensor-dht22": {
+   "rc": 0,
+   "violations": []
+  },
+  "dht-sensor-mp": {
+   "rc": 0,
+   "violations": []
+  },
+  "dict-iteration": {
+   "rc": 0,
+   "violations": []
+  },
+  "dict-literal-get": {
+   "rc": 0,
+   "violations": []
+  },
+  "dict-one-char-key": {
+   "rc": 0,
+   "violations": []
+  },
+  "dict-one-char-key-index": {
+   "rc": 0,
+   "violations": []
+  },
+  "dict-set-literal": {
+   "rc": 0,
+   "violations": []
+  },
+  "div16-correctness": {
+   "rc": 0,
+   "violations": []
+  },
+  "div32-correctness": {
+   "rc": 0,
+   "violations": []
+  },
+  "divmod-same-operands": {
+   "rc": 0,
+   "violations": []
+  },
+  "divmod16": {
+   "rc": 0,
+   "violations": []
+  },
+  "ds18b20": {
+   "rc": 0,
+   "violations": []
+  },
+  "dsp-stress": {
+   "rc": 0,
+   "violations": []
+  },
+  "dunder-methods": {
+   "rc": 0,
+   "violations": []
+  },
+  "dunder-ops": {
+   "rc": 0,
+   "violations": []
+  },
+  "edge-cases": {
+   "rc": 0,
+   "violations": []
+  },
+  "eeprom": {
+   "rc": 0,
+   "violations": []
+  },
+  "entry-main-explicit-call": {
+   "rc": 0,
+   "violations": []
+  },
+  "enum-member-annotation": {
+   "rc": 0,
+   "violations": []
+  },
+  "enum-state": {
+   "rc": 0,
+   "violations": []
+  },
+  "enumerate-buffer-param": {
+   "rc": 0,
+   "violations": []
+  },
+  "error-handling": {
+   "rc": 0,
+   "violations": []
+  },
+  "escaping-array": {
+   "rc": 0,
+   "violations": []
+  },
+  "except-dotted": {
+   "rc": 0,
+   "violations": []
+  },
+  "exception-edges": {
+   "rc": 0,
+   "violations": []
+  },
+  "exception-object": {
+   "rc": 0,
+   "violations": []
+  },
+  "exceptions-basic": {
+   "rc": 0,
+   "violations": []
+  },
+  "exceptions-finally": {
+   "rc": 0,
+   "violations": []
+  },
+  "extern-call": {
+   "rc": 0,
+   "violations": []
+  },
+  "factory-field-read": {
+   "rc": 0,
+   "violations": []
+  },
+  "factory-pin-list-loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "factory-pin-through-constructor": {
+   "rc": 0,
+   "violations": []
+  },
+  "factory-returns-class": {
+   "rc": 0,
+   "violations": []
+  },
+  "ffi-abi": {
+   "rc": 0,
+   "violations": []
+  },
+  "ffi-arduino": {
+   "rc": 0,
+   "violations": []
+  },
+  "ffi-crc8": {
+   "rc": 0,
+   "violations": []
+  },
+  "ffi-dsp": {
+   "rc": 0,
+   "violations": []
+  },
+  "ffi-wide-args": {
+   "rc": 0,
+   "violations": []
+  },
+  "field-buffer-slice": {
+   "rc": 0,
+   "violations": []
+  },
+  "field-from-method-call": {
+   "rc": 0,
+   "violations": []
+  },
+  "field-from-setter-and-init-helper": {
+   "rc": 0,
+   "violations": []
+  },
+  "field-truthiness-operators": {
+   "rc": 0,
+   "violations": []
+  },
+  "field-tuple-literal": {
+   "rc": 0,
+   "violations": []
+  },
+  "field-width-nested-write": {
+   "rc": 0,
+   "violations": []
+  },
+  "fixeddict": {
+   "rc": 0,
+   "violations": []
+  },
+  "flash-table-past-256": {
+   "rc": 0,
+   "violations": []
+  },
+  "flash-table-wide": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-arg-after-int": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-arg-no-shuffle": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-compare": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-compare-sole-use": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-div-zero": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-field-slot": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-from-int32": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-local-not-truncated": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-local-overload": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-module-global": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-modulo": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-not-shifted": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-param-uses": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-pow": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-print-large": {
+   "rc": 0,
+   "violations": []
+  },
+  "float-to-uint-cast": {
+   "rc": 0,
+   "violations": []
+  },
+  "folded-condition": {
+   "rc": 0,
+   "violations": []
+  },
+  "folded-const-type": {
+   "rc": 0,
+   "violations": []
+  },
+  "for-const-strings": {
+   "rc": 0,
+   "violations": []
+  },
+  "for-over-instance-tuple": {
+   "rc": 0,
+   "violations": []
+  },
+  "format-if-folds": {
+   "rc": 0,
+   "violations": []
+  },
+  "fp-mul-debug": {
+   "rc": 0,
+   "violations": []
+  },
+  "framebuf-slice-assign": {
+   "rc": 0,
+   "violations": []
+  },
+  "freq-probe": {
+   "rc": 0,
+   "violations": []
+  },
+  "fstring-bool": {
+   "rc": 0,
+   "violations": []
+  },
+  "fstring-debug": {
+   "rc": 0,
+   "violations": []
+  },
+  "fstring-float": {
+   "rc": 0,
+   "violations": []
+  },
+  "fstring-value": {
+   "rc": 0,
+   "violations": []
+  },
+  "funcptr": {
+   "rc": 0,
+   "violations": []
+  },
+  "function-name-binding": {
+   "rc": 0,
+   "violations": []
+  },
+  "future-annotations": {
+   "rc": 0,
+   "violations": []
+  },
+  "gc-basic": {
+   "rc": 0,
+   "violations": []
+  },
+  "gc-list": {
+   "rc": 0,
+   "violations": []
+  },
+  "generators": {
+   "rc": 0,
+   "violations": []
+  },
+  "genexp-all-tuple": {
+   "rc": 0,
+   "violations": []
+  },
+  "global-accumulator-width": {
+   "rc": 0,
+   "violations": []
+  },
+  "global-array-store": {
+   "rc": 0,
+   "violations": []
+  },
+  "global-init": {
+   "rc": 0,
+   "violations": []
+  },
+  "global-rebind-uppercase": {
+   "rc": 0,
+   "violations": []
+  },
+  "global-zero-init": {
+   "rc": 0,
+   "violations": []
+  },
+  "gpio-input-after-output": {
+   "rc": 0,
+   "violations": []
+  },
+  "gpio-overhead": {
+   "rc": 0,
+   "violations": []
+  },
+  "held-instance-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "held-read-folds": {
+   "rc": 0,
+   "violations": []
+  },
+  "held-write-anon": {
+   "rc": 0,
+   "violations": []
+  },
+  "held-write-named": {
+   "rc": 0,
+   "violations": []
+  },
+  "i2c-irq": {
+   "rc": 0,
+   "violations": []
+  },
+  "i2c-readfrom-mem": {
+   "rc": 0,
+   "violations": []
+  },
+  "i2c-rw": {
+   "rc": 0,
+   "violations": []
+  },
+  "i2c-scanner": {
+   "rc": 0,
+   "violations": []
+  },
+  "implicit-int": {
+   "rc": 0,
+   "violations": []
+  },
+  "import-alias": {
+   "rc": 0,
+   "violations": []
+  },
+  "import-global-split": {
+   "rc": 0,
+   "violations": []
+  },
+  "imported-class": {
+   "rc": 0,
+   "violations": []
+  },
+  "imported-dotted-super": {
+   "rc": 0,
+   "violations": []
+  },
+  "imported-module-init": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|pymcu_hal_avr_uart_avr_uart_write_fmt|'counter_n' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "imported-module-pin": {
+   "rc": 0,
+   "violations": []
+  },
+  "in-over-named-list": {
+   "rc": 0,
+   "violations": []
+  },
+  "in-pullup": {
+   "rc": 0,
+   "violations": []
+  },
+  "indexed-unpack": {
+   "rc": 0,
+   "violations": []
+  },
+  "infer-types": {
+   "rc": 0,
+   "violations": []
+  },
+  "inheritance-zca": {
+   "rc": 0,
+   "violations": []
+  },
+  "inherited-property": {
+   "rc": 0,
+   "violations": []
+  },
+  "inline-multi-return": {
+   "rc": 0,
+   "violations": []
+  },
+  "inline-multisite": {
+   "rc": 0,
+   "violations": []
+  },
+  "inline-register-arg": {
+   "rc": 0,
+   "violations": []
+  },
+  "inline-returned-result": {
+   "rc": 0,
+   "violations": []
+  },
+  "inline-seq-runtime-index": {
+   "rc": 0,
+   "violations": []
+  },
+  "input-builtin": {
+   "rc": 0,
+   "violations": []
+  },
+  "instance-array": {
+   "rc": 0,
+   "violations": []
+  },
+  "instance-array-index": {
+   "rc": 0,
+   "violations": []
+  },
+  "instance-field-truthiness": {
+   "rc": 0,
+   "violations": []
+  },
+  "instance-list-loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "int32-floor": {
+   "rc": 0,
+   "violations": []
+  },
+  "interrupt-counter": {
+   "rc": 0,
+   "violations": []
+  },
+  "isinstance-fold": {
+   "rc": 0,
+   "violations": []
+  },
+  "isinstance-tuple-list": {
+   "rc": 0,
+   "violations": []
+  },
+  "isr-global-survives-return": {
+   "rc": 0,
+   "violations": []
+  },
+  "isr-home-reg-clobber": {
+   "rc": 0,
+   "violations": []
+  },
+  "isr-reg-preservation": {
+   "rc": 0,
+   "violations": []
+  },
+  "isr-sp-preservation": {
+   "rc": 0,
+   "violations": []
+  },
+  "join-bytes-to-str": {
+   "rc": 0,
+   "violations": []
+  },
+  "join-field-receiver": {
+   "rc": 0,
+   "violations": []
+  },
+  "kwargs-forwarding": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline1.described.n' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.summed_keywords.s' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.summed_positions.s' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "lambda-ops": {
+   "rc": 0,
+   "violations": []
+  },
+  "layer-singleton-local": {
+   "rc": 0,
+   "violations": []
+  },
+  "lcd": {
+   "rc": 0,
+   "violations": []
+  },
+  "list-comp": {
+   "rc": 0,
+   "violations": []
+  },
+  "list-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "list-iter-bound": {
+   "rc": 0,
+   "violations": []
+  },
+  "list-param-dict-char-keys": {
+   "rc": 0,
+   "violations": []
+  },
+  "list-param-mp-sevenseg-upstream": {
+   "rc": 0,
+   "violations": []
+  },
+  "list-param-pins": {
+   "rc": 0,
+   "violations": []
+  },
+  "list-param-seven-segment": {
+   "rc": 0,
+   "violations": []
+  },
+  "list-param-values": {
+   "rc": 0,
+   "violations": []
+  },
+  "listcomp-over-names": {
+   "rc": 0,
+   "violations": []
+  },
+  "literal-width": {
+   "rc": 0,
+   "violations": []
+  },
+  "literal-width-module": {
+   "rc": 0,
+   "violations": []
+  },
+  "lm35-sensor-mp": {
+   "rc": 0,
+   "violations": []
+  },
+  "local-class-shadows-imported": {
+   "rc": 0,
+   "violations": []
+  },
+  "loop-else": {
+   "rc": 0,
+   "violations": []
+  },
+  "map-range": {
+   "rc": 0,
+   "violations": []
+  },
+  "match-advanced": {
+   "rc": 0,
+   "violations": []
+  },
+  "math-pow": {
+   "rc": 0,
+   "violations": []
+  },
+  "math-rounding": {
+   "rc": 0,
+   "violations": []
+  },
+  "matrix-math": {
+   "rc": 0,
+   "violations": []
+  },
+  "max7219": {
+   "rc": 0,
+   "violations": []
+  },
+  "max7219-cs": {
+   "rc": 0,
+   "violations": []
+  },
+  "max7219-cs-default": {
+   "rc": 0,
+   "violations": []
+  },
+  "mega-ramstart": {
+   "rc": 0,
+   "violations": []
+  },
+  "member-listcomp-fill": {
+   "rc": 0,
+   "violations": []
+  },
+  "memory-layout": {
+   "rc": 0,
+   "violations": []
+  },
+  "memoryview-return-annotation": {
+   "rc": 0,
+   "violations": []
+  },
+  "memoryview-slice-view": {
+   "rc": 0,
+   "violations": []
+  },
+  "method-factory-returns-class": {
+   "rc": 0,
+   "violations": []
+  },
+  "method-instance-param": {
+   "rc": 0,
+   "violations": []
+  },
+  "millis-micros": {
+   "rc": 0,
+   "violations": []
+  },
+  "minmax-key": {
+   "rc": 0,
+   "violations": []
+  },
+  "mmio-spy": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-alias": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-array-name-collision": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-array-survives": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-bytearray-local-collision": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-global-name-collision": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-instance-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-instance-nonmain": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-instance-read": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-level-end": {
+   "rc": 0,
+   "violations": []
+  },
+  "module-level-loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "mp-i2c-nack": {
+   "rc": 0,
+   "violations": []
+  },
+  "mul16-correctness": {
+   "rc": 0,
+   "violations": []
+  },
+  "mul16-signed": {
+   "rc": 0,
+   "violations": []
+  },
+  "multi-isr": {
+   "rc": 0,
+   "violations": []
+  },
+  "multi-pin": {
+   "rc": 0,
+   "violations": []
+  },
+  "name-guard": {
+   "rc": 0,
+   "violations": []
+  },
+  "name-main-guard": {
+   "rc": 0,
+   "violations": []
+  },
+  "named-sequence-loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "named-tuple-loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "namedtuple": {
+   "rc": 0,
+   "violations": []
+  },
+  "neg16-correctness": {
+   "rc": 0,
+   "violations": []
+  },
+  "neg32-correctness": {
+   "rc": 0,
+   "violations": []
+  },
+  "neopixel": {
+   "rc": 0,
+   "violations": []
+  },
+  "nested-calls": {
+   "rc": 0,
+   "violations": []
+  },
+  "nested-inline-closes-over-self": {
+   "rc": 0,
+   "violations": []
+  },
+  "nested-listcomp": {
+   "rc": 0,
+   "violations": []
+  },
+  "nested-zca-value": {
+   "rc": 0,
+   "violations": []
+  },
+  "new-builtins": {
+   "rc": 0,
+   "violations": []
+  },
+  "no-entrypoint": {
+   "rc": 0,
+   "violations": []
+  },
+  "none-then-value-width": {
+   "rc": 0,
+   "violations": []
+  },
+  "nonlocal": {
+   "rc": 0,
+   "violations": []
+  },
+  "nvm-slice-repr": {
+   "rc": 0,
+   "violations": []
+  },
+  "onechar-string-equality": {
+   "rc": 0,
+   "violations": []
+  },
+  "os-uname": {
+   "rc": 0,
+   "violations": []
+  },
+  "outline-branchy": {
+   "rc": 0,
+   "violations": []
+  },
+  "outline-dunders": {
+   "rc": 0,
+   "violations": []
+  },
+  "outline-mutating-getter": {
+   "rc": 0,
+   "violations": []
+  },
+  "outline-on-init": {
+   "rc": 0,
+   "violations": []
+  },
+  "outline-through-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "outlined-default": {
+   "rc": 0,
+   "violations": []
+  },
+  "outlined-self-call-override": {
+   "rc": 0,
+   "violations": []
+  },
+  "overflow-behavior": {
+   "rc": 0,
+   "violations": []
+  },
+  "overload-const-str": {
+   "rc": 0,
+   "violations": []
+  },
+  "overload-facade": {
+   "rc": 0,
+   "violations": []
+  },
+  "param-shadows-module-alias": {
+   "rc": 0,
+   "violations": []
+  },
+  "pcint-counter": {
+   "rc": 0,
+   "violations": []
+  },
+  "pgo-hot-veto": {
+   "rc": 0,
+   "violations": []
+  },
+  "pgo-register-priority": {
+   "rc": 0,
+   "violations": []
+  },
+  "pin-irq": {
+   "rc": 0,
+   "violations": []
+  },
+  "pin-irq-mp": {
+   "rc": 0,
+   "violations": []
+  },
+  "pin-irq-triggers": {
+   "rc": 0,
+   "violations": []
+  },
+  "pin-value-runtime": {
+   "rc": 0,
+   "violations": []
+  },
+  "print-integers": {
+   "rc": 0,
+   "violations": []
+  },
+  "print-order-effects": {
+   "rc": 0,
+   "violations": [
+    "generate|read-never-written|main|'tmp_26' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
+    "unify-widths|read-never-written|main|'tmp_26' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame"
+   ]
+  },
+  "print-strings": {
+   "rc": 0,
+   "violations": []
+  },
+  "probes-field-width": {
+   "rc": 0,
+   "violations": []
+  },
+  "progmem-lookup": {
+   "rc": 0,
+   "violations": []
+  },
+  "property-returns-instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "property-setter-through-loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "property-tuple-index": {
+   "rc": 0,
+   "violations": []
+  },
+  "ptr-offset": {
+   "rc": 0,
+   "violations": []
+  },
+  "ptr-runtime": {
+   "rc": 0,
+   "violations": []
+  },
+  "ptr-runtime-width": {
+   "rc": 0,
+   "violations": []
+  },
+  "ptr-rw-roundtrip": {
+   "rc": 0,
+   "violations": []
+  },
+  "ptr-uint32-deref": {
+   "rc": 0,
+   "violations": []
+  },
+  "pulse-in-hcsr04-cycle-count": {
+   "rc": 0,
+   "violations": []
+  },
+  "pwm-dual-channel": {
+   "rc": 0,
+   "violations": []
+  },
+  "pwm-duty-zero": {
+   "rc": 0,
+   "violations": []
+  },
+  "pwm-fade": {
+   "rc": 0,
+   "violations": []
+  },
+  "pwm-freq-nearest": {
+   "rc": 0,
+   "violations": []
+  },
+  "pwm-invert": {
+   "rc": 0,
+   "violations": []
+  },
+  "pwm-multi": {
+   "rc": 0,
+   "violations": []
+  },
+  "pwm-ocr-high-byte": {
+   "rc": 0,
+   "violations": []
+  },
+  "pwm-stop-keeps-timer": {
+   "rc": 0,
+   "violations": []
+  },
+  "pwm-timer0-timebase": {
+   "rc": 0,
+   "violations": []
+  },
+  "quoted-dotted-annotation": {
+   "rc": 0,
+   "violations": []
+  },
+  "raise-after-a-plain-call": {
+   "rc": 0,
+   "violations": []
+  },
+  "raise-from": {
+   "rc": 0,
+   "violations": []
+  },
+  "raise-in-main": {
+   "rc": 0,
+   "violations": []
+  },
+  "raise-in-try": {
+   "rc": 0,
+   "violations": []
+  },
+  "raise-message-deferred-print": {
+   "rc": 0,
+   "violations": []
+  },
+  "raise-no-print": {
+   "rc": 0,
+   "violations": []
+  },
+  "random-led": {
+   "rc": 0,
+   "violations": []
+  },
+  "random-prng": {
+   "rc": 0,
+   "violations": []
+  },
+  "range-bound-to-a-name": {
+   "rc": 0,
+   "violations": []
+  },
+  "range-counter-width": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'main.i' is written at INT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "range-loop-var-after": {
+   "rc": 0,
+   "violations": []
+  },
+  "range-pwm-fade": {
+   "rc": 0,
+   "violations": []
+  },
+  "range-runtime-step": {
+   "rc": 0,
+   "violations": []
+  },
+  "range-surface": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'main.i' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.v' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "range-unroll": {
+   "rc": 0,
+   "violations": []
+  },
+  "read-blocking": {
+   "rc": 0,
+   "violations": []
+  },
+  "rebound-module-alias": {
+   "rc": 0,
+   "violations": []
+  },
+  "reg-pressure": {
+   "rc": 0,
+   "violations": []
+  },
+  "register-width-widening": {
+   "rc": 0,
+   "violations": []
+  },
+  "repeated-none-list": {
+   "rc": 0,
+   "violations": []
+  },
+  "return-buffer": {
+   "rc": 0,
+   "violations": []
+  },
+  "reversed-named-array": {
+   "rc": 0,
+   "violations": []
+  },
+  "romfs-protocol": {
+   "rc": 0,
+   "violations": []
+  },
+  "rtos-multitask": {
+   "rc": 0,
+   "violations": []
+  },
+  "runtime-slice-iter": {
+   "rc": 0,
+   "violations": []
+  },
+  "sensor-dashboard": {
+   "rc": 0,
+   "violations": []
+  },
+  "servo": {
+   "rc": 0,
+   "violations": []
+  },
+  "servo-angle-map": {
+   "rc": 0,
+   "violations": []
+  },
+  "shift-register": {
+   "rc": 0,
+   "violations": []
+  },
+  "signed-compare": {
+   "rc": 0,
+   "violations": []
+  },
+  "signed-extend": {
+   "rc": 0,
+   "violations": []
+  },
+  "signed-mixed-width": {
+   "rc": 0,
+   "violations": []
+  },
+  "signed-rshift": {
+   "rc": 0,
+   "violations": []
+  },
+  "signed-wraparound": {
+   "rc": 0,
+   "violations": []
+  },
+  "sleep-ms-widths": {
+   "rc": 0,
+   "violations": []
+  },
+  "sleep-seconds": {
+   "rc": 0,
+   "violations": []
+  },
+  "sleep-wakeup": {
+   "rc": 0,
+   "violations": []
+  },
+  "slice-assign": {
+   "rc": 0,
+   "violations": []
+  },
+  "slice-ops": {
+   "rc": 0,
+   "violations": []
+  },
+  "slot-field-read-outside": {
+   "rc": 0,
+   "violations": []
+  },
+  "smoothing": {
+   "rc": 0,
+   "violations": []
+  },
+  "soft-pwm": {
+   "rc": 0,
+   "violations": []
+  },
+  "softspi": {
+   "rc": 0,
+   "violations": []
+  },
+  "softspi-peripheral": {
+   "rc": 0,
+   "violations": []
+  },
+  "spi-cs": {
+   "rc": 0,
+   "violations": []
+  },
+  "spi-irq": {
+   "rc": 0,
+   "violations": []
+  },
+  "spi-shift-register": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'main.MODE_CHASER' is written at UINT8 but used at INT32 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.MODE_RUNNING' is written at UINT8 but used at INT32 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "sreg-flags": {
+   "rc": 0,
+   "violations": []
+  },
+  "ssd1306": {
+   "rc": 0,
+   "violations": []
+  },
+  "state-machine": {
+   "rc": 0,
+   "violations": []
+  },
+  "state-machine-branch-constant": {
+   "rc": 0,
+   "violations": []
+  },
+  "static-method": {
+   "rc": 0,
+   "violations": []
+  },
+  "stdlib-bare-imports": {
+   "rc": 0,
+   "violations": []
+  },
+  "stopwatch": {
+   "rc": 0,
+   "violations": []
+  },
+  "str-class-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "str-format": {
+   "rc": 0,
+   "violations": []
+  },
+  "str-join-runtime-buffer": {
+   "rc": 0,
+   "violations": []
+  },
+  "str-runtime-branch": {
+   "rc": 0,
+   "violations": []
+  },
+  "str-runtime-module": {
+   "rc": 0,
+   "violations": []
+  },
+  "stress-math": {
+   "rc": 0,
+   "violations": []
+  },
+  "string-copied-to-a-name": {
+   "rc": 0,
+   "violations": []
+  },
+  "string-field-from-literal": {
+   "rc": 0,
+   "violations": []
+  },
+  "string-runtime-index": {
+   "rc": 0,
+   "violations": []
+  },
+  "strjoin": {
+   "rc": 0,
+   "violations": []
+  },
+  "struct-calcsize-param": {
+   "rc": 0,
+   "violations": []
+  },
+  "struct-over-a-fixed-buffer": {
+   "rc": 0,
+   "violations": []
+  },
+  "struct-tuple-return": {
+   "rc": 0,
+   "violations": []
+  },
+  "struct-unpack": {
+   "rc": 0,
+   "violations": [
+    "canfail|storage-width|main|'inline1.load.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load_calibration_coeffs.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load_calibration_coeffs.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline1.load_calibration_coeffs.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load_calibration_coeffs.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load_calibration_coeffs.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline1.load_calibration_coeffs.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load_calibration_coeffs.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load_calibration_coeffs.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline1.load_calibration_coeffs.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load_calibration_coeffs.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load_calibration_coeffs.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline1.load_calibration_coeffs.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "style-bitreg-new": {
+   "rc": 0,
+   "violations": []
+  },
+  "style-bitreg-old": {
+   "rc": 0,
+   "violations": []
+  },
+  "style-dispatch-ifelif": {
+   "rc": 0,
+   "violations": []
+  },
+  "style-dispatch-match": {
+   "rc": 0,
+   "violations": []
+  },
+  "submodule-alias-member": {
+   "rc": 0,
+   "violations": []
+  },
+  "super-init-nested-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "super-init-none-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "super-method-constant-args-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "super-outlined": {
+   "rc": 0,
+   "violations": []
+  },
+  "t-flag-demo": {
+   "rc": 0,
+   "violations": []
+  },
+  "t-flag-errors": {
+   "rc": 0,
+   "violations": []
+  },
+  "timer-ctc": {
+   "rc": 0,
+   "violations": []
+  },
+  "timer-interrupt": {
+   "rc": 0,
+   "violations": []
+  },
+  "timer-poll": {
+   "rc": 0,
+   "violations": []
+  },
+  "timer2-interrupt": {
+   "rc": 0,
+   "violations": []
+  },
+  "tone-buzzer": {
+   "rc": 0,
+   "violations": []
+  },
+  "tone-freq-map": {
+   "rc": 0,
+   "violations": []
+  },
+  "tuple-args": {
+   "rc": 0,
+   "violations": []
+  },
+  "tuple-index": {
+   "rc": 0,
+   "violations": []
+  },
+  "tuple-ops": {
+   "rc": 0,
+   "violations": []
+  },
+  "tuple-return-annotation": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'main.iret_1_1' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "tuple-unpack": {
+   "rc": 0,
+   "violations": []
+  },
+  "tuple-unpack-property": {
+   "rc": 0,
+   "violations": []
+  },
+  "two-index-unannotated-return": {
+   "rc": 0,
+   "violations": []
+  },
+  "type-checking-guard-import": {
+   "rc": 0,
+   "violations": []
+  },
+  "type-inference": {
+   "rc": 0,
+   "violations": []
+  },
+  "typing-extensions": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-115200-u2x": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-baud-8mhz": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-baud-computed": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-command": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-echo": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-echo-cp": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-echo-mp": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-readline": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-rx-interrupt": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-str": {
+   "rc": 0,
+   "violations": []
+  },
+  "uart-write-hex": {
+   "rc": 0,
+   "violations": []
+  },
+  "uint16-math": {
+   "rc": 0,
+   "violations": []
+  },
+  "uint16-param-passthrough": {
+   "rc": 0,
+   "violations": []
+  },
+  "uint32-compare-max": {
+   "rc": 0,
+   "violations": []
+  },
+  "uint32-from-float": {
+   "rc": 0,
+   "violations": []
+  },
+  "uint32-roundtrip": {
+   "rc": 0,
+   "violations": []
+  },
+  "union-parameter-at-call-site": {
+   "rc": 0,
+   "violations": []
+  },
+  "union-protocol-member": {
+   "rc": 0,
+   "violations": []
+  },
+  "volatile-flag": {
+   "rc": 0,
+   "violations": []
+  },
+  "warning-decorator": {
+   "rc": 0,
+   "violations": []
+  },
+  "watchdog": {
+   "rc": 0,
+   "violations": []
+  },
+  "while-condition-call": {
+   "rc": 0,
+   "violations": []
+  },
+  "wide-compare": {
+   "rc": 0,
+   "violations": []
+  },
+  "wide-const-div": {
+   "rc": 0,
+   "violations": []
+  },
+  "with-as-instance-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "with-bound-name-field-read": {
+   "rc": 0,
+   "violations": []
+  },
+  "with-context-manager": {
+   "rc": 0,
+   "violations": []
+  },
+  "with-enter-returns-another-class": {
+   "rc": 0,
+   "violations": []
+  },
+  "yield-and-splat": {
+   "rc": 0,
+   "violations": []
+  },
+  "yield-from": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-array": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-factory": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-factory-b": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-factory-slot": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-factory-unannotated-field": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-field-method-call": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-instance-array": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-method-calls-mutator": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-method-loop-return": {
+   "rc": 0,
+   "violations": [
+    "generate|storage-width|main|'inline1.after_while.k' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "zca-mixed-fold-and-share": {
+   "rc": 0,
+   "violations": [
+    "generate|write-exceeds-slot|main|copy 1000 -> var 'pymcu_time__delay_us_avr.us' (UINT8): value 1000 cannot fit UINT8",
+    "unify-widths|write-exceeds-slot|main|copy 1000 -> var 'pymcu_time__delay_us_avr.us' (UINT8): value 1000 cannot fit UINT8"
+   ]
+  },
+  "zca-outline": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-outline-dht": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-outline-selfcall": {
+   "rc": 0,
+   "violations": []
+  },
+  "zca-slot": {
+   "rc": 0,
+   "violations": []
+  }
+ },
+ "version": 1
+}
