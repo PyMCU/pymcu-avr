@@ -1380,7 +1380,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             EmitRaw($".equ _arg_spill, _stack_base + {_maxStaticUsage}");
 
         if (program.NeedsGc)
-            EmitGcSramLayout();
+            // Roots are pushed in function prologues and popped at returns, and the
+            // language has no recursion, so the program's total GcRoot count bounds
+            // the live shadow-stack depth -- plus the GC_REF globals seeded once at
+            // gc_init, which never pop. Sizing the region to that total (instead of
+            // the flat 64 slots) hands the slack back to the heap: adafruit_irremote's
+            // decode_bits on a 65-pulse frame needs ~570 B live, which the flat
+            // reserve left ~10 B short on an Uno.
+            EmitGcSramLayout(Math.Clamp(
+                (program.Functions.Sum(f => f.Body.Count(i => i is GcRoot)) +
+                 program.Globals.Count(g => g.Type == DataType.GC_REF)) * 2, 2, 128));
 
         EmitRaw("");
 
@@ -4880,7 +4889,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // variable .equ directives have been emitted.
     //
     // Layout immediately after static variables (at _stack_base + _maxStaticUsage):
-    //   _gc_ss_base       : 128 bytes  (64 shadow-stack slots x 2 bytes each)
+    //   _gc_ss_base       : ssBytes    (shadow-stack slots x 2 bytes each, up to 128)
     //   _gc_ss_top_addr   : 1 byte     (current shadow-stack depth)
     //   _gc_heap_top_lo   : 1 byte     (lo byte of GC heap write pointer)
     //   _gc_heap_top_hi   : 1 byte     (hi byte of GC heap write pointer)
@@ -4890,10 +4899,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     //   _heap_start       : start of GC-managed heap
     //   _heap_end         : 0x0880 (leaves ~127 bytes for hardware SP call stack)
     // -------------------------------------------------------------------------
-    private void EmitGcSramLayout()
+    private void EmitGcSramLayout(int ssBytes)
     {
         int ssBase = _maxStaticUsage;   // offset from _stack_base
-        int ssTopAddr = ssBase + 128;   // 1 byte after 64-entry shadow stack
+        int ssTopAddr = ssBase + ssBytes;   // 1 byte after the shadow stack
         int heapTopLo = ssTopAddr + 1;
         int heapTopHi = heapTopLo + 1;
         int fixDstLo = heapTopHi + 1;
@@ -4910,8 +4919,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         EmitRaw($".equ _gc_fix_src_lo,  _stack_base + {fixSrcLo}");
         EmitRaw($".equ _gc_fix_src_hi,  _stack_base + {fixSrcLo + 1}");
         EmitRaw($".equ _heap_start,     _stack_base + {heapStart}");
-        EmitRaw($".equ _heap_end,       0x0880");
-        EmitRaw($"; Shadow stack: {ssBase}..{ssBase + 127} ({128} bytes)");
+        EmitRaw($".equ _heap_end,       0x08D0");
+        EmitRaw($"; Shadow stack: {ssBase}..{ssBase + ssBytes - 1} ({ssBytes} bytes)");
         EmitRaw($"; GC heap: {heapStart}..0x07FF (~{0x0880 - (0x0100 + heapStart)} bytes available)");
         EmitRaw("");
     }
