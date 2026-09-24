@@ -1028,6 +1028,55 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (size == 4) { Emit("STS", addr + "+2", regB2); Emit("STS", addr + "+3", regB3); }
     }
 
+    // Zero a destination through the ABI's hardwired-zero R1 (kept CLR'd since the
+    // prologue) instead of loading 0 into a register pair first: a 16-bit slot store
+    // costs 2 instructions instead of LDI+LDI+STD+STD.
+    private void StoreZeroInto(Val val, DataType type)
+    {
+        int size = type.SizeOf();
+        if (val is MemoryAddress mem)
+        {
+            if (mem.Address is >= 0x20 and <= 0x5F)
+                Emit("OUT", $"0x{mem.Address - 0x20:X2}", "R1");
+            else
+                Emit("STS", $"0x{mem.Address:X4}", "R1");
+            for (int i = 1; i < size; i++)
+                Emit("STS", $"0x{mem.Address + i:X4}", "R1");
+            return;
+        }
+
+        var name = val switch { Variable v => v.Name, Temporary t => t.Name, _ => "" };
+
+        if (!string.IsNullOrEmpty(name) && _regLayout.TryGetValue(name, out var dstReg))
+        {
+            Emit("CLR", dstReg);
+            if (size >= 2) Emit("CLR", GetHighReg(dstReg));
+            if (size == 4) { Emit("CLR", $"R{int.Parse(dstReg[1..]) + 2}"); Emit("CLR", $"R{int.Parse(dstReg[1..]) + 3}"); }
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(name) && _tmpRegLayout.TryGetValue(name, out var tmpReg))
+        {
+            Emit("CLR", tmpReg);
+            if (size >= 2) Emit("CLR", GetHighReg(tmpReg));
+            if (size == 4) { Emit("CLR", $"R{int.Parse(tmpReg[1..]) + 2}"); Emit("CLR", $"R{int.Parse(tmpReg[1..]) + 3}"); }
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(name) && _stackLayout.TryGetValue(name, out int offset))
+        {
+            for (int i = 0; i < size; i++)
+                EmitSlotStore(offset + i, "R1");
+            return;
+        }
+
+        var zaddr = ResolveAddress(val);
+        if (string.IsNullOrEmpty(zaddr)) return;
+        Emit("STS", zaddr, "R1");
+        for (int i = 1; i < size; i++)
+            Emit("STS", zaddr + $"+{i}", "R1");
+    }
+
     public override void Compile(ProgramIR program, TextWriter output)
     {
         // First thing, before any pass can ask for a size: a .mir from a compiler that
@@ -3004,6 +3053,13 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         {
             LoadFloatIntoRegs(cp.Src);
             StoreFloatFromRegs(cp.Dst);
+            return;
+        }
+        // A constant zero goes straight to the destination through R1 -- no
+        // LDI pair to load a value the ABI already keeps in a register.
+        if (cp.Src is Constant { Value: 0 })
+        {
+            StoreZeroInto(cp.Dst, dstType);
             return;
         }
         // When src is a typeless constant, use the destination's declared type
