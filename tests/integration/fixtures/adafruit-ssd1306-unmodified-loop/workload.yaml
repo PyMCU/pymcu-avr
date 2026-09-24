@@ -1,0 +1,22 @@
+# PGO workload for the loop twin of the unmodified Adafruit SSD1306 (128x32,
+# I2C @ 0x3C): the simpletest body runs inside `while True:` and the program
+# parks in `while True: pass` after three iterations.
+#
+# The display is a slave on the TWI bus: it ACKs 0x3C and consumes whatever the
+# driver writes. The run stops when the first 50 transactions have closed:
+#   1 probe (empty write) + 1 power-on + 27 init commands + per loop iteration
+#   2 x (6 address-window commands + one 513-byte frame write), LOOP_ITERS=3. max_ms is only a safety cap;
+#   the transaction count is the real bound.
+#
+# expect pins a prefix of the flattened stream (each transaction contributes
+# its address byte then its data bytes): probe `3c`, power-on `3c 80 af`,
+# display-off `3c 80 ae`, then the next two init writes.
+scenarios:
+  - name: ssd1306-128x32
+    stimuli:
+      - {i2c_slave: 0x3C}
+    run:
+      until_i2c_transactions: 50
+      max_ms: 2000
+    expect:
+      i2c_tx: "3c 3c 80 af 3c 80 ae 3c 80 20 3c 80 00"
