@@ -192,10 +192,10 @@ public static class DifferentialCorpus
                 "whole-surface program's temporaries without the optimizer); it runs " +
                 "optimized through the surfacecov oracle pair",
             ["fixtures/surfacecov-dht"] =
-                "byte-identical upstream adafruit_dht.py assigns a `uint8` into a slot " +
-                "declared `Union[int, float, None]`, a member the union does not " +
-                "declare, which PyMCU refuses by design -- neither build exists; the " +
-                "fixture pins the refusal as XBUILD-FAIL in the surfacecov sweep",
+                "byte-identical upstream adafruit_dht.py drives four pins through the " +
+                "pulse HAL, whose ISR can sit at only one interrupt vector -- the build " +
+                "is refused by design; the fixture pins the refusal as XBUILD-FAIL in " +
+                "the surfacecov sweep",
             ["fixtures/surfacecov-ds18x20"] =
                 "byte-identical upstream adafruit_onewire/bus.py indexes a compile-time " +
                 "tuple at run time, which PyMCU refuses by design -- neither build " +

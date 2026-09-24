@@ -342,5 +342,5 @@
   ]
  },
  "max_ms": 8000,
- "expect_build_fail": "is not a member of Union"
+ "expect_build_fail": "is already the handler for interrupt vector"
 }
