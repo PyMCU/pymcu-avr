@@ -134,6 +134,7 @@ _gai_fail:
     CLR     R25
     RET
 
+; @@REFS-BEGIN@@
 ; ---------------------------------------------------------------------------
 ; gc_alloc_refs  --  gc_alloc, then set bit6 in the mark byte: the payload is
 ; an array of GC_REFs, so the mark phase must trace it and compaction must
@@ -154,6 +155,7 @@ gc_alloc_refs:
 _garf_done:
     RET
 
+; @@REFS-END@@
 ; ---------------------------------------------------------------------------
 ; gc_collect  --  run a full mark-then-compact GC cycle.
 ; ---------------------------------------------------------------------------
@@ -166,7 +168,9 @@ gc_collect:
     CLI
     PUSH    R18                         ; preserve across the mark/compact calls
     CALL    _gc_do_mark
+; @@REFS-BEGIN@@
     CALL    _gc_trace_refs              ; mark what ref-bearing payloads reach
+; @@REFS-END@@
     CALL    _gc_do_compact
     POP     R18
     OUT     0x3F, R18                   ; restore SREG (re-enables interrupts iff they were on)
@@ -239,6 +243,7 @@ _gdm_next:
 _gdm_done:
     RET
 
+; @@REFS-BEGIN@@
 ; ---------------------------------------------------------------------------
 ; _gc_trace_refs  --  mark objects reachable through ref-bearing payloads.
 ;
@@ -344,6 +349,7 @@ _gtr_pass_done:
     POP     R28
     RET
 
+; @@REFS-END@@
 ; ---------------------------------------------------------------------------
 ; _gc_do_compact  --  compact live objects toward _heap_start.
 ;
@@ -415,6 +421,7 @@ _gdc_loop:
     CPC     R23, R25
     BREQ    _gdc_copy                   ; same address, no fixup
 
+; @@REFS-BEGIN@@
     ; _gc_update_ss also rewrites matching slots inside ref-bearing payloads.
     ; It walks two regions -- the finalized run [_heap_start, Z) and the
     ; unprocessed run [Y, heap_top) -- so publish the cursors it needs.
@@ -422,6 +429,7 @@ _gdc_loop:
     STS     _gc_fix_dst_hi, R31
     STS     _gc_fix_src_lo, R28
     STS     _gc_fix_src_hi, R29
+; @@REFS-END@@
 
     PUSH    R16                         ; save heap_top lo
     PUSH    R17                         ; save heap_top hi
@@ -533,12 +541,15 @@ _guss_next:
     RJMP    _guss_loop
 
 _guss_done:
+; @@REFS-BEGIN@@
     ; A moved object's other references live inside ref-bearing payloads:
     ; a list[list[T]] that holds the moved list as an element. Rewrite those
     ; too, over the regions _gc_fix_dst/_gc_fix_src bound.
     CALL    _gc_update_heap
+; @@REFS-END@@
     RET
 
+; @@REFS-BEGIN@@
 ; ---------------------------------------------------------------------------
 ; _gc_update_heap  --  rewrite GC_REF slots inside ref-bearing payloads.
 ;
@@ -622,6 +633,7 @@ _guh_next:
 _guh_done:
     RET
 
+; @@REFS-END@@
 ; ---------------------------------------------------------------------------
 ; gc_list_fixup  --  repoint every GC_REF variable from old_user_ptr to new_user_ptr.
 ;
@@ -638,6 +650,7 @@ gc_list_fixup:
     MOVW    R18, R22                    ; R19:R18 = new (temp)
     MOVW    R22, R24                    ; R23:R22 = old
     MOVW    R24, R18                    ; R25:R24 = new
+; @@REFS-BEGIN@@
     ; No collection is in progress: the payload-fixup walk sees the whole heap
     ; as the unprocessed region and an empty finalized run.
     LDI     R16, lo8(_heap_start)
@@ -646,5 +659,6 @@ gc_list_fixup:
     LDI     R16, hi8(_heap_start)
     STS     _gc_fix_dst_hi, R16
     STS     _gc_fix_src_hi, R16
+; @@REFS-END@@
     CALL    _gc_update_ss
     RET

@@ -82,6 +82,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private int _bssSize;
     private int _argSpillBytes;  // bytes of the fixed SRAM region for >R16..R25 overflow arguments
     private bool _needsGc;      // mirrors program.NeedsGc for use in CompileFunction
+    private bool _usesRefPayloads;  // mirrors program.UsesRefPayloads for EmitGcRuntime
     private List<string> _gcRefGlobals = new();  // GC_REF global slots: permanent GC roots
     // A Return in the entry function survived the optimizer's CFG pass, so the
     // program has at least one reachable ending: emit the shared __pymcu_halt
@@ -1194,6 +1195,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 $"static data needs {maxStack} bytes but {LayoutChip()} has {sramAvailable} bytes of SRAM " +
                 $"(and the call stack needs {stackReserve} of them). Reduce array sizes or pick a chip with more RAM.");
         _needsGc = program.NeedsGc;
+        _usesRefPayloads = program.UsesRefPayloads;
         _gcRefGlobals = program.Globals.Where(g => g.Type == DataType.GC_REF)
                                      .Select(g => g.Name).ToList();
         _needsHalt = false;
@@ -5276,6 +5278,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             text = System.Text.RegularExpressions.Regex.Replace(
                 text, @"^(\s*)(CALL|JMP)\b", "$1R$2",
                 System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        // Ref-payload support (list[list[T]]) costs ~250 bytes of runtime. A
+        // program that never builds a ref-bearing payload can neither flag nor
+        // trace one, so drop the @@REFS@@ regions. Every site that named
+        // _gc_trace_refs or _gc_update_heap sits inside a region itself, so
+        // nothing references either routine once the strip runs.
+        if (!_usesRefPayloads)
+        {
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text, @"(?ms)^; @@REFS-BEGIN@@\n.*?^; @@REFS-END@@\n", "");
+        }
         os.Write(text);
     }
 
