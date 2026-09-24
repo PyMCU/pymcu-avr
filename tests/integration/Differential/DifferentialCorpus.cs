@@ -92,16 +92,14 @@ public static class DifferentialCorpus
     /// sets of numbers, and it was not in this repository: a module-level global read through
     /// an @inline expansion carried UINT8 in the IR while its write carried the widened type,
     /// so the backend zero-extended a value that was already 16 or 32 bits wide. Fixed in
-    /// PyMCU (pymcu-avr#6), which is why both came out together.
+    /// PyMCU (pymcu-avr#6), which is why both came out together. held-write-anon followed:
+    /// PyMCU#183's "optimized folds the constructor's value" was the field-layout path
+    /// leaving the held instance's fields out of storage, and main's class-typed field
+    /// layout records them, so both builds emit the write.
     /// </remarks>
     public static readonly IReadOnlyDictionary<string, string> KnownDivergences =
         new Dictionary<string, string>
         {
-            ["fixtures/held-write-anon"] =
-                "PyMCU#183: the write through a method on a field holding a nameless " +
-                "instance lands in the unoptimized build (GPIOR1=7) while the optimized " +
-                "build folds the constructor's value instead (GPIOR1=0); " +
-                "HeldInstanceWriteTests pins the failure on the wire",
         };
 
     /// <summary>

@@ -4,10 +4,8 @@
   "lines": [
    2,
    4,
-   18,
-   22,
-   36
+   18
   ],
-  "reason": "fraction's `self._pwm_out.duty_cycle == 0` disabled-check resolves the wrong storage through the boxed _pwm_out field, so the getter returns a float where CPython returns None; the 45.49/44.97 line is AVR float32 rounding vs CPython float64. Reproduces identically under bin-main."
+  "reason": "a never-written servo's angle/fraction getters return 0.0 where CPython returns None -- the `self._pwm_out.duty_cycle == 0` disabled-check resolves the wrong storage through the boxed _pwm_out field; the 45.49/44.97 line is AVR float32 rounding vs CPython float64. Lines 22/36 healed: `s.angle = None` / `s.fraction = None` now print None (statically-known None propagates through property writes), where bin-main still prints 1.0."
  }
 }
