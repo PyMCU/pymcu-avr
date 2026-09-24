@@ -83,6 +83,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private int _argSpillBytes;  // bytes of the fixed SRAM region for >R16..R25 overflow arguments
     private bool _needsGc;      // mirrors program.NeedsGc for use in CompileFunction
     private bool _usesRefPayloads;  // mirrors program.UsesRefPayloads for EmitGcRuntime
+    private int _gcPushSites;         // EmitShadowStackPush call sites emitted; 0 => strip _gc_ss_push
     private List<string> _gcRefGlobals = new();  // GC_REF global slots: permanent GC roots
     // A Return in the entry function survived the optimizer's CFG pass, so the
     // program has at least one reachable ending: emit the shared __pymcu_halt
@@ -5314,6 +5315,13 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             text = System.Text.RegularExpressions.Regex.Replace(
                 text, @"(?ms)^; @@REFS-BEGIN@@\n.*?^; @@REFS-END@@\n", "");
         }
+        // _gc_ss_push is called only by emitted code; a program whose GC_REFs
+        // are all startup seeds has no push sites, so drop the helper.
+        if (_gcPushSites == 0)
+        {
+            text = System.Text.RegularExpressions.Regex.Replace(
+                text, @"(?ms)^; @@SSPUSH-BEGIN@@\n.*?^; @@SSPUSH-END@@\n", "");
+        }
         os.Write(text);
     }
 
@@ -5335,30 +5343,16 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     }
 
     // Push the SRAM address of a GC_REF slot onto the shadow stack and bump the
-    // depth counter. Shared by per-function GcRoot and the one-time global seed
-    // in main's prologue.
+    // depth counter. Shared by per-function GcRoot sites. The push runs through
+    // the _gc_ss_push helper in gc_runtime.S: 6 bytes per site instead of ~28
+    // bytes of inline sequence (the helper is stripped when nothing calls it).
     private void EmitShadowStackPush(int sramAddr, string varName)
     {
         EmitComment($"gc_root push: {varName} @ 0x{sramAddr:X4}");
-
-        // X = _gc_ss_base; index = _gc_ss_top_addr (1 byte); X += index*2
-        // Then store sramAddr as 2 bytes at X; increment _gc_ss_top_addr.
-        Emit("LDS",  "R16", "_gc_ss_top_addr");    // R16 = current depth
-        Emit("MOV",  "R17", "R16");
-        Emit("LSL",  "R17");                        // R17 = depth * 2
-        Emit("LDI",  "R26", "lo8(_gc_ss_base)");
-        Emit("LDI",  "R27", "hi8(_gc_ss_base)");
-        Emit("CLR",  "R18");
-        Emit("ADD",  "R26", "R17");
-        Emit("ADC",  "R27", "R18");                 // X = _gc_ss_base + depth*2
-
-        Emit("LDI",  "R17", $"lo8(0x{sramAddr:X4})");
-        Emit("LDI",  "R18", $"hi8(0x{sramAddr:X4})");
-        Emit("ST",   "X+",  "R17");                 // store sramAddr lo
-        Emit("ST",   "X",   "R18");                 // store sramAddr hi
-
-        Emit("INC",  "R16");
-        Emit("STS",  "_gc_ss_top_addr", "R16");     // depth++
+        _gcPushSites++;
+        Emit("LDI",  "R24", $"lo8(0x{sramAddr:X4})");
+        Emit("LDI",  "R25", $"hi8(0x{sramAddr:X4})");
+        Emit("CALL", "_gc_ss_push");
     }
 
     // GcUnroot: pop one entry from the shadow stack (decrement depth counter).

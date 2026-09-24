@@ -487,6 +487,30 @@ _gdc_done:
     POP     R28                         ; restore the caller's frame pointer
     RET
 
+; @@SSPUSH-BEGIN@@
+; ---------------------------------------------------------------------------
+; _gc_ss_push  --  push a GC_REF slot address onto the shadow stack and bump
+; the depth counter. Shared by every GcRoot site so a push costs a 6-byte
+; call instead of ~28 bytes of inline sequence.
+; In:  R25:R24 = absolute SRAM address of the variable slot
+; Clobbers: R16, R17, R18, R26, R27
+; ---------------------------------------------------------------------------
+_gc_ss_push:
+    LDS     R16, _gc_ss_top_addr        ; R16 = current depth
+    MOV     R17, R16
+    LSL     R17                         ; R17 = depth * 2
+    LDI     R26, lo8(_gc_ss_base)
+    LDI     R27, hi8(_gc_ss_base)
+    CLR     R18
+    ADD     R26, R17
+    ADC     R27, R18                    ; X = _gc_ss_base + depth*2
+    ST      X+, R24                     ; store sramAddr lo
+    ST      X, R25                      ; store sramAddr hi
+    INC     R16
+    STS     _gc_ss_top_addr, R16        ; depth++
+    RET
+; @@SSPUSH-END@@
+
 ; ---------------------------------------------------------------------------
 ; _gc_update_ss  --  update every slot holding old_user_ptr: shadow-stack
 ; variable slots AND element slots inside ref-bearing list payloads. The heap
