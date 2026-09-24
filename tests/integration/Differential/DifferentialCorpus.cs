@@ -173,12 +173,6 @@ public static class DifferentialCorpus
                 "compiler reports as recursive (function 'set_duty_u16') and PyMCU " +
                 "refuses recursion by design -- neither build exists; the fixture pins " +
                 "the refusal as XBUILD-FAIL in the surfacecov sweep",
-            ["fixtures/surfacecov-74hc595"] =
-                "byte-identical upstream adafruit_74hc595.py initialises self._device to " +
-                "None and later assigns an SPIDevice instance to it: under RFC 0009 the " +
-                "field is a tagged union and an instance has no member slot, which PyMCU " +
-                "refuses by design -- neither build exists; the fixture pins the refusal " +
-                "as XBUILD-FAIL in the surfacecov sweep",
             ["fixtures/surfacecov-debouncer"] =
                 "the unoptimized build needs 2401 B of static data on a 2048 B part (the " +
                 "whole-surface program's temporaries without the optimizer); it runs " +

@@ -1,5 +1,4 @@
 {
  "spi": true,
- "max_ms": 8000,
- "expect_build_fail": "has no member slot"
+ "max_ms": 8000
 }
