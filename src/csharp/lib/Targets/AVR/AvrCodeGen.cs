@@ -1867,8 +1867,24 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 // freed memory after the first collection). Seed them here, once,
                 // before any __module_init call binds an object to the slot. BSS is
                 // already zeroed, so every seeded slot reads null until then.
-                foreach (var gname in _gcRefGlobals)
-                    EmitShadowStackPush(GetGcRefSramAddr(gname), gname);
+                // The shadow stack is empty at this point, so each seed is a pair
+                // of direct stores to its compile-time-known index -- the dynamic
+                // EmitShadowStackPush sequence would spend ~28 bytes per root
+                // re-deriving an address that is constant here.
+                for (int i = 0; i < _gcRefGlobals.Count; i++)
+                {
+                    int sramAddr = GetGcRefSramAddr(_gcRefGlobals[i]);
+                    EmitComment($"gc_root seed: {_gcRefGlobals[i]} @ 0x{sramAddr:X4}");
+                    Emit("LDI", "R16", $"lo8(0x{sramAddr:X4})");
+                    Emit("STS", $"_gc_ss_base+{2 * i}", "R16");
+                    Emit("LDI", "R16", $"hi8(0x{sramAddr:X4})");
+                    Emit("STS", $"_gc_ss_base+{2 * i + 1}", "R16");
+                }
+                if (_gcRefGlobals.Count > 0)
+                {
+                    Emit("LDI", "R16", $"{_gcRefGlobals.Count}");
+                    Emit("STS", "_gc_ss_top_addr", "R16");
+                }
             }
         }
 
