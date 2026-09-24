@@ -2106,6 +2106,47 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             return false;
         }
 
+        // An outlined region becomes an RCALL'd subroutine, so no control-flow edge may cross
+        // its boundary. A jump OUT abandons the frame: when the outside code reaches a Return,
+        // its RET pops the RCALL's own return address and lands back in the caller mid-body --
+        // a `try`/`except` inside a real function swallowed an OSError exactly that way (the
+        // expansion's BranchOnError jumped to the parent's catch dispatch, whose SET;RET
+        // returned to just past the RCALL, where the happy path CLT'd the pending error and
+        // the probe "succeeded"). A jump IN is no better: it enters the subroutine mid-body
+        // and the subroutine's own RET returns to the wrong frame. Regions that are not
+        // control-flow-self-contained stay inline.
+        static IEnumerable<string> JumpTargetsOf(Instruction i) => i switch
+        {
+            Jump j                     => new[] { j.Target },
+            JumpIfZero j               => new[] { j.Target },
+            JumpIfNotZero j            => new[] { j.Target },
+            JumpIfEqual j              => new[] { j.Target },
+            JumpIfNotEqual j           => new[] { j.Target },
+            JumpIfLessThan j           => new[] { j.Target },
+            JumpIfLessOrEqual j        => new[] { j.Target },
+            JumpIfGreaterThan j        => new[] { j.Target },
+            JumpIfGreaterOrEqual j     => new[] { j.Target },
+            JumpIfBitSet j             => new[] { j.Target },
+            JumpIfBitClear j           => new[] { j.Target },
+            BranchOnError b            => new[] { b.ErrorLabel },
+            SignalError { CatchLabel: string cl } => new[] { cl },
+            _                          => Array.Empty<string>(),
+        };
+
+        bool RegionCrossesControlFlow(int start, int end)
+        {
+            var inside = new HashSet<string>();
+            for (int k = start + 1; k < end; k++)
+                if (func.Body[k] is Label l) inside.Add(l.Name);
+            for (int k = 0; k < func.Body.Count; k++)
+            {
+                bool kInside = k > start && k < end;
+                foreach (var target in JumpTargetsOf(func.Body[k]))
+                    if (inside.Contains(target) != kInside) return true;
+            }
+            return false;
+        }
+
         // The outliner emits ONE occurrence as the subroutine and RCALLs all of them, so every
         // occurrence must be byte-identical -- otherwise an occurrence that differs (e.g. a force-
         // inlined method whose result temp lands in a different stack slot per call site) reads its
@@ -2138,6 +2179,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         foreach (var (fname, ranges) in inlineGroups)
         {
             if (ranges.Any(r => RegionIsCallPassthrough(r.start, r.end))) continue;  // keep inline
+            if (ranges.Any(r => RegionCrossesControlFlow(r.start, r.end))) continue; // keep inline
             if (!RangesIdentical(ranges)) continue;                                  // keep inline
             var label = MakeLabel("_pymcu_outline");
             outlinedLabels[fname] = label;
