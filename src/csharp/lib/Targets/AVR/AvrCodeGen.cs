@@ -2270,8 +2270,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             // `-> array.array`) stays UNKNOWN -- 1 byte -- while the value the body
             // returns is a GC pointer. Marshal by the value's width then: sizing the
             // return run from UNKNOWN handed the caller only the pointer's low byte.
-            var returnType = declared == null || declared == DataType.UNKNOWN
-                ? GetValType(r.Value)
+            // Only pointer-class values override the declaration: a caller reading
+            // an UNKNOWN return takes one byte, so a wider scalar here would be a
+            // byte nobody consumes.
+            var valueType = GetValType(r.Value);
+            var returnType = declared == null
+                || (declared == DataType.UNKNOWN
+                    && valueType is DataType.GC_REF or DataType.FUNCREF)
+                ? valueType
                 : declared.Value;
             if (r.Tag != null)
             {
@@ -2301,8 +2307,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (r.Tag != null)
         {
             var declaredTag = _currentFunction?.ReturnType;
-            var payloadType = declaredTag == null || declaredTag == DataType.UNKNOWN
-                ? GetValType(r.Value)
+            var tagValueType = r.Value is not NoneVal ? GetValType(r.Value) : declaredTag ?? DataType.UINT8;
+            var payloadType = declaredTag == null
+                || (declaredTag == DataType.UNKNOWN
+                    && tagValueType is DataType.GC_REF or DataType.FUNCREF)
+                ? tagValueType
                 : declaredTag.Value;
             LoadIntoReg(r.Tag, TagReturnReg(payloadType), DataType.UINT8);
         }
