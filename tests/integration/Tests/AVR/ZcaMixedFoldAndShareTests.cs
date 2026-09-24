@@ -43,7 +43,10 @@ public class ZcaMixedFoldAndShareTests
         // every //, which this fixture's `1000000 // self.baud` exercises: -64 B.
         // 946 -> 938: constant delays count on the narrowest counter the count needs,
         // so this fixture's sleep loops lost a register each: -8 B.
-        FlashBytes(PymcuCompiler.BuildFixture("zca-mixed-fold-and-share")).Should().Be(938,
+        // 938 -> 930: the RFC 0011 generator campaign's AVR collector and codegen
+        // improvements shrank the outlined body's marshaling: -8 B. RFC 0009
+        // (tagged unions) leaves the fixture byte-identical to main.
+        FlashBytes(PymcuCompiler.BuildFixture("zca-mixed-fold-and-share")).Should().Be(930,
             "this fixture's baseline before RFC 0006's per-field fold (Phase 3) lands; " +
             "a change here needs the RFC's baseline JSON updated alongside it, not silently");
     }
