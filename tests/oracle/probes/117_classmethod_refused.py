@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:116
+# doc: docs/language/roadmap.md:117
 class Util:
     @classmethod
     def make(cls):

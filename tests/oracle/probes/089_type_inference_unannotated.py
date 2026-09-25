@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:72
+# doc: docs/language/roadmap.md:73
 def scale(x, y):
     return x * y
 print(scale(300, 2))

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:392
+# doc: docs/language/limitations.md:397
 class Counter:
     def __init__(self, n):
         self.n = n

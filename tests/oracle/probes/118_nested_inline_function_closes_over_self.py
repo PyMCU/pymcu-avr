@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:287
+# doc: docs/language/limitations.md:292
 from pymcu.types import inline
 
 class Counter:

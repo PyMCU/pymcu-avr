@@ -1,5 +1,5 @@
 # expect: refuse recursive
-# doc: docs/language/limitations.md:274
+# doc: docs/language/limitations.md:279
 def f(n):
     if n == 0:
         return 0

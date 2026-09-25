@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:278
+# doc: docs/language/limitations.md:283
 class Sensor:
     def __init__(self):
         self.count = 0

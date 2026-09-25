@@ -104,13 +104,13 @@ DIVERGENCE_TRANSFORMS: dict[str, "callable[[str], str]"] = {
         for line in text.split("\n")
     ),
     # A triple-quoted string's leading newline, right after the opening quote, is stripped
-    # (roadmap.md:64).
-    "docs/language/roadmap.md:64": lambda text: text[1:] if text.startswith("\n") else text,
+    # (roadmap.md:65).
+    "docs/language/roadmap.md:65": lambda text: text[1:] if text.startswith("\n") else text,
     # __del__ is emitted nowhere: storage is static, nothing collects an instance, and `del`
     # is refused for the same reason, so there is no moment a destructor could run at
-    # (limitations.md:383). Whatever the body prints is therefore absent from the firmware's
+    # (limitations.md:388). Whatever the body prints is therefore absent from the firmware's
     # output, which is what this drops from CPython's.
-    "docs/language/limitations.md:383": lambda text: "\n".join(
+    "docs/language/limitations.md:388": lambda text: "\n".join(
         line for line in text.split("\n") if line != "DEL"
     ),
     # A field read before any write reachable from it executes: the interpreters resolve

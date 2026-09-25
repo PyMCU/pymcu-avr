@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:59
+# doc: docs/language/roadmap.md:60
 class Table:
     def __init__(self, values):
         self.values = values

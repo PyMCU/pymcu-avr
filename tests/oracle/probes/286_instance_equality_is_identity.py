@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:407
+# doc: docs/language/limitations.md:412
 class Plain:
     def __init__(self, n):
         self.n = n

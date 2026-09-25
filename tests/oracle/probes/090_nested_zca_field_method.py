@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:73
+# doc: docs/language/roadmap.md:74
 class Pin:
     def __init__(self, v):
         self.v = v

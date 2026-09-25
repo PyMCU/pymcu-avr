@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:312
+# doc: docs/language/limitations.md:317
 def double(n):
     return n * 2
 

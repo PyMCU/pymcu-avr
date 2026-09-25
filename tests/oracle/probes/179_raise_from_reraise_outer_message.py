@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:217
+# doc: docs/language/limitations.md:222
 def risky():
     raise ValueError("bad reading")
 

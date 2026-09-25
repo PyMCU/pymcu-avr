@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:392
+# doc: docs/language/limitations.md:397
 class Acc:
     def __init__(self, n):
         self.n = n

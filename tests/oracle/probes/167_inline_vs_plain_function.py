@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:89
+# doc: docs/language/roadmap.md:90
 from pymcu.types import inline
 @inline
 def inl(x):

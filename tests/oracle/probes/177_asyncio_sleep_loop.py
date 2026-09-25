@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:72
+# doc: docs/language/roadmap.md:73
 import asyncio
 async def worker(n):
     total = 0

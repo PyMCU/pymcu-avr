@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:71
+# doc: docs/language/roadmap.md:72
 def gen(n):
     for i in range(n):
         yield i * 2
