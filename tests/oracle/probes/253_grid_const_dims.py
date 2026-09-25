@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:679
+# doc: docs/language/limitations.md:693
 from pymcu.types import const
 
 W: const[int] = 4

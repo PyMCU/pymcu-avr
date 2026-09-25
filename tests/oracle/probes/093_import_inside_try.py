@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:715
+# doc: docs/language/limitations.md:729
 try:
     from pymcu.types import uint8
 except ImportError:

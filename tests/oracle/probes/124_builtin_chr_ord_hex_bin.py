@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:766
+# doc: docs/language/limitations.md:780
 def make(n: int) -> int:
     return n
 print(chr(make(66)))

@@ -1,5 +1,5 @@
 # expect: refuse slice
-# doc: docs/language/limitations.md:649
+# doc: docs/language/limitations.md:663
 def take(n):
     buf = bytearray(b"abcd")
     part = buf[0:n]
