@@ -201,6 +201,17 @@ class _Ptr:
     def value(self, v):
         _Ptr._mem[self.address] = int(v) & 0xFF
 
+    # One bit of the same byte. `REG[bit]` and `REG[bit] = v` are half of what a
+    # register declaration means, and without them a probe that uses the bit forms
+    # raised TypeError under CPython and could not be written at all.
+    def __getitem__(self, bit):
+        return (_Ptr._mem.get(self.address, 0) >> int(bit)) & 1
+
+    def __setitem__(self, bit, v):
+        mask = 1 << int(bit)
+        cur = _Ptr._mem.get(self.address, 0)
+        _Ptr._mem[self.address] = (cur | mask) if int(v) else (cur & ~mask & 0xFF)
+
 
 class FixedDict(dict):
     def __init__(self, capacity: int):
