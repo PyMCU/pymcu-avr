@@ -994,12 +994,21 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
 
         if (val is MemoryAddress mem)
         {
+            // A 16-bit peripheral register pair is committed by the write of its LOW byte,
+            // which takes the high half from the shared TEMP latch, so the high byte must be
+            // stored FIRST. Storing low first committed the pair with a stale TEMP and then
+            // only refilled TEMP with the real high byte: `TCNT1.value = v` landed as
+            // (stale << 8) | lo. Reads keep the other order, low first, because reading the
+            // low byte is what latches the high one.
+            if (size >= 2)
+            {
+                if (size == 4) { Emit("STS", $"0x{mem.Address + 3:X4}", regB3); Emit("STS", $"0x{mem.Address + 2:X4}", regB2); }
+                Emit("STS", $"0x{mem.Address + 1:X4}", regH);
+            }
             if (mem.Address is >= 0x20 and <= 0x5F)
                 Emit("OUT", $"0x{mem.Address - 0x20:X2}", reg);
             else
                 Emit("STS", $"0x{mem.Address:X4}", reg);
-            if (size >= 2) Emit("STS", $"0x{mem.Address + 1:X4}", regH);
-            if (size == 4) { Emit("STS", $"0x{mem.Address + 2:X4}", regB2); Emit("STS", $"0x{mem.Address + 3:X4}", regB3); }
             return;
         }
 
@@ -1055,12 +1064,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         int size = type.SizeOf();
         if (val is MemoryAddress mem)
         {
+            // High byte first, like StoreRegInto: the LOW byte's write is what commits a
+            // TEMP-latched 16-bit register pair, so it goes last even when every byte is zero.
+            for (int i = size - 1; i >= 1; i--)
+                Emit("STS", $"0x{mem.Address + i:X4}", "R1");
             if (mem.Address is >= 0x20 and <= 0x5F)
                 Emit("OUT", $"0x{mem.Address - 0x20:X2}", "R1");
             else
                 Emit("STS", $"0x{mem.Address:X4}", "R1");
-            for (int i = 1; i < size; i++)
-                Emit("STS", $"0x{mem.Address + i:X4}", "R1");
             return;
         }
 

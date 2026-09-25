@@ -39,6 +39,16 @@
 
 ### Fixed
 
+- **avr**: a 16-bit register store put the LOW byte out first. The pair is committed by
+  the write of its LOW byte, which takes the high half from the shared TEMP latch, so the
+  high byte has to go out FIRST; `StoreRegInto` and `StoreZeroInto` emitted `STS low` then
+  `STS high`, which committed the pair with whatever TEMP held and then only refilled TEMP
+  for the next access. A runtime `TCNT1.value = v` landed as (stale << 8) | lo. Loads are
+  unchanged and stay low-byte-first, which is what latches the high half to be read back.
+  Pinned on the emulator by `fixtures/timer16-store-order`, which writes and reads back on
+  the chip so a swapped pair, a one-byte write and a one-byte read are all wrong numbers
+  rather than missing output. The constant-store half of the same bug is fixed in the
+  compiler (PyMCU/pymcu#483); `fixtures/timer1-clear-temp` pins the HAL half.
 - **avr**: silent wrong code on parts whose SRAM does not start at 0x0100 -- every
   absolute slot and array access past the Y+63 displacement window emitted
   `0x0100 + offset` regardless of the chip. On the ATmega2560 (RAMSTART 0x0200)
