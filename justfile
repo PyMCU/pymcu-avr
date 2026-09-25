@@ -28,3 +28,14 @@ test-oracle:
 # the verifier already sees the violation, the message names the guilty pass.
 verify:
     "{{repo_root}}/.venv/bin/python" "{{repo_root}}/tools/verify_ir.py"
+
+# ─── resolve-observe ────────────────────────────────────────────────────────
+# Observer-mode name resolution over the same corpus, with
+# PYMCU_RESOLVE_OBSERVE=1. The pass decides each name's binding once before
+# lowering and derives its storage key from that binding plus the expansion it
+# is read in; this prints every place where the compiler's own ladder answered
+# a different key. It changes nothing, so the firmware is byte-identical with
+# the flag on. Run it when a miscompile smells like a NAME: a stale value, a
+# write that never lands, a read that answers somebody else's binding.
+resolve-observe:
+    "{{repo_root}}/.venv/bin/python" "{{repo_root}}/tools/resolve_observe.py"
