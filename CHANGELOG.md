@@ -29,6 +29,13 @@
   `CompatCpBusioUartBufferTests` losing received bytes, three failures that never name the
   rate, because the emulator does not model a baud mismatch either. This asserts where the
   rate is decided instead.
+- **avr**: `fixtures/compat-mp-uart-115200-u2x` and `CompatMpUart115200U2xTests` — the same
+  pin for the other compat layer, `machine.UART(0, 115200)`. It had the identical `uint16`
+  baudrate and was configured for 50000 baud in silicon at the same time, with every suite
+  green, because nothing anywhere asserted its registers. What let both ship was not the
+  declaration, it was that the native path had a test and the layers did not: CircuitPython
+  was caught only sideways, by a buffer test losing bytes, and MicroPython was not caught at
+  all. A compat layer added after these needs its own case here.
 
 ### Fixed
 
