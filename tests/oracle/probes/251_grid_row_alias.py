@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:673
+# doc: docs/language/limitations.md:674
 g = [[0] * 4 for _ in range(3)]
 for x in range(4):
     g[1][x] = x + 10

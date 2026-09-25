@@ -1,4 +1,4 @@
 # expect: refuse `[row] * H` creates H aliases of ONE row object
-# doc: docs/language/limitations.md:673
+# doc: docs/language/limitations.md:674
 g = [[0] * 4] * 2
 print(g[0][0])

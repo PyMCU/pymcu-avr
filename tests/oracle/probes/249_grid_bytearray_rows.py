@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:673
+# doc: docs/language/limitations.md:674
 g = [bytearray(4) for _ in range(3)]
 g[0][0] = 9
 g[2][3] = 7

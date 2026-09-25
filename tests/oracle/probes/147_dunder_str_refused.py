@@ -1,5 +1,5 @@
 # expect: refuse has no runtime __str__
-# doc: docs/language/limitations.md:749
+# doc: docs/language/limitations.md:750
 class Point:
     def __init__(self, x, y):
         self.x = x

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:673
+# doc: docs/language/limitations.md:674
 class Grid:
     def __init__(self, width, height):
         self.width = width

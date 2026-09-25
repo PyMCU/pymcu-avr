@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:748
+# doc: docs/language/limitations.md:749
 from pymcu.types import uint8
 a: uint8[5] = [1, 2, 3, 4, 5]
 print(len(a))

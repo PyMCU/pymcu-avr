@@ -1,5 +1,5 @@
 # expect: refuse a grid's dimensions must be compile-time constants
-# doc: docs/language/limitations.md:673
+# doc: docs/language/limitations.md:674
 def cols():
     return 4
 

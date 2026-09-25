@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:777
+# doc: docs/language/limitations.md:778
 """Fixed at #438: `a + b` of two string variables folds their texts.
 
 It used to add the two interned ids as integers, so this printed another
