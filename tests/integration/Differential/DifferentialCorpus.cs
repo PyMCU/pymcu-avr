@@ -100,6 +100,15 @@ public static class DifferentialCorpus
     public static readonly IReadOnlyDictionary<string, string> KnownDivergences =
         new Dictionary<string, string>
         {
+        ["fixtures/compat-mp-framebuf"] =
+            "the unoptimized build draws a different picture, and it is the one that is " +
+            "wrong: the optimized build's 133 lines are byte-identical to what MicroPython's " +
+            "own builtin framebuf prints for this program (reference/micropython.txt), and " +
+            "PYMCU_NO_OPT=1 differs from it from the thirteenth byte on. Same family as " +
+            "PyMCU/PyMCU#510, where PYMCU_NO_OPT=1 does not turn the outliner off and comes " +
+            "out with 14 outlined regions instead of 4 and more wrong pixels, not fewer; " +
+            "CompatMpFramebufTests pins the optimized build against the interpreter on both " +
+            "front ends",
         };
 
     /// <summary>
