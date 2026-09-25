@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:90
+# doc: docs/language/roadmap.md:92
 from pymcu.chips import __CHIP__
 if __CHIP__.name == "atmega328p":
     print("avr")

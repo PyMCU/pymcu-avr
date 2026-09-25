@@ -1,5 +1,5 @@
 # expect: refuse method not supported
-# doc: docs/language/roadmap.md:65
+# doc: docs/language/roadmap.md:67
 from pymcu.types import uint8
 xs: list[uint8] = list()
 xs.append(2)

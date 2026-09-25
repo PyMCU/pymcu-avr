@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:59
+# doc: docs/language/roadmap.md:61
 buf = bytearray(b"abcdef")
 buf[1:4] = b"XYZ"
 print(buf)

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:63
+# doc: docs/language/roadmap.md:65
 if __name__ == "__main__":
     print("main")
 else:

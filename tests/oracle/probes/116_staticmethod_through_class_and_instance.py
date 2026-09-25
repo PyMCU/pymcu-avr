@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:94
+# doc: docs/language/roadmap.md:96
 class Util:
     @staticmethod
     def double(n):

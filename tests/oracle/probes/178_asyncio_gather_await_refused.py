@@ -1,5 +1,5 @@
 # expect: refuse only `await asyncio.sleep(n)`
-# doc: docs/language/roadmap.md:70
+# doc: docs/language/roadmap.md:72
 import asyncio
 async def worker(n, tag):
     for i in range(n):

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:61
+# doc: docs/language/roadmap.md:63
 # tracked: #391
 class Slot:
     def __get__(self, obj, typ=None):

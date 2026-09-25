@@ -1,5 +1,5 @@
 # expect: refuse undefined reference
-# doc: docs/language/roadmap.md:62
+# doc: docs/language/roadmap.md:64
 from pymcu.ffi import extern
 from pymcu.types import uint8
 @extern("oracle_missing_symbol")

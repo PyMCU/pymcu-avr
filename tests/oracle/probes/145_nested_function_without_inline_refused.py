@@ -1,5 +1,5 @@
 # expect: refuse Nested function
-# doc: docs/language/roadmap.md:87
+# doc: docs/language/roadmap.md:89
 def outer(x: int) -> int:
     def inner(y: int) -> int:
         return y + 1
