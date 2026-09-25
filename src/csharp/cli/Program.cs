@@ -213,8 +213,14 @@ rootCmd.SetAction(pr =>
         codegen.EmitVarMapPath  = emitVarMap;
         codegen.EmitBlockMapPath = emitBlockMap;
         codegen.ProfilePath      = profile;
-        using var writer = new StreamWriter(output);
+        using var writer = OutputFile.Open(output);
         codegen.Compile(ir, writer);
+
+        // Flushed here rather than left to the `using`, so that a disk that fills on the
+        // last buffer is a named failure of this path and not an exception out of a
+        // dispose that nothing is watching.
+        OutputFile.Flush(writer, output);
+
         Console.WriteLine($"[BUILD_OK] {output}");
         if (codegen.ProfileReport is { } pgoReport)
             Console.WriteLine($"[PGO] {pgoReport}");
@@ -224,6 +230,12 @@ rootCmd.SetAction(pr =>
             Console.WriteLine($"[LINEMAP] {emitLineMap}");
         if (!string.IsNullOrEmpty(emitBlockMap))
             Console.WriteLine($"[BLOCKMAP] {emitBlockMap}");
+    }
+    catch (OutputFile.Refused ex)
+    {
+        Console.Error.WriteLine($"[pymcuc-avr] {ex.Message}");
+        if (verbose) Console.Error.WriteLine(ex.StackTrace);
+        Environment.ExitCode = 1;
     }
     catch (Exception ex)
     {
@@ -302,3 +314,56 @@ devicesCmd.SetAction(_ =>
 rootCmd.Subcommands.Add(devicesCmd);
 
 rootCmd.Parse(args).Invoke();
+
+// ── the output file ─────────────────────────────────────────────────────────
+//
+// A filesystem refusal of the path this binary was TOLD to write came out as
+// "[pymcuc-avr] Codegen failed: <.NET's words>", which is wrong twice over. Nothing in
+// codegen failed -- the environment refused the write -- and the label sends the reader
+// into the backend to look for a bug that is not there. Whether the path appears at all
+// is left to .NET: "Could not find a part of the path" names it, and neither message
+// ever says the path was the OUTPUT.
+//
+// That is how PyMCU#498 hid on the pymcuc side of the same chain: two builds handed the
+// compiler one output path, and the loser of the race reported a crash that read as a
+// miscompilation of whatever it was building. This is the other half of that fix; the
+// guard on the compiler's own two writes is `OutputFile.Guard` in PyMCU.
+//
+// A read of an INPUT must not come through here: the message asserts the path is the
+// output, so the guard wraps the call that opens or flushes that one file and nothing
+// else. What it does not cover is a buffer that fills mid-codegen and flushes early --
+// that write happens inside `Compile`, and widening the guard to the whole of codegen
+// would put every IOException the backend can raise under a message that swears the
+// output file was at fault.
+internal static class OutputFile
+{
+    /// Thrown in place of the raw IO exception, so the handler can tell a refused output
+    /// from a codegen failure without inspecting messages.
+    internal sealed class Refused(string path, Exception cause)
+        : Exception($"cannot write the output file '{path}': {cause.Message}", cause);
+
+    internal static StreamWriter Open(string path)
+    {
+        try
+        {
+            return new StreamWriter(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException
+                                  or NotSupportedException or ArgumentException)
+        {
+            throw new Refused(path, e);
+        }
+    }
+
+    internal static void Flush(StreamWriter writer, string path)
+    {
+        try
+        {
+            writer.Flush();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            throw new Refused(path, e);
+        }
+    }
+}
