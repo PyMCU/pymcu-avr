@@ -1,6 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:70
-# tracked: #399
+# doc: docs/language/roadmap.md:71
 x = 12
 s = f"t={x:04d}"
 print(s)

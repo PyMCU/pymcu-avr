@@ -1,6 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:797
-# tracked: #438
+# doc: docs/language/limitations.md:802
 x = "abc"
 if x == "abc":
     print("yes")
