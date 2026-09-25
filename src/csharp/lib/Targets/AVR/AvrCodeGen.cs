@@ -2197,8 +2197,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         bool emittedEpilogue = false;
         var skipStack = new Stack<bool>();
         bool Skipping() => skipStack.Count > 0 && skipStack.Peek();
-        foreach (var instr in func.Body)
+        for (int bi = 0; bi < func.Body.Count; bi++)
         {
+            var instr = func.Body[bi];
             if (func.IsInterrupt && !func.IsNaked && instr is Return)
             {
                 if (!Skipping())
@@ -2232,6 +2233,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
 
             if (Skipping()) continue;
+
+            int consumed = TryCompileFillRun(func.Body, bi, func.Body.Count);
+            if (consumed > 0) { bi += consumed - 1; continue; }
 
             CompileInstruction(instr);
         }
@@ -2275,6 +2279,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     continue;
                 }
                 if (SubSkipping()) continue;
+                int subConsumed = TryCompileFillRun(func.Body, i, end);
+                if (subConsumed > 0) { i += subConsumed - 1; continue; }
                 CompileInstruction(si);
             }
             Emit("RET");
@@ -4662,6 +4668,124 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
 
         StoreRegInto("R24", al.Dst, al.ElemType);
+    }
+
+    // --- Constant fill runs -------------------------------------------------
+    //
+    // `self.buffer = bytearray(513)` lowers to 513 ArrayStore of the same constant
+    // into consecutive indices of the same array, and each one costs a whole
+    // instruction: 2 bytes inside the STD Y+q window, 4 bytes (STS) past it. On the
+    // ssd1306 simpletest that single Python line was 1972 of the 4188 bytes of the
+    // image. A counted loop writes the same bytes in 12 to 16.
+    //
+    // The run is only replaced when the loop is STRICTLY SMALLER than the unrolled
+    // form it stands in for, measured with the same rule the emitter below uses, so
+    // a short fill (the two byte `self.temp = bytearray(2)`) keeps its two stores and
+    // no program can grow.
+
+    /// Length of the constant fill run that starts at body index `start`, or 0.
+    /// A run is a maximal sequence of ArrayStore into the SAME array, with the same
+    /// element type, the same constant value, and consecutive constant indices.
+    private static int FillRunLength(List<Instruction> body, int start, int limit)
+    {
+        if (body[start] is not ArrayStore { Index: Constant i0, Src: Constant v0 } first) return 0;
+        int n = 1;
+        int idx = i0.Value;
+        for (int k = start + 1; k < limit; k++)
+        {
+            if (body[k] is not ArrayStore { Index: Constant ik, Src: Constant vk } a) break;
+            if (a.ArrayName != first.ArrayName || a.ElemType != first.ElemType) break;
+            if (vk.Value != v0.Value || ik.Value != idx + 1) break;
+            idx = ik.Value;
+            n++;
+        }
+        return n;
+    }
+
+    /// Bytes the unrolled form of a fill run costs, by the same rule CompileArrayStore
+    /// uses: STD Y+q while the slot is inside the 6-bit displacement window, STS after.
+    private int UnrolledFillBytes(int baseOffset, int firstIndex, int count, int elemSize)
+    {
+        int bytes = 0;
+        for (int k = 0; k < count; k++)
+        {
+            int off = baseOffset + (firstIndex + k) * elemSize;
+            bytes += off <= 63 ? 2 : 4;
+            if (elemSize == 2) bytes += (off + 1) <= 63 ? 2 : 4;
+        }
+        return bytes;
+    }
+
+    /// Bytes the loop form costs. Kept next to the emitter so the two cannot drift.
+    private static int LoopFillBytes(int count, int value, int elemSize)
+    {
+        int bytes = 4;                       // LDI Z low, LDI Z high
+        if (value != 0) bytes += 2;          // LDI R24, value   (R1 is the zero register)
+        if (elemSize == 2 && value != 0) bytes += 2;
+        bytes += count <= 256 ? 2 : 4;       // counter: LDI R18 / LDI R26 + LDI R27
+        bytes += 2 * elemSize;               // ST Z+ per element byte
+        bytes += count <= 256 ? 4 : 4;       // DEC + BRNE, or SBIW + BRNE
+        return bytes;
+    }
+
+    /// Emit the counted loop that fills `count` elements of `arrayName` starting at
+    /// `firstIndex` with `value`. Scratch only: Z (R30/R31), R24 and R18 or X, all of
+    /// which CompileArrayStore already treats as scratch (register homes are R2-R15).
+    private void EmitConstantFill(string arrayName, int baseOffset, int firstIndex,
+                                  int count, int value, DataType elemType)
+    {
+        int elemSize = elemType.SizeOf();
+        int addr = RamStart() + baseOffset + firstIndex * elemSize;
+        EmitComment($"fill {arrayName}[{firstIndex}..{firstIndex + count - 1}] = {value}");
+        Emit("LDI", "R30", $"low({addr})");
+        Emit("LDI", "R31", $"high({addr})");
+        string valReg = "R1";                                  // the zero register
+        if (value != 0) { Emit("LDI", "R24", $"{value & 0xFF}"); valReg = "R24"; }
+        string hiReg = "R1";
+        if (elemSize == 2 && value != 0)
+        {
+            Emit("LDI", "R25", $"{(value >> 8) & 0xFF}");
+            hiReg = "R25";
+        }
+        var loop = MakeLabel("L_FILL");
+        if (count <= 256)
+        {
+            // 256 iterations come out of LDI 0: DEC wraps 0 -> 255 and the loop runs 256 times.
+            Emit("LDI", "R18", $"{count & 0xFF}");
+            EmitLabel(loop);
+            Emit("ST", "Z+", valReg);
+            if (elemSize == 2) Emit("ST", "Z+", hiReg);
+            Emit("DEC", "R18");
+            Emit("BRNE", loop);
+        }
+        else
+        {
+            Emit("LDI", "R26", $"low({count})");
+            Emit("LDI", "R27", $"high({count})");
+            EmitLabel(loop);
+            Emit("ST", "Z+", valReg);
+            if (elemSize == 2) Emit("ST", "Z+", hiReg);
+            Emit("SBIW", "R26", "1");
+            Emit("BRNE", loop);
+        }
+    }
+
+    /// Replaces the fill run starting at `start` when the loop is smaller, and returns
+    /// how many body instructions it consumed (0 when the run is left unrolled).
+    private int TryCompileFillRun(List<Instruction> body, int start, int limit)
+    {
+        int n = FillRunLength(body, start, limit);
+        if (n < 2) return 0;
+        var first = (ArrayStore)body[start];
+        if (!_stackLayout.TryGetValue(first.ArrayName, out int baseOffset)) return 0;
+        int elemSize = first.ElemType.SizeOf();
+        if (elemSize is not (1 or 2)) return 0;
+        int firstIndex = ((Constant)first.Index).Value;
+        int value = ((Constant)first.Src).Value;
+        if (UnrolledFillBytes(baseOffset, firstIndex, n, elemSize)
+            <= LoopFillBytes(n, value, elemSize)) return 0;
+        EmitConstantFill(first.ArrayName, baseOffset, firstIndex, n, value, first.ElemType);
+        return n;
     }
 
     private void CompileArrayStore(ArrayStore ast)
