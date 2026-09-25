@@ -19,6 +19,16 @@
 - **avr**: `fixtures/cp-i2c-nack` and `fixtures/mp-i2c-nack` — a CircuitPython and a
   MicroPython program that write and read a NACKed address — with tests asserting the
   `E:OSError` reports on UART.
+- **avr**: `fixtures/compat-cp-uart-115200-u2x` and `CompatCpUart115200U2xTests` — the
+  compat-layer twin of `Uart115200U2xTests`, pinning that `busio.UART(baudrate=115200)`
+  reaches the registers `UART(115200)` reaches: U2X0 set and UBRR=16, which is 115942 baud
+  at 16 MHz. The native path was pinned and the compat path was not, and the compat path
+  is the one that carries the rate through a parameter of declared width. 115200 does not
+  fit a `uint16`, so a layer declaring one hands the HAL 49664 and the part is configured
+  for 50000 baud with nothing said. What that looked like from above was
+  `CompatCpBusioUartBufferTests` losing received bytes, three failures that never name the
+  rate, because the emulator does not model a baud mismatch either. This asserts where the
+  rate is decided instead.
 
 ### Fixed
 
