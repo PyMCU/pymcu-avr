@@ -1,7 +1,7 @@
-# PyMCU -- grouped-peripheral-timer1: Timer/Counter1 reached through the TIMER1 group.
+# PyMCU -- grouped-peripheral-timer1: Timer/Counter1 reached through the Timer1 group.
 #
 # RFC 0012. The same program is written twice: here against the grouped peripheral
-# (TIMER1.TCCR1A, TIMER1.CS10) and in grouped-peripheral-timer1-loose against the
+# (Timer1.TCCR1A, Timer1.CS10) and in grouped-peripheral-timer1-loose against the
 # module-level register names. The two must produce the SAME firmware, byte for byte,
 # and this one must configure the timer for real.
 #
@@ -21,45 +21,45 @@
 # Checkpoint 2: three overflows have been seen and cleared, counted into GPIOR0.
 # Checkpoint 3: the clock is stopped, the counter is given a value whose halves differ,
 #               and it is read back through the 16-bit name and through both byte names.
-from pymcu.chips.atmega328p import TIMER1, DDRB, GPIOR0, GPIOR1, GPIOR2
+from pymcu.chips.atmega328p import Timer1, DDRB, GPIOR0, GPIOR1, GPIOR2
 from pymcu.types import uint8, uint16, asm
 
 
 def main():
     DDRB[1] = 1                      # OC1A is PB1
 
-    TIMER1.TCNT1H.value = 0
-    TIMER1.TCNT1L.value = 0
-    TIMER1.ICR1H.value = 0x4E        # TOP = 19999
-    TIMER1.ICR1L.value = 0x1F
-    TIMER1.OCR1AH.value = 0x05       # duty of OC1A = 1500
-    TIMER1.OCR1AL.value = 0xDC
-    TIMER1.OCR1BH.value = 0x03       # duty of OC1B = 1000
-    TIMER1.OCR1BL.value = 0xE8
-    TIMER1.TCCR1A.value = (1 << TIMER1.COM1A1) | (1 << TIMER1.WGM11)
-    TIMER1.TCCR1B.value = (1 << TIMER1.WGM13) | (1 << TIMER1.WGM12) | (1 << TIMER1.CS10)
-    TIMER1.TIMSK1.value = 0          # polled, no interrupt
-    TIMER1.TIFR1[TIMER1.TOV1] = 1    # a flag is cleared by writing a ONE to it
+    Timer1.TCNT1H.value = 0
+    Timer1.TCNT1L.value = 0
+    Timer1.ICR1H.value = 0x4E        # TOP = 19999
+    Timer1.ICR1L.value = 0x1F
+    Timer1.OCR1AH.value = 0x05       # duty of OC1A = 1500
+    Timer1.OCR1AL.value = 0xDC
+    Timer1.OCR1BH.value = 0x03       # duty of OC1B = 1000
+    Timer1.OCR1BL.value = 0xE8
+    Timer1.TCCR1A.value = (1 << Timer1.COM1A1) | (1 << Timer1.WGM11)
+    Timer1.TCCR1B.value = (1 << Timer1.WGM13) | (1 << Timer1.WGM12) | (1 << Timer1.CS10)
+    Timer1.TIMSK1.value = 0          # polled, no interrupt
+    Timer1.TIFR1[Timer1.TOV1] = 1    # a flag is cleared by writing a ONE to it
     asm("BREAK")
 
     overflows: uint8 = 0
     while overflows < 3:
-        if TIMER1.TIFR1[TIMER1.TOV1]:
-            TIMER1.TIFR1[TIMER1.TOV1] = 1
+        if Timer1.TIFR1[Timer1.TOV1]:
+            Timer1.TIFR1[Timer1.TOV1] = 1
             overflows = overflows + 1
     GPIOR0.value = overflows
     asm("BREAK")
 
     # Stop the clock and seed the counter, then read it back at both widths.
-    TIMER1.TCCR1B.value = (1 << TIMER1.WGM13) | (1 << TIMER1.WGM12)
-    TIMER1.TCNT1H.value = 0x12
-    TIMER1.TCNT1L.value = 0x34
-    count: uint16 = TIMER1.TCNT1.value
+    Timer1.TCCR1B.value = (1 << Timer1.WGM13) | (1 << Timer1.WGM12)
+    Timer1.TCNT1H.value = 0x12
+    Timer1.TCNT1L.value = 0x34
+    count: uint16 = Timer1.TCNT1.value
     GPIOR0.value = 0
     if count == 0x1234:
         GPIOR0.value = 0xA5
-    GPIOR1.value = TIMER1.TCNT1L.value
-    GPIOR2.value = TIMER1.TCNT1H.value
+    GPIOR1.value = Timer1.TCNT1L.value
+    GPIOR2.value = Timer1.TCNT1H.value
     asm("BREAK")
 
     while True:

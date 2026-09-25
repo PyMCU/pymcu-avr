@@ -15,7 +15,7 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// declares the same registers as attributes of a class named after the peripheral,
 /// the way an XC8 program reaches T1CON through the Timer1 SFR block:
 ///
-///     TIMER1.TCCR1B.value = (1 &lt;&lt; TIMER1.WGM13) | (1 &lt;&lt; TIMER1.CS10)
+///     Timer1.TCCR1B.value = (1 &lt;&lt; Timer1.WGM13) | (1 &lt;&lt; Timer1.CS10)
 ///
 /// Two things are measured here and both are needed. The first is that the grouping
 /// costs nothing: the two fixtures are the same program in the two spellings and
@@ -98,7 +98,7 @@ public class GroupedPeripheralTimer1Tests
     {
         // (1 << COM1A1) | (1 << WGM11) = 0x80 | 0x02
         BootCp1().Data[TCCR1A_ADDR].Should().Be(0x82,
-            "TIMER1.TCCR1A.value took the bit positions named in the group");
+            "Timer1.TCCR1A.value took the bit positions named in the group");
     }
 
     [Test]
@@ -137,7 +137,7 @@ public class GroupedPeripheralTimer1Tests
     public void Cp2_ThreeOverflowsWereSeenAndCounted()
     {
         BootCp2().Data[GPIOR0_ADDR].Should().Be(3,
-            "the loop leaves only after TIMER1.TIFR1[TIMER1.TOV1] has been seen set three times");
+            "the loop leaves only after Timer1.TIFR1[Timer1.TOV1] has been seen set three times");
     }
 
     [Test]
@@ -165,15 +165,15 @@ public class GroupedPeripheralTimer1Tests
         // read brought back both halves. A swapped pair reads 0x3412 and a single-byte
         // read 0x0034; neither is 0x1234.
         BootCp3().Data[GPIOR0_ADDR].Should().Be(0xA5,
-            "TIMER1.TCNT1.value == 0x1234 is what the marker is written under");
+            "Timer1.TCNT1.value == 0x1234 is what the marker is written under");
     }
 
     [Test]
     public void Cp3_TheByteNamesReadTheTwoHalves()
     {
         var uno = BootCp3();
-        uno.Data[GPIOR1_ADDR].Should().Be(0x34, "TIMER1.TCNT1L.value is the low half");
-        uno.Data[GPIOR2_ADDR].Should().Be(0x12, "TIMER1.TCNT1H.value is the high half");
+        uno.Data[GPIOR1_ADDR].Should().Be(0x34, "Timer1.TCNT1L.value is the low half");
+        uno.Data[GPIOR2_ADDR].Should().Be(0x12, "Timer1.TCNT1H.value is the high half");
     }
 
     // --- The bar: grouping costs nothing ---
