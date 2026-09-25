@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:750
+# doc: docs/language/limitations.md:755
 def clamp(n: int) -> int:
     return abs(n)
 print(clamp(-7))

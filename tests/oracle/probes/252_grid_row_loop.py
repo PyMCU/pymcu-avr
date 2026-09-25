@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:674
+# doc: docs/language/limitations.md:679
 g = [[0] * 4 for _ in range(3)]
 n = 0
 for row in g:
