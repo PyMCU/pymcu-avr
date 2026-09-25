@@ -87,7 +87,30 @@ public static class DifferentialCorpus
     /// one of them stops diverging, so the entry gets deleted along with the fix.
     /// </summary>
     /// <remarks>
-    /// Empty, and worth keeping empty. The two entries that lived here (print-integers and
+    /// <para>
+    /// <b>It stopped being empty on 2026-09-25, and what it costs to add the next one is
+    /// written here on purpose.</b> A list of exceptions is a strong barrier while it is
+    /// empty and a weak one once it has entries, because the second costs half of what the
+    /// first did and the third costs nothing: there is precedent. So the bar is stated
+    /// rather than left to judgement.
+    /// </para>
+    /// <para>
+    /// <b>An entry needs two things, and neither is negotiable.</b> First, it has to be
+    /// MEASURED which of the two builds is the correct one, against a THIRD witness outside
+    /// this repository -- the real interpreter, CPython, a datasheet, silicon. Two builds
+    /// that disagree is not a finding, it is two builds that disagree; without a third
+    /// reading there is no way to say which one to accuse, and the entry would be recording
+    /// confusion rather than a defect. Second, it carries the ISSUE NUMBER of the defect
+    /// that causes it. Without both, it does not go in, and the program's divergence is a
+    /// failing test until somebody does the work.
+    /// </para>
+    /// <para>
+    /// The entry below meets both: the optimized build's output is byte-identical to what
+    /// MicroPython's own builtin framebuf prints for that program, so the unoptimized build
+    /// is the one that is wrong, and it points at PyMCU/PyMCU#510.
+    /// </para>
+    /// <para>
+    /// The two entries that lived here before (print-integers and
     /// literal-width-module, "prints 210/12/64" and "prints 44/251/112") were one bug with two
     /// sets of numbers, and it was not in this repository: a module-level global read through
     /// an @inline expansion carried UINT8 in the IR while its write carried the widened type,
@@ -96,6 +119,7 @@ public static class DifferentialCorpus
     /// PyMCU#183's "optimized folds the constructor's value" was the field-layout path
     /// leaving the held instance's fields out of storage, and main's class-typed field
     /// layout records them, so both builds emit the write.
+    /// </para>
     /// </remarks>
     public static readonly IReadOnlyDictionary<string, string> KnownDivergences =
         new Dictionary<string, string>
