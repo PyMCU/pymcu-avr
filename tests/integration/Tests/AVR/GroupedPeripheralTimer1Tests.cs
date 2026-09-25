@@ -28,8 +28,17 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 ///
 /// Checkpoint 1: configured, nothing counted yet.
 /// Checkpoint 2: three overflows seen and cleared, counted into GPIOR0.
-/// Checkpoint 3: clock stopped, counter copied through the 16-bit name into OCR1B
-///               and its low byte into GPIOR0 through the byte name.
+/// Checkpoint 3: clock stopped, the counter given 0x1234 and read back through the
+///               16-bit name and through both byte names. The value is written rather
+///               than sampled because the counter a free run leaves behind depends on
+///               how many cycles the build took, which is exactly what the optimizer
+///               and peephole differential axes vary.
+///
+/// Every 16-bit register is WRITTEN through its byte names, high half first, because the
+/// AVR commits such a register when the low byte is written and takes the high half from
+/// a temporary register shared by the whole timer. That is what the HAL does and what the
+/// fixture does, so the timer really runs at the period asserted below. Reading is the
+/// other order and the 16-bit name is correct for it, which checkpoint 3 exercises.
 ///
 /// Data-space addresses (ATmega328P): TIFR1 0x36, TIMSK1 0x6F, TCCR1A 0x80,
 /// TCCR1B 0x81, TCNT1 0x84, ICR1 0x86, OCR1A 0x88, OCR1B 0x8A, GPIOR0 0x3E, DDRB 0x24.
@@ -42,6 +51,8 @@ public class GroupedPeripheralTimer1Tests
     private const int DDRB_ADDR   = 0x24;
     private const int TIFR1_ADDR  = 0x36;
     private const int GPIOR0_ADDR = 0x3E;
+    private const int GPIOR1_ADDR = 0x4A;
+    private const int GPIOR2_ADDR = 0x4B;
     private const int TIMSK1_ADDR = 0x6F;
     private const int TCCR1A_ADDR = 0x80;
     private const int TCCR1B_ADDR = 0x81;
@@ -102,9 +113,9 @@ public class GroupedPeripheralTimer1Tests
     public void Cp1_SixteenBitRegisters_HoldTheirWholeValues()
     {
         var uno = BootCp1();
-        uno.Memory.Should().HaveWordAt(ICR1_ADDR, 19999, "TOP written through the 16-bit name");
-        uno.Memory.Should().HaveWordAt(OCR1A_ADDR, 1500, "OC1A duty written through the 16-bit name");
-        uno.Memory.Should().HaveWordAt(OCR1B_ADDR, 1000, "OC1B duty written through the 16-bit name");
+        uno.Memory.Should().HaveWordAt(ICR1_ADDR, 19999, "TOP, high half written first");
+        uno.Memory.Should().HaveWordAt(OCR1A_ADDR, 1500, "OC1A duty, high half written first");
+        uno.Memory.Should().HaveWordAt(OCR1B_ADDR, 1000, "OC1B duty, high half written first");
     }
 
     [Test]
@@ -148,21 +159,21 @@ public class GroupedPeripheralTimer1Tests
     }
 
     [Test]
-    public void Cp3_TheSixteenBitReadBackCopiedTheWholeCounter()
+    public void Cp3_TheSixteenBitReadReturnedTheWholeCounter()
     {
-        var uno = BootCp3();
-        int counter = uno.Data[TCNT1_ADDR] | (uno.Data[TCNT1_ADDR + 1] << 8);
-        counter.Should().BeInRange(1, 19999, "the counter ran and is below TOP");
-        uno.Memory.Should().HaveWordAt(OCR1B_ADDR, (ushort)counter,
-            "OCR1B took the counter through TIMER1.TCNT1.value, both halves");
+        // The comparison runs on the chip, so the marker only appears when the 16-bit
+        // read brought back both halves. A swapped pair reads 0x3412 and a single-byte
+        // read 0x0034; neither is 0x1234.
+        BootCp3().Data[GPIOR0_ADDR].Should().Be(0xA5,
+            "TIMER1.TCNT1.value == 0x1234 is what the marker is written under");
     }
 
     [Test]
-    public void Cp3_TheByteNameReadTheLowHalf()
+    public void Cp3_TheByteNamesReadTheTwoHalves()
     {
         var uno = BootCp3();
-        uno.Data[GPIOR0_ADDR].Should().Be(uno.Data[TCNT1_ADDR],
-            "TIMER1.TCNT1L.value is the low byte of the same register");
+        uno.Data[GPIOR1_ADDR].Should().Be(0x34, "TIMER1.TCNT1L.value is the low half");
+        uno.Data[GPIOR2_ADDR].Should().Be(0x12, "TIMER1.TCNT1H.value is the high half");
     }
 
     // --- The bar: grouping costs nothing ---

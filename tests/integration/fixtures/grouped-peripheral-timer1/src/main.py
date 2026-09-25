@@ -9,21 +9,33 @@
 # output on OC1A (PB1), prescaler 1. At 16 MHz an ICR1 of 19999 makes one period
 # 20000 cycles = 1.25 ms.
 #
+# Every 16-bit register of Timer1 is WRITTEN through its byte names, high half first.
+# The AVR commits such a register when the LOW byte is written and takes the high half
+# from a temporary register shared by the whole timer, so the high byte has to be put
+# there first. This is what the HAL does (lib/src/pymcu/hal/avr/pwm/atmega328p.py) and
+# what the fixture does, so the timer really runs at the period the test claims.
+# READING is the other order and the 16-bit name is correct for it, which checkpoint 3
+# exercises.
+#
 # Checkpoint 1: the timer is configured and nothing has counted yet.
 # Checkpoint 2: three overflows have been seen and cleared, counted into GPIOR0.
-# Checkpoint 3: the clock is stopped and the counter is copied, through the 16-bit
-#               name, into OCR1B; its low byte goes to GPIOR0 through the byte name.
-from pymcu.chips.atmega328p import TIMER1, DDRB, GPIOR0
+# Checkpoint 3: the clock is stopped, the counter is given a value whose halves differ,
+#               and it is read back through the 16-bit name and through both byte names.
+from pymcu.chips.atmega328p import TIMER1, DDRB, GPIOR0, GPIOR1, GPIOR2
 from pymcu.types import uint8, uint16, asm
 
 
 def main():
     DDRB[1] = 1                      # OC1A is PB1
 
-    TIMER1.TCNT1.value = 0
-    TIMER1.ICR1.value = 19999        # TOP
-    TIMER1.OCR1A.value = 1500        # duty of OC1A
-    TIMER1.OCR1B.value = 1000        # duty of OC1B
+    TIMER1.TCNT1H.value = 0
+    TIMER1.TCNT1L.value = 0
+    TIMER1.ICR1H.value = 0x4E        # TOP = 19999
+    TIMER1.ICR1L.value = 0x1F
+    TIMER1.OCR1AH.value = 0x05       # duty of OC1A = 1500
+    TIMER1.OCR1AL.value = 0xDC
+    TIMER1.OCR1BH.value = 0x03       # duty of OC1B = 1000
+    TIMER1.OCR1BL.value = 0xE8
     TIMER1.TCCR1A.value = (1 << TIMER1.COM1A1) | (1 << TIMER1.WGM11)
     TIMER1.TCCR1B.value = (1 << TIMER1.WGM13) | (1 << TIMER1.WGM12) | (1 << TIMER1.CS10)
     TIMER1.TIMSK1.value = 0          # polled, no interrupt
@@ -38,11 +50,16 @@ def main():
     GPIOR0.value = overflows
     asm("BREAK")
 
-    # Stop the clock so the counter holds still, then read it back at both widths.
+    # Stop the clock and seed the counter, then read it back at both widths.
     TIMER1.TCCR1B.value = (1 << TIMER1.WGM13) | (1 << TIMER1.WGM12)
+    TIMER1.TCNT1H.value = 0x12
+    TIMER1.TCNT1L.value = 0x34
     count: uint16 = TIMER1.TCNT1.value
-    TIMER1.OCR1B.value = count
-    GPIOR0.value = TIMER1.TCNT1L.value
+    GPIOR0.value = 0
+    if count == 0x1234:
+        GPIOR0.value = 0xA5
+    GPIOR1.value = TIMER1.TCNT1L.value
+    GPIOR2.value = TIMER1.TCNT1H.value
     asm("BREAK")
 
     while True:
