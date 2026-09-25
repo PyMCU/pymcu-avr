@@ -27,24 +27,19 @@ from pymcu.hal.console import print
 from pymcu.types import uint16
 
 # Constant store: split into byte halves by the IR generator.
-# The read-back goes through a uint16 local because `print(TCNT1.value)` reads only the
-# low byte today (PyMCU#493), which would hide the high half this fixture is about.
 TCNT1.value = 0x1234
-a: uint16 = TCNT1.value
-print(a)
+print(TCNT1.value)
 
 # A second constant store, to a different pair, right after the first: the value that
 # leaks through a stale TEMP is the previous pair's high byte, so ordering the halves
 # wrong here cannot be hidden by a TEMP that happens to hold zero.
 OCR1A.value = 0x5678
-b: uint16 = OCR1A.value
-print(b)
+print(OCR1A.value)
 
 # Runtime store: one 16-bit copy that the AVR backend orders. GPIOR0 reads 0 out of
 # reset, so the value is 0x1234 with the compiler unable to fold it.
 v: uint16 = uint16(GPIOR0.value) + 0x1234
 ICR1.value = v
-c: uint16 = ICR1.value
-print(c)
+print(ICR1.value)
 
 print("done")
