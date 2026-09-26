@@ -194,8 +194,9 @@ public class CompatCpNeopixelWriteTests
     [Test]
     public void AOneBitIsPinnedAtWhatItMeasures()
     {
-        // T1H is in window; T1L is 812 ns where the datasheet says 450, so the period is
-        // 25 cycles against a nominal 20. What is left is three codegen shapes in the
+        // T1H is in window; T1L runs well past the datasheet's 450 ns, so the period is
+        // 26 cycles against a nominal 20 (25 while the emulator charged CBI one cycle,
+        // avr8sharp#18). What is left is three codegen shapes in the
         // loop's tail, not this emitter's to spend -- PyMCU#355. Pinned at the measurement
         // so that fix shows up here as a test to update rather than passing unnoticed.
         var (highs, _, periods) = Pulses();
@@ -203,7 +204,7 @@ public class CompatCpNeopixelWriteTests
         for (var i = 8; i < 15; i++)
         {
             (highs[i] * NsPerCycle).Should().BeInRange(650, 950, "T1H is 800 ns");
-            periods[i].Should().Be(25, "as measured; nominal is 20");
+            periods[i].Should().Be(26, "as measured; nominal is 20");
         }
     }
 

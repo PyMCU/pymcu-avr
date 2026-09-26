@@ -15,9 +15,9 @@
        Avr8Sharp.TestKit 1.1.0-beta1, which predates ProfilingDecoder and
        RunCyclesProfiled and does not compile it. TestKit.Core 1.1.0-beta8 is
        the first split package with the profiled run loop; Avr8Sharp
-       1.1.0-beta9 is the newest core it can sit on. -->
+       1.1.0-beta10 is the newest core it can sit on. -->
   <ItemGroup>
-    <PackageReference Include="Avr8Sharp" Version="1.1.0-beta9" />
-    <PackageReference Include="Avr8Sharp.TestKit.Core" Version="1.1.0-beta8" />
+    <PackageReference Include="Avr8Sharp" Version="1.1.0-beta10" />
+    <PackageReference Include="Avr8Sharp.TestKit.Core" Version="1.1.0-beta10" />
   </ItemGroup>
 </Project>

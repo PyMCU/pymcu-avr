@@ -12,7 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avr8Sharp.TestKit" Version="1.1.0-beta1" />
+    <PackageReference Include="Avr8Sharp.TestKit" Version="1.1.0-beta10" />
     <PackageReference Include="System.CommandLine" Version="2.0.6" />
   </ItemGroup>
 

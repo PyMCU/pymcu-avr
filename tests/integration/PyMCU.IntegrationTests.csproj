@@ -11,7 +11,7 @@
 
     <ItemGroup>
         <!-- Avr8Sharp.TestKit is published on nuget.org -->
-        <PackageReference Include="Avr8Sharp.TestKit" Version="1.1.0-beta1" />
+        <PackageReference Include="Avr8Sharp.TestKit" Version="1.1.0-beta10" />
     </ItemGroup>
 
     <ItemGroup>

@@ -55,7 +55,9 @@ public class GpioOverheadTests
     {
         var (delta, _) = MeasureBreakPair(Boot(), skipPairs: 1);
         TestContext.WriteLine($"Pin.low()  → {delta} cycles ({delta * 62.5:F0} ns at 16 MHz)");
-        delta.Should().Be(2, "Pin.low() must compile to a single CBI instruction (2 cycles)");
+        // delta = 1 (BREAK B3 executed before capture) + 2 (CBI) = 3, the same shape as
+        // Pin.high(). It read 2 while the emulator charged CBI one cycle (avr8sharp#18).
+        delta.Should().Be(3, "Pin.low() must compile to a single CBI instruction (2 cycles); 1 cycle BREAK overhead is included");
     }
 
     // ── delay_ms(1) ───────────────────────────────────────────────────────────

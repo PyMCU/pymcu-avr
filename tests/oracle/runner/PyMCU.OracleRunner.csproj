@@ -6,6 +6,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Avr8Sharp.TestKit" Version="1.1.0-beta1" />
+    <PackageReference Include="Avr8Sharp.TestKit" Version="1.1.0-beta10" />
   </ItemGroup>
 </Project>
