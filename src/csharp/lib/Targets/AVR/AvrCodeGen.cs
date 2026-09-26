@@ -247,6 +247,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // spent about 120 bytes of its 510 on that shuffle alone (pymcu-avr#24).
     private bool TryLoadFloatIntoArg1(Val val)
     {
+        val = IntegerLiteralAsFloat(val);
         if (val is FloatConstant fc)
         {
             uint bits = BitConverter.SingleToUInt32Bits((float)fc.Value);
@@ -305,9 +306,18 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         return true;
     }
 
+    // An integer literal where a float is wanted is that float, known now. Converted at run
+    // time it went through the integer path below, which types a Constant by the NARROWEST
+    // width it asks GetValType for: -2 was loaded as the unsigned byte 254, so
+    // `f: float = -2` stored 254.0, `v * -2` multiplied by 254 and `v > -4` compared with
+    // 252 -- and a literal that did fit paid a __floatsisf call for a value it already had.
+    private static Val IntegerLiteralAsFloat(Val val) =>
+        val is Constant { Text: null } ic ? new FloatConstant(ic.Value) : val;
+
     // Load a FLOAT value into R22(B0/LSB):R23(B1):R24(B2):R25(B3/MSB).
     private void LoadFloatIntoRegs(Val val)
     {
+        val = IntegerLiteralAsFloat(val);
         if (val is FloatConstant fc)
         {
             uint bits = BitConverter.SingleToUInt32Bits((float)fc.Value);
