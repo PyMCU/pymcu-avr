@@ -6,8 +6,9 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 
 /// <summary>
 /// A temporary homed in R16:R17 whose live range crosses an `asm()` that writes the pair:
-/// an inlined helper whose asm names R16/R17, and a loop body with such an asm under a
-/// `range()` bound. The seed arrives
+/// an inlined helper whose asm names R16/R17, a loop body with such an asm under a
+/// `range()` bound, and a temp passed as an asm %N operand (the operands are staged through
+/// R16..R19). The seed arrives
 /// over UART so nothing constant-folds; the expected lines are CPython's for s = 5, with the
 /// asm's own effect accounted for where it has one.
 /// </summary>
@@ -69,5 +70,20 @@ public class AsmClobbersTempPairTests
             "print(GPIOR1.value)\n" +
             "while True:\n    pass\n", 1)
             .Should().Equal("8");
+    }
+
+    // %0 was staged into R16 before the %1 temp, homed in R16, was copied out of it.
+    [Test]
+    public void AsmOperandTemp_ReadBeforeTheStagingOverwritesIt()
+    {
+        Run(Head +
+            "def f(v: uint8) -> uint8:\n" +
+            "    x: uint8 = v + 7\n" +
+            "    asm(\"add %0, %1\", x, v + 5)\n" +
+            "    return x\n\n" +
+            Seed +
+            "print(f(s))\n" +
+            "while True:\n    pass\n", 1)
+            .Should().Equal("22");
     }
 }

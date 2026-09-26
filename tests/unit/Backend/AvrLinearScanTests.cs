@@ -255,6 +255,20 @@ public class AvrLinearScanTests
         Assert.False(result.ContainsKey("t1"), "asm() stages its %N operands through R16..R19");
     }
 
+    [Fact]
+    public void Temporary_UsedAsAsmOperand_NotAllocated()
+    {
+        // `asm("add %0, %1", x, s + 5)`: %0 is loaded into R16 before %1 is read, so a %1 temp
+        // homed in R16 would be read after it was overwritten.
+        var t1 = new Temporary("t1");
+        var result = Allocate(
+            new Binary(BinaryOp.Add, new Variable("s"), new Constant(5), t1),        // 0
+            new InlineAsm("add %0, %1", new List<Val> { new Variable("x"), t1 }),    // 1
+            new Return(new NoneVal()));
+
+        Assert.False(result.ContainsKey("t1"));
+    }
+
     [Theory]
     [InlineData("nop")]
     [InlineData("sei")]
