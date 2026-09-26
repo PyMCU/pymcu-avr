@@ -244,6 +244,47 @@ public class AvrPeepholeTests
         Assert.Contains(result, l => l.Mnemonic == "RJMP" && l.Op1 == "main");
     }
 
+    // ─── Park/unpark round trip across a runtime call ───────────────────────
+
+    [Fact]
+    public void ParkReadAgainAfterCall_ParkKept()
+    {
+        // `(s + 3) ** 3`: the base is parked in R16:R17 and read by both multiplies. The call
+        // MAY clobber R16 but is not a redefinition, so the park stays live past it. Treating
+        // the CALL as the kill rewrote the park into `MOV R18,R24` and the second multiply read
+        // whatever R16 held (2295 instead of 27).
+        var result = Opt(
+            AvrAsmLine.MakeInstruction("MOV", "R16", "R24"),
+            AvrAsmLine.MakeInstruction("MOV", "R17", "R25"),
+            AvrAsmLine.MakeInstruction("MOV", "R18", "R16"),
+            AvrAsmLine.MakeInstruction("MOV", "R19", "R17"),
+            AvrAsmLine.MakeInstruction("CALL", "__mul32"),
+            AvrAsmLine.MakeInstruction("MOV", "R18", "R16"),
+            AvrAsmLine.MakeInstruction("MOV", "R19", "R17"),
+            AvrAsmLine.MakeInstruction("CALL", "__mul32"),
+            AvrAsmLine.MakeInstruction("RET"));
+
+        Assert.Contains(result, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R24");
+        Assert.Contains(result, l => l.Mnemonic == "MOV" && l.Op1 == "R17" && l.Op2 == "R25");
+    }
+
+    [Fact]
+    public void ParkRedefinedAfterCall_RoundTripCollapsed()
+    {
+        // Past the call the park is overwritten before any read, so it is dead and the
+        // round trip still collapses into a direct move.
+        var result = Opt(
+            AvrAsmLine.MakeInstruction("MOV", "R16", "R24"),
+            AvrAsmLine.MakeInstruction("MOV", "R18", "R16"),
+            AvrAsmLine.MakeInstruction("CALL", "__mul32"),
+            AvrAsmLine.MakeInstruction("LDI", "R16", "5"),
+            AvrAsmLine.MakeInstruction("STS", "0x0100", "R16"),
+            AvrAsmLine.MakeInstruction("RET"));
+
+        Assert.Contains(result, l => l.Mnemonic == "MOV" && l.Op1 == "R18" && l.Op2 == "R24");
+        Assert.DoesNotContain(result, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R24");
+    }
+
     // ─── 3-window: MOV Ra, Rb ; OP Ra ; MOV Rb, Ra → OP Rb ; MOV Ra, Rb ─────
 
     [Fact]
