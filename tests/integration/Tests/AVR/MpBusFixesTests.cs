@@ -106,6 +106,26 @@ public class MpBusFixesTests
             "enable_irq(s2) restores 'off' while the outer section is open (PyMCU#353)");
     }
 
+    /// <summary>
+    /// The same nesting through `from machine import disable_irq, enable_irq`. A compiler
+    /// fault takes the result of an @inline function imported with `from` for an instance,
+    /// so the restore's `state != 0` folds to true and the inner enable_irq(s2) re-enables.
+    /// Fixed on PyMCU's branch fix/bytes-literal-and-from-import-print, not merged yet. This
+    /// pins TODAY's wrong output so it fails when that fix lands: then assert
+    /// "1\n0\n0\n0\n1\nEND\n", as the machine.-spelled test above does.
+    /// </summary>
+    [TestCase(false)]
+    [TestCase(true)]
+    public void Irq_NestedSections_FromImport_KnownCompilerFault(bool pyParser)
+    {
+        var uno = new ArduinoUnoSimulation();
+        uno.WithHex(Build("mp-irq-nesting-from-import", pyParser));
+        RunToEnd(uno).Should().Be("1\n0\n0\n1\n1\nEND\n",
+            "KNOWN COMPILER FAULT (from-import of an @inline taken for an instance, "
+            + "PyMCU fix/bytes-literal-and-from-import-print): if this now reads 1 0 0 0 1 "
+            + "the fix has landed, and this test must be changed to expect it");
+    }
+
     // ── ADC ──────────────────────────────────────────────────────────────────
 
     [TestCase(false)]
