@@ -1,7 +1,10 @@
 # machine.UART.readline() and readinto() integration test fixture
 #
 # readline(buf, max_len) -- reads until '\n'; caller provides buffer (PyMCU deviation)
-# readinto(buf)          -- fills len(buf) bytes (matches MicroPython)
+# readinto(buf)          -- reads at most len(buf) bytes, waiting `timeout` ms for the first
+#                           and `timeout_char` ms between them (matches MicroPython; it used
+#                           to block until the buffer was full, which a board at the default
+#                           timeout of 0 does not do, so the UART is built with timeouts)
 #
 # Protocol (command-driven loop):
 #   Boot: "READY\n"
@@ -13,7 +16,7 @@ from pymcu.types import uint8
 
 
 def main():
-    uart = UART(0, 9600)
+    uart = UART(0, 9600, timeout=100, timeout_char=10)
     uart.write("READY\n")
 
     line_buf: uint8[16] = bytearray(16)

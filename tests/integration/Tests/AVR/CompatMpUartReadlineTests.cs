@@ -14,9 +14,8 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 ///   - MicroPython: readline() -> bytes object (heap allocated)
 ///   - PyMCU:       readline(buf, max_len) -> uint8 count; caller owns buffer
 ///
-/// readinto(buf, nbytes) deviation:
-///   - MicroPython: readinto(buf) fills up to len(buf) bytes
-///   - PyMCU:       readinto(buf, nbytes) reads exactly nbytes (explicit count)
+/// readinto(buf) matches MicroPython: it reads at most len(buf) bytes, waiting the
+/// UART's timeout (100 ms here) for the first and timeout_char (10 ms) between the rest.
 /// </summary>
 [TestFixture]
 public class CompatMpUartReadlineTests
