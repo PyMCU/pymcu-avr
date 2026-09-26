@@ -1,5 +1,5 @@
 # expect: refuse :7:11: error: SyntaxError: Expected '(' after function name
-# doc: docs/language/type-system.md
+# doc: https://github.com/PyMCU/PyMCU/issues/521
 # frontend: default
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8

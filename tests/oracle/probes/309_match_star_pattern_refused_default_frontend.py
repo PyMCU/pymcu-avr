@@ -1,5 +1,5 @@
 # expect: refuse :10:17: error: SyntaxError: Expected expression
-# doc: docs/language/roadmap.md:22
+# doc: https://github.com/PyMCU/PyMCU/issues/524
 # frontend: default
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8

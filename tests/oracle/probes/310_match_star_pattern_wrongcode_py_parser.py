@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:22
+# doc: https://github.com/PyMCU/PyMCU/issues/401
 # frontend: py-parser
 # tracked: #401
 from pymcu.chips.atmega328p import GPIOR0

@@ -1,5 +1,5 @@
 # expect: refuse :10:10: error: SyntaxError: match pattern MatchMapping
-# doc: docs/language/roadmap.md:22
+# doc: https://github.com/PyMCU/PyMCU/issues/523
 # frontend: py-parser
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8

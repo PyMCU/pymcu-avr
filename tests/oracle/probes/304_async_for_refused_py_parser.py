@@ -1,5 +1,5 @@
 # expect: refuse :15:5: error: SyntaxError: AsyncFor is not supported
-# doc: docs/language/limitations.md:902
+# doc: https://github.com/PyMCU/PyMCU/issues/524
 # frontend: py-parser
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8

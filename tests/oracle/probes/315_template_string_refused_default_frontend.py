@@ -1,5 +1,5 @@
 # expect: refuse :9:10: error: SyntaxError: Expected newline or end of block
-# doc: docs/language/roadmap.md:65
+# doc: https://github.com/PyMCU/PyMCU/issues/524
 # frontend: default
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8

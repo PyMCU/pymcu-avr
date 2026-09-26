@@ -1,5 +1,5 @@
 # expect: refuse 'async with' is not supported: it suspends, and the coroutine-to-state-machine lowering is not implemented yet
-# doc: docs/language/limitations.md:902
+# doc: https://github.com/PyMCU/PyMCU/issues/524
 # frontend: default
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8

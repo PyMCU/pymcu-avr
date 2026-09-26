@@ -1,5 +1,5 @@
 # expect: refuse :7:1: error: SyntaxError: TypeAlias is not supported
-# doc: docs/language/type-system.md
+# doc: https://github.com/PyMCU/PyMCU/issues/524
 # frontend: py-parser
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8

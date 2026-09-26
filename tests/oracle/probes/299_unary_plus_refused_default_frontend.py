@@ -1,5 +1,5 @@
 # expect: refuse unary '+' is not supported; it has no effect on a number, so write the operand on its own
-# doc: docs/language/roadmap.md:16
+# doc: https://github.com/PyMCU/PyMCU/issues/524
 # frontend: default
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8
