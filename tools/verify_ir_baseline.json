@@ -436,7 +436,7 @@
    "rc": 0,
    "violations": []
   },
-  "106_yield_in_method_refused": {
+  "106_generator_method_unbound_receiver_refused": {
    "rc": 1,
    "violations": []
   },

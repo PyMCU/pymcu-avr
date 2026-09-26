@@ -1,5 +1,5 @@
-# expect: refuse yield
-# doc: LANGUAGE_ROADMAP.md:375
+# expect: refuse cannot tell which class
+# doc: docs/language/roadmap.md:115
 class Gen:
     def values(self):
         yield 1
