@@ -38,6 +38,23 @@ Environment overrides:
 - `PYMCU_ORACLE_RUNNER` -- path to a prebuilt `PyMCU.OracleRunner.dll`
   (default: builds `tests/oracle/runner` into `build/oracle/` itself).
 
+The runner takes flags after the time budget, all optional:
+
+- `--timed` -- run the whole budget instead of stopping at `END`.
+- `--dump=start:len` -- hex-dump SRAM to stderr at exit.
+- `--wire=PDa:PDb` -- a jumper between two port-D pins.
+- `--adc=ch:volts` -- attach the ADC (every channel at 0 V) and set one channel;
+  repeatable.
+- `--spi` -- attach SPI; each byte shifted out is logged and answered with its
+  complement.
+- `--twi[=AA]` -- attach TWI with one device at hex address `AA` (default `3C`) that
+  ACKs its address and every byte, answers reads with `0x10, 0x11, ...`, and logs every
+  bus event (a repeated START apart from a START).
+
+SPI and TWI traffic goes to stderr, one event per line. With no flag the simulation is
+the bare Uno every language probe has always run on, so a probe cannot depend on a
+peripheral it did not ask for.
+
 Every probe is meant to run -- and stay green -- under both front ends.
 `# tracked: #<N>` probes are known, filed compiler bugs and report as
 `xfail(strict)`: a fix turns them into a hard XPASS failure until the

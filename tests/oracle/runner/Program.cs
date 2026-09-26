@@ -1,7 +1,37 @@
 using System.Globalization;
+using AVR8Sharp.Core.Peripherals;
 using Avr8Sharp.TestKit.Boards;
 
 var sim = new ArduinoUnoSimulation();
+// The bus peripherals are attached only when a flag asks for them, so a program run
+// without one sees the same simulation the language probes always had.
+//   --adc=ch:volts   attach the ADC (every channel at 0 V) and set one channel; repeatable
+//   --spi            attach SPI; each byte shifted out is logged and answered with its complement
+//   --twi[=AA]       attach TWI with one device at hex address AA (default 3C). It ACKs its
+//                    address and every byte written, answers reads with 0x10, 0x11, ...,
+//                    and logs every bus event, repeated STARTs apart from STARTs
+// SPI and TWI traffic goes to stderr, one event per line.
+var busLog = new System.Text.StringBuilder();
+AvrAdc? adc = null;
+foreach (var a in args.Skip(1))
+{
+    if (a.StartsWith("--adc=", StringComparison.Ordinal) && adc is null)
+    {
+        sim.AddAdc(AvrAdc.AdcConfig, out adc);
+        for (var i = 0; i < adc.ChannelValues.Length; i++) adc.ChannelValues[i] = 0;
+    }
+    else if (a == "--spi")
+    {
+        sim.AddSpi(AvrSpi.SpiConfig, out var spi);
+        spi.OnTransfer = b => { busLog.Append($"SPI {b:X2}\n"); return (byte)(b ^ 0xFF); };
+    }
+    else if (a == "--twi" || a.StartsWith("--twi=", StringComparison.Ordinal))
+    {
+        var address = a == "--twi" ? (byte)0x3C : Convert.ToByte(a["--twi=".Length..], 16);
+        sim.AddTwi(AvrTwi.TwiConfig, out var twi);
+        twi.EventHandler = new LoggingTwiDevice(twi, address, busLog);
+    }
+}
 sim.WithHex(Console.In.ReadToEnd());
 var maxMs = double.Parse(args[0], CultureInfo.InvariantCulture);
 var timed = false;
@@ -9,6 +39,13 @@ var dumpStart = -1;
 var dumpLen = 0;
 foreach (var a in args.Skip(1))
 {
+    if (a.StartsWith("--adc=", StringComparison.Ordinal))
+    {
+        var ap = a["--adc=".Length..].Split(':');
+        adc!.ChannelValues[int.Parse(ap[0], CultureInfo.InvariantCulture)] =
+            double.Parse(ap[1], CultureInfo.InvariantCulture);
+        continue;
+    }
     if (a == "--timed")
     {
         timed = true;
@@ -58,6 +95,7 @@ finally
     // A crashed simulation still shows what the program printed before it died --
     // without this the partial output vanished with the exception.
     Console.Write(sim.Serial.Text.Replace("\r\n", "\n"));
+    Console.Error.Write(busLog.ToString());
     if (dumpStart >= 0)
     {
         var sb = new System.Text.StringBuilder();
@@ -69,5 +107,41 @@ finally
             sb.Append('\n');
         }
         Console.Error.Write(sb.ToString());
+    }
+}
+
+/// <summary>One I2C device at a fixed address that logs the bus as it sees it.</summary>
+sealed class LoggingTwiDevice(AvrTwi twi, byte address, System.Text.StringBuilder log) : ITwiEventHandler
+{
+    private byte _next = 0x10;
+
+    public void Start(bool repeated)
+    {
+        log.Append(repeated ? "TWI RSTART\n" : "TWI START\n");
+        twi.CompleteStart();
+    }
+
+    public void Stop()
+    {
+        log.Append("TWI STOP\n");
+        twi.CompleteStop();
+    }
+
+    public void ConnectToSlave(byte addr, bool write)
+    {
+        log.Append($"TWI ADDR {addr:X2} {(write ? "W" : "R")}\n");
+        twi.CompleteConnect(addr == address);
+    }
+
+    public void WriteByte(byte data)
+    {
+        log.Append($"TWI W {data:X2}\n");
+        twi.CompleteWrite(true);
+    }
+
+    public void ReadByte(bool ack)
+    {
+        log.Append($"TWI R {_next:X2} {(ack ? "ACK" : "NACK")}\n");
+        twi.CompleteRead(_next++);
     }
 }
