@@ -78,7 +78,7 @@ public class CompatCpNeopixelWriteTests
             uno.RunInstructions(1);
             var level = (uno.Data[PortdAddr] >> DataBit) & 1;
             if (level == previous) continue;
-            edges.Add(uno.Cpu.Cycles - start);
+            edges.Add((long)(uno.Cpu.Cycles - start));
             previous = level;
         }
 
