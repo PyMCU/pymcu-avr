@@ -29,6 +29,46 @@ public static class AvrLinearScan
         public bool SpansCall;
     }
 
+    // Instructions with no IR Call whose lowering still writes R16/R17. The 32-bit integer
+    // division and modulo go through __div32/__mod32/__divs32/__mods32, which use R16 as
+    // their loop counter without saving it (PyMCU/PyMCU#408 moved their scratch into the
+    // caller-saved set), and the GC shadow-stack push/pop stage the depth in R16:R17. A temp
+    // homed in the pair across one of them came back as the counter's last value:
+    // `(s + 300) + 100000 // (s + 7)` printed 14541 instead of 14585. The 8/16-bit
+    // divisions, __mul32 and the float routines leave R16:R17 intact, so they stay out.
+    // Over-approximates the width test of AvrCodeGen.CompileBinary (it widens to Src1, this
+    // looks at every operand), which can only spill a temp that did not need it.
+    private static bool ClobbersTempPair(Instruction instr)
+    {
+        static bool Wide(Val v) => v switch
+        {
+            Temporary t => t.Type.SizeOf() == 4 && t.Type != DataType.FLOAT,
+            Variable vv => vv.Type.SizeOf() == 4 && vv.Type != DataType.FLOAT,
+            MemoryAddress m => m.Type.SizeOf() == 4 && m.Type != DataType.FLOAT,
+            Constant c => c.Value is > 65535 or < -32768,
+            _ => false,
+        };
+        static bool IsFloat(Val v) => v switch
+        {
+            Temporary t => t.Type == DataType.FLOAT,
+            Variable vv => vv.Type == DataType.FLOAT,
+            MemoryAddress m => m.Type == DataType.FLOAT,
+            FloatConstant => true,
+            _ => false,
+        };
+        static bool IsDivMod(BinaryOp op) => op is BinaryOp.Div or BinaryOp.FloorDiv or BinaryOp.Mod;
+
+        return instr switch
+        {
+            Binary b => IsDivMod(b.Op)
+                        && !IsFloat(b.Src1) && !IsFloat(b.Src2) && !IsFloat(b.Dst)
+                        && (Wide(b.Src1) || Wide(b.Src2) || Wide(b.Dst)),
+            AugAssign aa => IsDivMod(aa.Op) && Wide(aa.Target),
+            GcRoot or GcUnroot => true,
+            _ => false,
+        };
+    }
+
     public static Dictionary<string, string> Allocate(Function func)
     {
         var intervals = new Dictionary<string, LiveInterval>();
@@ -55,7 +95,7 @@ public static class AvrLinearScan
             // IndirectCall and GcAlloc transfer control to a callee/allocator and clobber the
             // caller-saved scratch the same way a direct Call does, so a temp whose live range
             // spans them must be spilled rather than kept in R16/R17.
-            if (instr is Call or IndirectCall or GcAlloc) callIndices.Add(i);
+            if (instr is Call or IndirectCall or GcAlloc || ClobbersTempPair(instr)) callIndices.Add(i);
 
             switch (instr)
             {
