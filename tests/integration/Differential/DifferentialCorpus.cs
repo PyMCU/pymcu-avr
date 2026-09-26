@@ -229,10 +229,14 @@ public static class DifferentialCorpus
                 "exists; the fixture pins the refusal as XBUILD-FAIL in the surfacecov " +
                 "sweep",
             ["fixtures/surfacecov-irremote"] =
-                "byte-identical upstream adafruit_irremote.py defines a generator METHOD " +
-                "(`yield` inside NonblockingGenericDecode.read), which PyMCU refuses by " +
-                "design -- neither build exists; the fixture pins the refusal as " +
-                "XBUILD-FAIL in the surfacecov sweep",
+                "byte-identical upstream adafruit_irremote.py is refused on `pulses`: the " +
+                "name already holds a tagged union and an instance has no member slot the " +
+                "payload can hold (RFC 0009 decision 4) -- neither build exists; the " +
+                "fixture pins the refusal as XBUILD-FAIL in the surfacecov sweep. The " +
+                "generator METHOD this note used to blame (`yield` inside " +
+                "NonblockingGenericDecode.read) is not what refuses it: a generator method " +
+                "whose receiver is bound to a name compiles, and oracle probe 294 checks " +
+                "one against CPython",
         };
 
     /// <summary>
