@@ -1179,8 +1179,13 @@ public static class AvrPeephole
     // holds without path divergence, so this bails (returns false) at any branch,
     // jump, label, RET, or non-directive raw asm — a write seen past a conditional
     // branch does not redefine r on the not-taken path (e.g. a `min = x` guarded by
-    // `BRSH`). A plain CALL is transparent: it returns to the next instruction and,
-    // per ReadsReg/WritesReg, only touches the argument/scratch registers.
+    // `BRSH`). A plain CALL returns to the next instruction, so the scan continues past it,
+    // but it never counts as the redefinition: WritesReg says a call MAY clobber the
+    // scratch registers, and a may-write is not a kill. The math runtime (`__mul32`, the
+    // 8/16-bit divisions) leaves R16:R17 intact and the allocator keeps a temp there across
+    // it, so `MOV R16,R24 ; ... ; MOV R18,R16 ; CALL __mul32 ; MOV R18,R16` still reads the
+    // park after the call. Treating the CALL as the kill dropped the park and the second
+    // multiply read whatever R16 held: `(s + 3) ** 3` printed 2295 instead of 27.
     private static bool RegDeadAfter(List<AvrAsmLine> lines, int j, int r)
     {
         for (int k = j + 1; k < lines.Count; k++)
@@ -1198,6 +1203,7 @@ public static class AvrPeephole
             if (m is "RET" or "RETI" or "RJMP" or "JMP" or "IJMP" or "EIJMP" || m.StartsWith("BR"))
                 return false;                        // path divergence -> linear reasoning unsound
             if (ReadsReg(lk, r)) return false;       // used before redefinition -> live
+            if (m is "CALL" or "RCALL" or "ICALL" or "EICALL") continue;   // may-clobber, not a kill
             if (WritesReg(lk, r)) return true;       // redefined first -> dead
         }
         return false;
