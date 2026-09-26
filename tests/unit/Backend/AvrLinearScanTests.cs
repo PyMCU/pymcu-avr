@@ -221,6 +221,58 @@ public class AvrLinearScanTests
 
     // ─── Empty function ───────────────────────────────────────────────────────
 
+    // ─── Inline asm ───────────────────────────────────────────────────────────
+    // asm() text the allocator cannot model: naming R16/R17, making a call, or taking %N
+    // operands (staged through R16..R19) writes the pair, so a temp live across it is spilled.
+
+    [Theory]
+    [InlineData("ldi r16, 0x55")]
+    [InlineData("LDI R17, 0x66")]
+    [InlineData("movw r16, r24")]
+    [InlineData("rcall helper")]
+    [InlineData("call helper")]
+    [InlineData("icall")]
+    public void Uint16Temporary_SpanningAsmThatWritesThePair_NotAllocated(string code)
+    {
+        var t1 = new Temporary("t1", DataType.UINT16);
+        var result = Allocate(
+            new Copy(new Constant(300), t1),   // 0 — t1 def
+            new InlineAsm(code),               // 1
+            new Return(t1));                   // 2 — t1 last use
+
+        Assert.False(result.ContainsKey("t1"), $"`{code}` can write R16:R17");
+    }
+
+    [Fact]
+    public void Uint8Temporary_SpanningAsmWithOperands_NotAllocated()
+    {
+        var t1 = new Temporary("t1");
+        var result = Allocate(
+            new Copy(new Constant(20), t1),                                          // 0
+            new InlineAsm("inc %0", new List<Val> { new Variable("x") }),            // 1 — %0 in R16
+            new Return(t1));                                                         // 2
+
+        Assert.False(result.ContainsKey("t1"), "asm() stages its %N operands through R16..R19");
+    }
+
+    [Theory]
+    [InlineData("nop")]
+    [InlineData("sei")]
+    [InlineData("out 0x25, r24")]
+    [InlineData("ldi r18, 1")]
+    public void Uint16Temporary_SpanningAsmThatLeavesThePair_StillAllocated(string code)
+    {
+        // `r18` must not match `r1[67]`, and `r1` alone is not the pair either.
+        var t1 = new Temporary("t1", DataType.UINT16);
+        var result = Allocate(
+            new Copy(new Constant(300), t1),
+            new InlineAsm(code),
+            new Return(t1));
+
+        Assert.True(result.TryGetValue("t1", out var reg));
+        Assert.Equal("R16", reg);
+    }
+
     [Fact]
     public void EmptyFunction_ReturnsEmptyDictionary()
         => Assert.Empty(Allocate());
