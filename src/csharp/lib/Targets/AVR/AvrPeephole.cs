@@ -210,7 +210,8 @@ public static class AvrPeephole
 
     public static List<AvrAsmLine> Optimize(List<AvrAsmLine> lines,
         HashSet<int>? noForwardAddrs = null, int ramStart = 0x100,
-        IReadOnlySet<string>? outlinedSubroutines = null)
+        IReadOnlySet<string>? outlinedSubroutines = null,
+        IReadOnlySet<string>? clobberingCallTargets = null)
     {
         var result = new List<AvrAsmLine>(lines);
 
@@ -577,7 +578,7 @@ public static class AvrPeephole
         while (prChanged)
         {
             prChanged = false;
-            EliminateParkRoundTrip(result, ref prChanged);
+            EliminateParkRoundTrip(result, clobberingCallTargets ?? new HashSet<string>(), ref prChanged);
             if (prChanged)
                 result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         }
@@ -1127,7 +1128,8 @@ public static class AvrPeephole
     // home and reloading it. Sound only when, between the two MOVs, nothing reads or
     // writes Rh or Rd and there is no call/branch/label (so reordering is safe), and
     // Rh is dead after the unpark (so dropping its definition loses nothing).
-    private static void EliminateParkRoundTrip(List<AvrAsmLine> lines, ref bool changed)
+    private static void EliminateParkRoundTrip(List<AvrAsmLine> lines,
+        IReadOnlySet<string> clobberingCallTargets, ref bool changed)
     {
         for (int i = 0; i < lines.Count; i++)
         {
@@ -1149,7 +1151,7 @@ public static class AvrPeephole
                     int rd = ParseReg(lj.Op1);
                     if (rd >= 0 && rd != rh && rd != rs
                         && !RegTouchedBetween(lines, i, j, rd)
-                        && RegDeadAfter(lines, j, rh))
+                        && RegDeadAfter(lines, j, rh, clobberingCallTargets))
                     {
                         lines[i] = AvrAsmLine.MakeInstruction("MOV", "R" + rd, "R" + rs);
                         lines[j] = AvrAsmLine.MakeEmpty();
@@ -1179,14 +1181,17 @@ public static class AvrPeephole
     // holds without path divergence, so this bails (returns false) at any branch,
     // jump, label, RET, or non-directive raw asm — a write seen past a conditional
     // branch does not redefine r on the not-taken path (e.g. a `min = x` guarded by
-    // `BRSH`). A plain CALL returns to the next instruction, so the scan continues past it,
-    // but it never counts as the redefinition: WritesReg says a call MAY clobber the
-    // scratch registers, and a may-write is not a kill. The math runtime (`__mul32`, the
-    // 8/16-bit divisions) leaves R16:R17 intact and the allocator keeps a temp there across
-    // it, so `MOV R16,R24 ; ... ; MOV R18,R16 ; CALL __mul32 ; MOV R18,R16` still reads the
-    // park after the call. Treating the CALL as the kill dropped the park and the second
-    // multiply read whatever R16 held: `(s + 3) ** 3` printed 2295 instead of 27.
-    private static bool RegDeadAfter(List<AvrAsmLine> lines, int j, int r)
+    // `BRSH`). A plain CALL returns to the next instruction, so the scan continues past it.
+    // Only a call the allocator never keeps a temp across counts as the redefinition of the
+    // scratch it clobbers: ICALL, and a CALL to one of <paramref name="clobberingCallTargets"/>
+    // (an IR Call, a GC allocation, a 32-bit division). Any other CALL is a may-write, not a
+    // kill: the rest of the math runtime (`__mul32`, the 8/16-bit divisions) leaves R16:R17
+    // intact and the allocator keeps a temp there across it, so `MOV R16,R24 ; ... ;
+    // MOV R18,R16 ; CALL __mul32 ; MOV R18,R16` still reads the park after the call. Treating
+    // that CALL as the kill dropped the park and the second multiply read whatever R16 held:
+    // `(s + 3) ** 3` printed 2295 instead of 27.
+    private static bool RegDeadAfter(List<AvrAsmLine> lines, int j, int r,
+        IReadOnlySet<string> clobberingCallTargets)
     {
         for (int k = j + 1; k < lines.Count; k++)
         {
@@ -1203,7 +1208,8 @@ public static class AvrPeephole
             if (m is "RET" or "RETI" or "RJMP" or "JMP" or "IJMP" or "EIJMP" || m.StartsWith("BR"))
                 return false;                        // path divergence -> linear reasoning unsound
             if (ReadsReg(lk, r)) return false;       // used before redefinition -> live
-            if (m is "CALL" or "RCALL" or "ICALL" or "EICALL") continue;   // may-clobber, not a kill
+            if (m is "CALL" or "RCALL" && !clobberingCallTargets.Contains(lk.Op1))
+                continue;                            // may-clobber, not a kill
             if (WritesReg(lk, r)) return true;       // redefined first -> dead
         }
         return false;

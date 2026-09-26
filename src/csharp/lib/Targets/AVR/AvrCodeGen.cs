@@ -39,6 +39,11 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // result in ANY register the allocator picked, so the peephole's calling-convention
     // assumptions (nothing scratch is live across a RET) do not hold at its RET.
     private readonly HashSet<string> _outlinedSubroutines = [];
+    // Targets of the calls the register allocator never keeps a temp across (an IR Call, a GC
+    // allocation, the shadow-stack push, a 32-bit division). R16:R17 are dead after one of
+    // these; after any other CALL (the rest of the math runtime, a delay subroutine, an
+    // outlined region) a temp can still be live.
+    private readonly HashSet<string> _clobberingCallTargets = [];
 
     // Last non-inline source position seen while walking the IR, for backend refusals.
     private string _lastSourceFile = "";
@@ -666,6 +671,15 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // variant (__divs*/__mods*, Python semantics: quotient floors toward -inf and
     // the remainder takes the sign of the divisor) is used; otherwise the unsigned
     // core (__div*/__mod*). `wantMod` selects the modulo entry point.
+    // The 32-bit routines use R16 as their loop counter without saving it, so the allocator
+    // keeps no temp across them (AvrLinearScan.ClobbersTempPair) and the peephole may take the
+    // call for the redefinition of R16:R17. The 8/16-bit ones save the pair.
+    private void EmitDivModCall(string routine, bool is32)
+    {
+        if (is32) _clobberingCallTargets.Add(routine);
+        Emit("CALL", routine);
+    }
+
     private static string DivModRoutine(bool wantMod, bool is32, bool is16, bool signed)
     {
         string sz = is32 ? "32" : is16 ? "16" : "8";
@@ -1676,7 +1690,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("RJMP", "__pymcu_halt_spin");
         }
 
-        var optimized = AvrPeephole.Optimize(_assembly, noForward, RamStart(), _outlinedSubroutines);
+        var optimized = AvrPeephole.Optimize(_assembly, noForward, RamStart(), _outlinedSubroutines,
+            _clobberingCallTargets);
         if (EmitBlockMapPath != null)
             // _pgob_* branch markers went in as comments so the peephole could
             // work through them; now that its position is final, each marker
@@ -2960,6 +2975,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             }
         }
 
+        _clobberingCallTargets.Add(call.FunctionName);
         Emit("CALL", call.FunctionName);
         var dstType = GetValType(call.Dst);
         if (dstType == DataType.FLOAT)
@@ -4136,10 +4152,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 break;
             case IrBinOp.Div:
             case IrBinOp.FloorDiv:
-                Emit("CALL", DivModRoutine(false, is32, is16, IsSignedComparison(b.Src1, b.Src2)));
+                EmitDivModCall(DivModRoutine(false, is32, is16, IsSignedComparison(b.Src1, b.Src2)), is32);
                 break;
             case IrBinOp.Mod:
-                Emit("CALL", DivModRoutine(true, is32, is16, IsSignedComparison(b.Src1, b.Src2)));
+                EmitDivModCall(DivModRoutine(true, is32, is16, IsSignedComparison(b.Src1, b.Src2)), is32);
                 break;
             case IrBinOp.Equal:
             {
@@ -4595,10 +4611,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     break;
                 case IrBinOp.Div:
                 case IrBinOp.FloorDiv:
-                    Emit("CALL", DivModRoutine(false, is32, is16, IsSignedComparison(aa.Target, aa.Operand)));
+                    EmitDivModCall(DivModRoutine(false, is32, is16, IsSignedComparison(aa.Target, aa.Operand)), is32);
                     break;
                 case IrBinOp.Mod:
-                    Emit("CALL", DivModRoutine(true, is32, is16, IsSignedComparison(aa.Target, aa.Operand)));
+                    EmitDivModCall(DivModRoutine(true, is32, is16, IsSignedComparison(aa.Target, aa.Operand)), is32);
                     break;
                 case IrBinOp.Equal:
                 case IrBinOp.NotEqual:
@@ -5225,6 +5241,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         CLR_R25IfNeeded(ga.Size);                        // R25 = 0 for 1-byte sizes
         // Refs payloads (list[list[T]]) get the ref-bearing header flag so the
         // collector traces and relocates the pointers inside them.
+        _clobberingCallTargets.Add(ga.Refs ? "gc_alloc_refs" : "gc_alloc");
         Emit("CALL", ga.Refs ? "gc_alloc_refs" : "gc_alloc");
         StoreRegInto("R24", ga.Dst, DataType.GC_REF);   // store returned user_ptr (R24:R25)
     }
@@ -5472,6 +5489,10 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     break;
             }
         }
+
+        // The peephole runs after this and matches call targets by the text it sees.
+        foreach (var (full, sh) in pairs)
+            if (_clobberingCallTargets.Contains(full)) _clobberingCallTargets.Add(sh);
     }
 
     // Returns true when varName appears as a source (read) operand in any instruction.
@@ -5610,6 +5631,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         _gcPushSites++;
         Emit("LDI",  "R24", $"lo8(0x{sramAddr:X4})");
         Emit("LDI",  "R25", $"hi8(0x{sramAddr:X4})");
+        _clobberingCallTargets.Add("_gc_ss_push");
         Emit("CALL", "_gc_ss_push");
     }
 

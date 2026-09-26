@@ -285,6 +285,29 @@ public class AvrPeepholeTests
         Assert.DoesNotContain(result, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R24");
     }
 
+    [Fact]
+    public void ParkPastCallToAFunction_RoundTripCollapsed()
+    {
+        // The allocator never keeps a temp across an IR Call, so the codegen names its targets
+        // and a CALL to one of them is the park's redefinition: the collapse stays free there.
+        var lines = new List<AvrAsmLine>
+        {
+            AvrAsmLine.MakeInstruction("MOV", "R16", "R24"),
+            AvrAsmLine.MakeInstruction("MOV", "R30", "R16"),
+            AvrAsmLine.MakeInstruction("CALL", "user_fn"),
+            AvrAsmLine.MakeInstruction("MOV", "R18", "R24"),
+            AvrAsmLine.MakeInstruction("RET"),
+        };
+
+        var collapsed = AvrPeephole.Optimize(lines, clobberingCallTargets: new HashSet<string> { "user_fn" });
+        Assert.Contains(collapsed, l => l.Mnemonic == "MOV" && l.Op1 == "R30" && l.Op2 == "R24");
+
+        // Without the name the same CALL is only a may-write: nothing past it proves the park
+        // dead, so it is kept.
+        var kept = AvrPeephole.Optimize(lines);
+        Assert.Contains(kept, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R24");
+    }
+
     // ─── 3-window: MOV Ra, Rb ; OP Ra ; MOV Rb, Ra → OP Rb ; MOV Ra, Rb ─────
 
     [Fact]
