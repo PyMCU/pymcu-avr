@@ -1500,6 +1500,222 @@
    "rc": 1,
    "violations": []
   },
+  "450_abs_seeded_wide": {
+   "rc": 0,
+   "violations": []
+  },
+  "451_min_max_seeded_wide": {
+   "rc": 0,
+   "violations": []
+  },
+  "452_divmod_seeded_positive": {
+   "rc": 0,
+   "violations": []
+  },
+  "453_zip_enumerate_seeded_wide": {
+   "rc": 0,
+   "violations": []
+  },
+  "454_reversed_list_seeded": {
+   "rc": 0,
+   "violations": []
+  },
+  "455_chr_ord_seeded": {
+   "rc": 0,
+   "violations": []
+  },
+  "456_int_float_casts_seeded": {
+   "rc": 0,
+   "violations": []
+  },
+  "457_bool_seeded": {
+   "rc": 0,
+   "violations": []
+  },
+  "458_any_all_seeded_list": {
+   "rc": 0,
+   "violations": []
+  },
+  "459_sum_list_literal_seeded": {
+   "rc": 0,
+   "violations": []
+  },
+  "460_sum_generator_with_start": {
+   "rc": 0,
+   "violations": []
+  },
+  "461_getattr_module_default": {
+   "rc": 0,
+   "violations": []
+  },
+  "462_open_unembedded_file_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "463_eval_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "464_exec_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "465_compile_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "466_breakpoint_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "467_help_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "468_globals_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "469_locals_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "470_vars_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "471_dir_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "472_exit_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "473_quit_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "474_ascii_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "475_object_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "476_complex_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "477_dict_call_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "478_set_call_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "479_frozenset_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "480_tuple_call_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "481_slice_call_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "482_type_call_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "483_issubclass_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "484_callable_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "485_id_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "486_hash_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "487_repr_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "488_format_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "489_iter_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "490_next_on_generator_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "491_map_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "492_filter_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "493_sorted_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "494_getattr_on_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "495_setattr_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "496_delattr_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "497_property_call_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "498_hex_runtime_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "499_bin_runtime_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "500_str_of_int_runtime_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "501_pow_three_arguments_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "502_sum_list_with_start_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "503_any_over_array_refused": {
+   "rc": 1,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": [
