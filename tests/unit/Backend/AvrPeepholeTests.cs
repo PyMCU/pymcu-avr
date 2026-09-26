@@ -308,6 +308,28 @@ public class AvrPeepholeTests
         Assert.Contains(kept, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R24");
     }
 
+    [Fact]
+    public void ParkPastCallToAnOutlinedRegion_ParkKept()
+    {
+        // An outlined region is a lifted piece of the caller: it may read the temp the caller
+        // left in R16, so the park stays even when a later write would otherwise prove it dead.
+        var lines = new List<AvrAsmLine>
+        {
+            AvrAsmLine.MakeInstruction("MOV", "R16", "R24"),
+            AvrAsmLine.MakeInstruction("MOV", "R30", "R16"),
+            AvrAsmLine.MakeInstruction("RCALL", "_pymcu_outline_0"),
+            AvrAsmLine.MakeInstruction("LDI", "R16", "5"),
+            AvrAsmLine.MakeInstruction("STS", "0x0100", "R16"),
+            AvrAsmLine.MakeInstruction("RET"),
+            AvrAsmLine.MakeLabel("_pymcu_outline_0"),
+            AvrAsmLine.MakeInstruction("STS", "0x0101", "R16"),
+            AvrAsmLine.MakeInstruction("RET"),
+        };
+
+        var result = AvrPeephole.Optimize(lines, outlinedSubroutines: new HashSet<string> { "_pymcu_outline_0" });
+        Assert.Contains(result, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R24");
+    }
+
     // ─── 3-window: MOV Ra, Rb ; OP Ra ; MOV Rb, Ra → OP Rb ; MOV Ra, Rb ─────
 
     [Fact]

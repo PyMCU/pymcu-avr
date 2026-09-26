@@ -578,7 +578,8 @@ public static class AvrPeephole
         while (prChanged)
         {
             prChanged = false;
-            EliminateParkRoundTrip(result, clobberingCallTargets ?? new HashSet<string>(), ref prChanged);
+            EliminateParkRoundTrip(result, clobberingCallTargets ?? new HashSet<string>(),
+                outlinedSubroutines ?? new HashSet<string>(), ref prChanged);
             if (prChanged)
                 result.RemoveAll(l => l.Type == AvrAsmLine.LineType.Empty);
         }
@@ -1129,7 +1130,8 @@ public static class AvrPeephole
     // writes Rh or Rd and there is no call/branch/label (so reordering is safe), and
     // Rh is dead after the unpark (so dropping its definition loses nothing).
     private static void EliminateParkRoundTrip(List<AvrAsmLine> lines,
-        IReadOnlySet<string> clobberingCallTargets, ref bool changed)
+        IReadOnlySet<string> clobberingCallTargets, IReadOnlySet<string> outlinedSubroutines,
+        ref bool changed)
     {
         for (int i = 0; i < lines.Count; i++)
         {
@@ -1151,7 +1153,7 @@ public static class AvrPeephole
                     int rd = ParseReg(lj.Op1);
                     if (rd >= 0 && rd != rh && rd != rs
                         && !RegTouchedBetween(lines, i, j, rd)
-                        && RegDeadAfter(lines, j, rh, clobberingCallTargets))
+                        && RegDeadAfter(lines, j, rh, clobberingCallTargets, outlinedSubroutines))
                     {
                         lines[i] = AvrAsmLine.MakeInstruction("MOV", "R" + rd, "R" + rs);
                         lines[j] = AvrAsmLine.MakeEmpty();
@@ -1189,9 +1191,11 @@ public static class AvrPeephole
     // intact and the allocator keeps a temp there across it, so `MOV R16,R24 ; ... ;
     // MOV R18,R16 ; CALL __mul32 ; MOV R18,R16` still reads the park after the call. Treating
     // that CALL as the kill dropped the park and the second multiply read whatever R16 held:
-    // `(s + 3) ** 3` printed 2295 instead of 27.
+    // `(s + 3) ** 3` printed 2295 instead of 27. A call into an outlined region is neither:
+    // the region is a lifted piece of the caller and may consume the temp the caller left in
+    // R16:R17 (see EliminateDeadTempMoves), so it counts as a read and keeps the park.
     private static bool RegDeadAfter(List<AvrAsmLine> lines, int j, int r,
-        IReadOnlySet<string> clobberingCallTargets)
+        IReadOnlySet<string> clobberingCallTargets, IReadOnlySet<string> outlinedSubroutines)
     {
         for (int k = j + 1; k < lines.Count; k++)
         {
@@ -1208,6 +1212,8 @@ public static class AvrPeephole
             if (m is "RET" or "RETI" or "RJMP" or "JMP" or "IJMP" or "EIJMP" || m.StartsWith("BR"))
                 return false;                        // path divergence -> linear reasoning unsound
             if (ReadsReg(lk, r)) return false;       // used before redefinition -> live
+            if (m is "CALL" or "RCALL" && outlinedSubroutines.Contains(lk.Op1))
+                return false;                        // lifted caller code: may read the park
             if (m is "CALL" or "RCALL" && !clobberingCallTargets.Contains(lk.Op1))
                 continue;                            // may-clobber, not a kill
             if (WritesReg(lk, r)) return true;       // redefined first -> dead
