@@ -85,3 +85,55 @@ arithmetic) were each placed as a subscript index, as an f-string interpolation 
 ternary arm, with the plain spelling printed beside it as the control: all twenty agreed.
 `len()` was also taken out of `print()` into six other positions, all correct. Probes
 `420`-`424` cover these.
+
+### Comprehensions outside module scope
+
+The corpus had 24 comprehensions at module level, one in a method and none in a function.
+Measured with the single-clause, unfiltered form (the supported one), values seeded from
+`GPIOR0` and all three elements distinct so an all-zeros result would show:
+
+| scope | result |
+|---|---|
+| module level | ok |
+| inside a plain function | ok |
+| inside a method | ok |
+| inside an `@inline` function | ok |
+| inside an `@inline` method | ok |
+
+Four positions refuse, identically at module and at function scope: as a field, as a return
+value, as a call argument, and as a `for`-in iterable. The diagnostics are
+
+- `a list comprehension is only supported where it fills a fixed array whose length is a
+  compile-time constant (xs: uint8[4] = [f(i) for i in range(4)]). In this position there is
+  no array ...`
+- `for-in loop iterable must be a compile-time string constant, a constant list literal
+  [v0, v1, ...], range(N), enumerate(list/range), zip(a, b), reversed(iterable), or a
+  fixed-array slice`
+
+**Two spellings that look alike behave differently.** `[x * 10 + y for x in [1, 2] for y in
+[3, 4]]`, two `for` clauses in one comprehension, still miscompiles silently: probe `063`
+re-measured verbatim prints `0, 0, 0, 0` where CPython prints `13, 14, 23, 24`
+([PyMCU#394](https://github.com/PyMCU/PyMCU/issues/394), still open). A comprehension nested
+inside a comprehension, `[[...] for ...]`, refuses loudly instead. #394's title covers only
+the first.
+
+### Comparisons and f-strings in the positions that had none
+
+| construction and position | result |
+|---|---|
+| comparison as a value, as an argument, as a field, as an index, in a condition | ok |
+| comparison as a function return | prints `0`/`1`, see below |
+| chained comparison in a condition, as an argument, as an index | ok |
+| chained comparison as a value | prints `1`/`0`, see below |
+| f-string as a function return | refused |
+| f-string as an instance field | refused |
+| `len()` bound to a name, in a condition, as an argument, as an index, as a return, interpolated | ok (probe `424`) |
+
+Both f-string refusals are the documented one: supported streamed to a sink and assigned to a
+name, refused in other expression positions. Probe `423` pins the ternary-arm case.
+
+The `0`/`1` rows are [PyMCU#386](https://github.com/PyMCU/PyMCU/issues/386): the same boolean
+prints as `False` when written straight into `print()`, read from a field, or negated, and as
+`0` when it arrives through a name binding, a function return, or an `or`. Six positions, one
+program, two representations. `docs/language/type-system.md:20` says `True`/`False` fold to
+`1`/`0`, so three of the six follow the documentation and three follow CPython.
