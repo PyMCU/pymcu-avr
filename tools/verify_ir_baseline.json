@@ -348,9 +348,7 @@
   },
   "084_heap_list": {
    "rc": 0,
-   "violations": [
-    "canfail|one-storage-key|main|'main.xs' collides with declared storage 'xs': one source name is resolving to two keys"
-   ]
+   "violations": []
   },
   "085_closed_dict_set_literals": {
    "rc": 0,
@@ -524,7 +522,7 @@
    "rc": 0,
    "violations": []
   },
-  "127_chr_across_function_return_refused": {
+  "127_chr_across_function_return": {
    "rc": 0,
    "violations": []
   },
@@ -545,11 +543,8 @@
    "violations": []
   },
   "132_annotated_width_wraps_vs_cpython_bigint": {
-   "rc": 0,
-   "violations": [
-    "generate|write-exceeds-slot|main|copy 300 -> var 'echo.x' (UINT8): value 300 cannot fit UINT8",
-    "unify-widths|write-exceeds-slot|main|copy 300 -> var 'echo.x' (UINT8): value 300 cannot fit UINT8"
-   ]
+   "rc": 1,
+   "violations": []
   },
   "133_folded_overflow_refused": {
    "rc": 1,
@@ -608,16 +603,7 @@
   },
   "146_dunder_eq_le_sub_mul": {
    "rc": 0,
-   "violations": [
-    "canfail|read-never-written|main|'tmp_26_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "canfail|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "generate|read-never-written|main|'tmp_26_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "generate|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "optimize|read-never-written|main|'tmp_26_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "optimize|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "unify-widths|read-never-written|main|'tmp_26_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame",
-    "unify-widths|read-never-written|main|'tmp_28_v' is read but this function never writes it and it is not a parameter -- it names a slot in somebody else's frame"
-   ]
+   "violations": []
   },
   "147_dunder_str_refused": {
    "rc": 1,
@@ -645,10 +631,7 @@
   },
   "153_list_for_over_heap_list": {
    "rc": 0,
-   "violations": [
-    "canfail|one-storage-key|main|'main.xs' collides with declared storage 'xs': one source name is resolving to two keys",
-    "canfail|one-storage-key|main|'main.xs' collides with declared storage 'xs': one source name is resolving to two keys"
-   ]
+   "violations": []
   },
   "154_list_index_method_refused": {
    "rc": 1,
@@ -1050,9 +1033,7 @@
   },
   "250_grid_field_ctor_dims": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|main|'inline1.total.t' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "251_grid_row_alias": {
    "rc": 0,
@@ -1156,12 +1137,93 @@
   },
   "276_union_field_forwarding": {
    "rc": 0,
+   "violations": []
+  },
+  "277_bytearray_constant_fill": {
+   "rc": 0,
    "violations": [
-    "canfail|storage-width|main|'b_v' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'b_v' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'b_v' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'b_v' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+    "generate|storage-width|main|'main.i' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
+  },
+  "277_grouped_peripheral_registers": {
+   "rc": 0,
+   "violations": []
+  },
+  "277_match_capture_shadows_global": {
+   "rc": 0,
+   "violations": []
+  },
+  "278_grouped_peripheral_not_instantiable": {
+   "rc": 1,
+   "violations": []
+  },
+  "278_match_capture_in_function": {
+   "rc": 0,
+   "violations": []
+  },
+  "278_math_sqrt_exp_log_radians": {
+   "rc": 0,
+   "violations": []
+  },
+  "279_match_capture_in_inline": {
+   "rc": 0,
+   "violations": []
+  },
+  "280_match_capture_shadows_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "281_cmp_dunder_in_condition": {
+   "rc": 0,
+   "violations": []
+  },
+  "282_cmp_dunder_in_value_position": {
+   "rc": 0,
+   "violations": []
+  },
+  "283_cmp_dunder_while_and_chain": {
+   "rc": 0,
+   "violations": []
+  },
+  "284_dunder_on_a_module_level_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "285_dunder_on_a_field_receiver": {
+   "rc": 0,
+   "violations": []
+  },
+  "286_instance_equality_is_identity": {
+   "rc": 0,
+   "violations": []
+  },
+  "287_instance_ordering_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "288_minmax_over_instances_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "289_new_hook_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "290_init_subclass_hook_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "291_destructor_never_runs": {
+   "rc": 0,
+   "violations": []
+  },
+  "292_minmax_over_a_sequence_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "293_conditional_expression_str": {
+   "rc": 0,
+   "violations": []
   },
   "294_generator_method_bound_receiver": {
    "rc": 0,
@@ -1169,6 +1231,273 @@
   },
   "295_yield_from_delegation": {
    "rc": 0,
+   "violations": []
+  },
+  "296_not_operator": {
+   "rc": 0,
+   "violations": []
+  },
+  "297_del_statement_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "298_except_star_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "299_unary_plus_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "300_unary_plus_accepted_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "301_matmul_operator_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "302_matmul_operator_refused_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "303_async_for_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "304_async_for_refused_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "305_async_with_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "306_async_with_refused_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "307_match_mapping_pattern_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "308_match_mapping_pattern_refused_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "309_match_star_pattern_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "310_match_star_pattern_wrongcode_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "311_type_alias_statement_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "312_type_alias_statement_refused_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "313_generic_type_parameter_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "314_generic_type_parameter_refused_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "315_template_string_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "316_template_string_refused_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "317_paramspec_type_parameter_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "318_paramspec_type_parameter_ignored_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "319_typevartuple_type_parameter_refused_default_frontend": {
+   "rc": 1,
+   "violations": []
+  },
+  "320_typevartuple_type_parameter_ignored_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "321_match_sequence_arity_unchecked": {
+   "rc": 0,
+   "violations": [
+    "generate|read-never-written|main|'short__2' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape",
+    "unify-widths|read-never-written|main|'short__2' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape"
+   ]
+  },
+  "322_type_parameter_scope_is_not_bound_py_parser": {
+   "rc": 1,
+   "violations": []
+  },
+  "400_shortcircuit_narrow_cond_module": {
+   "rc": 0,
+   "violations": []
+  },
+  "401_shortcircuit_narrow_value_module": {
+   "rc": 0,
+   "violations": []
+  },
+  "402_shortcircuit_narrow_cond_function": {
+   "rc": 0,
+   "violations": []
+  },
+  "403_shortcircuit_narrow_value_function": {
+   "rc": 0,
+   "violations": []
+  },
+  "404_shortcircuit_narrow_cond_method": {
+   "rc": 0,
+   "violations": []
+  },
+  "405_shortcircuit_narrow_value_method": {
+   "rc": 0,
+   "violations": []
+  },
+  "406_shortcircuit_narrow_unguarded_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "407_inline_method_cmp_condition": {
+   "rc": 0,
+   "violations": []
+  },
+  "408_inline_method_cmp_value": {
+   "rc": 0,
+   "violations": []
+  },
+  "409_inline_method_boolop": {
+   "rc": 0,
+   "violations": []
+  },
+  "410_inline_method_not_operator": {
+   "rc": 0,
+   "violations": []
+  },
+  "411_inline_method_ternary": {
+   "rc": 0,
+   "violations": []
+  },
+  "412_inline_method_index_load": {
+   "rc": 0,
+   "violations": []
+  },
+  "413_inline_method_index_store": {
+   "rc": 0,
+   "violations": []
+  },
+  "414_inline_method_len_builtin": {
+   "rc": 0,
+   "violations": []
+  },
+  "415_inline_method_arithmetic": {
+   "rc": 0,
+   "violations": []
+  },
+  "416_inline_method_field_read": {
+   "rc": 0,
+   "violations": []
+  },
+  "417_inline_method_fstring": {
+   "rc": 0,
+   "violations": []
+  },
+  "418_inline_method_list_comprehension": {
+   "rc": 0,
+   "violations": []
+  },
+  "419_inline_method_buffer_argument": {
+   "rc": 0,
+   "violations": []
+  },
+  "420_subexpression_as_an_index": {
+   "rc": 0,
+   "violations": []
+  },
+  "421_subexpression_in_an_fstring": {
+   "rc": 0,
+   "violations": []
+  },
+  "422_subexpression_as_a_ternary_arm": {
+   "rc": 0,
+   "violations": []
+  },
+  "423_fstring_as_a_ternary_arm_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "424_len_outside_print": {
+   "rc": 0,
+   "violations": []
+  },
+  "425_signed_unsigned_runtime_compare": {
+   "rc": 0,
+   "violations": []
+  },
+  "426_temporary_receiver_constructor": {
+   "rc": 0,
+   "violations": []
+  },
+  "427_field_receiver_positions": {
+   "rc": 0,
+   "violations": []
+  },
+  "428_factory_result_receiver_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "429_instance_list_element_receiver": {
+   "rc": 0,
+   "violations": []
+  },
+  "430_nested_field_from_a_function": {
+   "rc": 0,
+   "violations": []
+  },
+  "431_comprehension_in_every_scope": {
+   "rc": 0,
+   "violations": []
+  },
+  "432_comprehension_in_an_inline_expanded_three_times": {
+   "rc": 0,
+   "violations": []
+  },
+  "433_comprehension_positions_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "434_comparison_in_the_positions_that_had_none": {
+   "rc": 0,
+   "violations": []
+  },
+  "435_fstring_as_a_return_and_as_a_field_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "436_buffer_outside_the_value_position": {
+   "rc": 0,
+   "violations": []
+  },
+  "437_indexed_write_in_an_inline_method": {
+   "rc": 0,
+   "violations": []
+  },
+  "438_instance_list_element_field_refused": {
+   "rc": 1,
    "violations": []
   },
   "adafruit-bmp280-unmodified": {
@@ -1277,6 +1606,34 @@
     "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
   },
+  "adafruit-dht-none-cached": {
+   "rc": 0,
+   "violations": [
+    "canfail|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._pulses_to_binary.bit_inx' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "adafruit-dht-optprint": {
+   "rc": 0,
+   "violations": [
+    "canfail|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._pulses_to_binary.bit_inx' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
   "adafruit-dht-unmodified": {
    "rc": 0,
    "violations": [
@@ -1284,7 +1641,20 @@
     "canfail|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._pulses_to_binary.binary' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline3._pulses_to_binary.bit_inx' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "optimize|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "unify-widths|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
+  },
+  "adafruit-dht-verbatim": {
+   "rc": 0,
+   "violations": [
+    "canfail|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "canfail|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'inline3._pulses_to_binary.bit_inx' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "optimize|storage-width|main|'inline2.measure.new_humidity' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "optimize|storage-width|main|'inline2.measure.new_temperature' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
@@ -1313,9 +1683,7 @@
    "violations": [
     "generate|storage-width|main|'display_height' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'display_width' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline2.set_pixel.index' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+    "generate|storage-width|main|'inline2.set_pixel.index' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
   },
   "adafruit-ssd1306-unmodified-64": {
@@ -1323,9 +1691,7 @@
    "violations": [
     "generate|storage-width|main|'display_height' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'display_width' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline2.set_pixel.index' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+    "generate|storage-width|main|'inline2.set_pixel.index' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
   },
   "adafruit-ssd1306-unmodified-64-loop": {
@@ -1368,6 +1734,10 @@
    "rc": 0,
    "violations": []
   },
+  "arena-field-offset-past-255": {
+   "rc": 0,
+   "violations": []
+  },
   "arena-high-water": {
    "rc": 0,
    "violations": []
@@ -1389,6 +1759,10 @@
    "violations": []
   },
   "array-array-as-list": {
+   "rc": 0,
+   "violations": []
+  },
+  "array-constant-fill-flash-bound": {
    "rc": 0,
    "violations": []
   },
@@ -1646,17 +2020,11 @@
   },
   "compat-cp-framebuf-text": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|main|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "compat-cp-framebuf-text-long": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|main|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "compat-cp-framebuf-text-long-loop": {
    "rc": 0,
@@ -1680,33 +2048,19 @@
   },
   "compat-cp-life": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|draw|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "compat-cp-life-grid": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|main|'inline2.neighbours.n' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline4.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "compat-cp-life-idiomatic": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|main|'inline2.neighbours.n' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline4.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "compat-cp-life-nested": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|draw|'inline3.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline6.write.end' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "compat-cp-microcontroller": {
    "rc": 0,
@@ -1719,6 +2073,10 @@
    ]
   },
   "compat-cp-neopixel-write": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-onewire-reset": {
    "rc": 0,
    "violations": []
   },
@@ -1794,6 +2152,10 @@
    "rc": 0,
    "violations": []
   },
+  "compat-cp-uart-115200-u2x": {
+   "rc": 0,
+   "violations": []
+  },
   "compat-cp-value-toggle": {
    "rc": 0,
    "violations": []
@@ -1802,7 +2164,23 @@
    "rc": 0,
    "violations": []
   },
+  "compat-mp-adc-channel": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-adc-port-name": {
+   "rc": 0,
+   "violations": []
+  },
   "compat-mp-blink-toggle": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-framebuf": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-i2c-big-buffer": {
    "rc": 0,
    "violations": []
   },
@@ -1819,6 +2197,14 @@
    "violations": []
   },
   "compat-mp-pin": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-pin-mode-literals": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-pin-mode-symbols": {
    "rc": 0,
    "violations": []
   },
@@ -1849,6 +2235,10 @@
    ]
   },
   "compat-mp-timer-freq": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-mp-uart-115200-u2x": {
    "rc": 0,
    "violations": []
   },
@@ -2324,6 +2714,14 @@
    "rc": 0,
    "violations": []
   },
+  "grouped-peripheral-timer1": {
+   "rc": 0,
+   "violations": []
+  },
+  "grouped-peripheral-timer1-loose": {
+   "rc": 0,
+   "violations": []
+  },
   "held-instance-field": {
    "rc": 0,
    "violations": []
@@ -2353,6 +2751,10 @@
    "violations": []
   },
   "i2c-scanner": {
+   "rc": 0,
+   "violations": []
+  },
+  "i2c-write-long": {
    "rc": 0,
    "violations": []
   },
@@ -2881,6 +3283,10 @@
    "rc": 0,
    "violations": []
   },
+  "ptr-field-element-width": {
+   "rc": 0,
+   "violations": []
+  },
   "ptr-offset": {
    "rc": 0,
    "violations": []
@@ -3141,6 +3547,10 @@
     "generate|storage-width|main|'main.MODE_RUNNING' is written at UINT8 but used at INT32 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
   },
+  "spi-write-long": {
+   "rc": 0,
+   "violations": []
+  },
   "sreg-flags": {
    "rc": 0,
    "violations": []
@@ -3323,7 +3733,7 @@
    "violations": []
   },
   "surfacecov-74hc595": {
-   "rc": 1,
+   "rc": 0,
    "violations": []
   },
   "surfacecov-bus-device": {
@@ -3332,7 +3742,9 @@
   },
   "surfacecov-debouncer": {
    "rc": 0,
-   "violations": []
+   "violations": [
+    "generate|storage-width|_bound_b_update|'inline1_update_current_state' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+   ]
   },
   "surfacecov-dht": {
    "rc": 1,
@@ -3416,6 +3828,14 @@
    "rc": 0,
    "violations": []
   },
+  "timer1-clear-temp": {
+   "rc": 0,
+   "violations": []
+  },
+  "timer16-store-order": {
+   "rc": 0,
+   "violations": []
+  },
   "timer2-interrupt": {
    "rc": 0,
    "violations": []
@@ -3445,6 +3865,10 @@
    "violations": [
     "generate|storage-width|main|'main.iret_1_1' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
+  },
+  "tuple-return-print": {
+   "rc": 0,
+   "violations": []
   },
   "tuple-unpack": {
    "rc": 0,
@@ -3624,16 +4048,11 @@
   },
   "zca-method-loop-return": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|main|'inline1.after_while.k' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "zca-mixed-fold-and-share": {
    "rc": 0,
-   "violations": [
-    "generate|write-exceeds-slot|main|copy 1000 -> var 'pymcu_time__delay_us_avr.us' (UINT8): value 1000 cannot fit UINT8",
-    "unify-widths|write-exceeds-slot|main|copy 1000 -> var 'pymcu_time__delay_us_avr.us' (UINT8): value 1000 cannot fit UINT8"
-   ]
+   "violations": []
   },
   "zca-outline": {
    "rc": 0,
