@@ -46,4 +46,17 @@ public class TempPairAcrossRuntimeCallTests
             "print((s ^ 20) ** 3)\n", 3)
             .Should().Equal("512", "390625", "4913");
     }
+
+    // The 32-bit division and modulo routines use R16 as their loop counter without saving
+    // it, and the allocator kept the left operand's temp in R16:R17 across them: the sum
+    // came back with the counter's last value in place of the temp.
+    [Test]
+    public void LeftTemp_SurvivesDiv32AndMod32()
+    {
+        Run("print((s + 300) + 100000 // (s + 7))\n" +
+            "print((s - 20) + 100000 % (s + 7))\n" +
+            "print((s ^ 20) + -100000 // (s + 7))\n" +
+            "print((s + 300) * (100000 % (s + 7)))\n", 4)
+            .Should().Equal("8638", "-11", "-8317", "1220");
+    }
 }

@@ -150,6 +150,75 @@ public class AvrLinearScanTests
             "a UINT16 temporary spanning a call must not be placed in caller-saved R16:R17");
     }
 
+    // ─── Runtime routines with no IR Call ─────────────────────────────────────
+    // __div32/__mod32/__divs32/__mods32 use R16 as their loop counter without saving it, and
+    // the GC shadow-stack push/pop stage the depth in R16:R17, so a temp live across one of
+    // them is spilled exactly as across a Call. `(s + 300) + 100000 // (s + 7)` printed 14541
+    // instead of 14585 while the temp sat in the pair.
+
+    [Theory]
+    [InlineData(BinaryOp.FloorDiv)]
+    [InlineData(BinaryOp.Div)]
+    [InlineData(BinaryOp.Mod)]
+    public void Uint16Temporary_Spanning32BitDivMod_NotAllocated(BinaryOp op)
+    {
+        var t1 = new Temporary("t1", DataType.UINT16);
+        var q = new Temporary("q", DataType.UINT32);
+        var result = Allocate(
+            new Copy(new Constant(300), t1),                                               // 0 — t1 def
+            new Binary(op, new Constant(100000), new Variable("d", DataType.UINT32), q),  // 1 — __div32
+            new Binary(BinaryOp.Add, t1, q, new Temporary("r", DataType.UINT32)),         // 2 — t1 last use
+            new Return(new NoneVal()));
+
+        Assert.False(result.ContainsKey("t1"),
+            "__div32 and __mod32 write R16, so a temp live across them cannot sit in R16:R17");
+    }
+
+    [Fact]
+    public void Uint8Temporary_Spanning32BitAugDiv_NotAllocated()
+    {
+        var t1 = new Temporary("t1");
+        var result = Allocate(
+            new Copy(new Constant(20), t1),                                                // 0 — t1 def
+            new AugAssign(BinaryOp.FloorDiv, new Variable("v", DataType.INT32), new Constant(7)), // 1
+            new Return(t1));                                                               // 2 — t1 last use
+
+        Assert.False(result.ContainsKey("t1"),
+            "a 32-bit //= lowers to __divs32, which writes R16");
+    }
+
+    [Fact]
+    public void Uint16Temporary_SpanningGcUnroot_NotAllocated()
+    {
+        var t1 = new Temporary("t1", DataType.UINT16);
+        var result = Allocate(
+            new Copy(new Constant(300), t1),                   // 0 — t1 def
+            new GcUnroot(new Variable("obj", DataType.GC_REF)), // 1 — LDS/DEC/STS R16
+            new Return(t1));                                    // 2 — t1 last use
+
+        Assert.False(result.ContainsKey("t1"), "the shadow-stack pop stages the depth in R16");
+    }
+
+    // The routines that leave R16:R17 intact keep the temp in the pair: spilling there would
+    // cost bytes on every 8/16-bit division and every 32-bit multiply for nothing.
+    [Theory]
+    [InlineData(BinaryOp.FloorDiv, DataType.UINT16)]
+    [InlineData(BinaryOp.Mod, DataType.INT16)]
+    [InlineData(BinaryOp.Mul, DataType.INT32)]
+    public void Uint16Temporary_SpanningRoutineThatSavesThePair_StillAllocated(BinaryOp op, DataType width)
+    {
+        var t1 = new Temporary("t1", DataType.UINT16);
+        var q = new Temporary("q", width);
+        var result = Allocate(
+            new Copy(new Constant(300), t1),                               // 0 — t1 def
+            new Binary(op, new Variable("a", width), new Variable("b", width), q), // 1
+            new Binary(BinaryOp.Add, t1, q, new Temporary("r", width)),    // 2 — t1 last use
+            new Return(new NoneVal()));
+
+        Assert.True(result.TryGetValue("t1", out var reg));
+        Assert.Equal("R16", reg);
+    }
+
     // ─── Empty function ───────────────────────────────────────────────────────
 
     [Fact]
