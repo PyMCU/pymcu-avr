@@ -87,6 +87,11 @@ public static class AvrLinearScan
     {
         var intervals = new Dictionary<string, LiveInterval>();
         var callIndices = new HashSet<int>();
+        // Temps handed to asm() as %N operands. The codegen stages the operands through R16..R19
+        // in order, so a temp homed in the pair is overwritten by an earlier operand before it
+        // is read: `asm("add %0, %1", x, s + 5)` loaded x into R16 and then copied R16 into R17
+        // as the temp. Such a temp gets a stack slot.
+        var asmOperands = new HashSet<string>();
 
         void VisitVal(Val val, int i)
         {
@@ -234,6 +239,13 @@ public static class AvrLinearScan
                 case SignalError se:
                     VisitVal(se.Code, i);
                     break;
+                case InlineAsm ia when ia.Operands != null:
+                    foreach (var op in ia.Operands)
+                    {
+                        VisitVal(op, i);
+                        if (op is Temporary ot) asmOperands.Add(ot.Name);
+                    }
+                    break;
             }
         }
 
@@ -300,7 +312,8 @@ public static class AvrLinearScan
         // emits around every uint16 temporary (StoreRegInto/LoadIntoReg already drive the
         // high byte via GetHighReg, so a pair-homed temp needs no codegen change).
         var eligible = intervals.Values
-            .Where(iv => !iv.SpansCall && (iv.Type.SizeOf() == 1 || iv.Type.SizeOf() == 2))
+            .Where(iv => !iv.SpansCall && !asmOperands.Contains(iv.Name)
+                         && (iv.Type.SizeOf() == 1 || iv.Type.SizeOf() == 2))
             .OrderBy(iv => iv.Def)
             .ToList();
 
