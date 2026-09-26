@@ -1,8 +1,8 @@
 # expect: match
 # doc: https://github.com/PyMCU/PyMCU/issues/520
-# tracked: #520
 # The same expression three times in one program: at module level, inside a plain function,
-# and at module level again. CPython prints 2, 2, 2. The emulator prints 2, 0, 2.
+# and at module level again. CPython prints 2, 2, 2. The emulator printed 2, 0, 2 until
+# PyMCU b574801a gave a nested field of a module-level instance its global storage.
 #
 # Written as one program rather than a matched pair on purpose. Nobody has to be convinced
 # that two programs are equivalent, because it is the same line written three times in the
