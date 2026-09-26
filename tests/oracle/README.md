@@ -42,3 +42,46 @@ Every probe is meant to run -- and stay green -- under both front ends.
 `# tracked: #<N>` probes are known, filed compiler bugs and report as
 `xfail(strict)`: a fix turns them into a hard XPASS failure until the
 header is removed.
+
+## Measured cells still waiting for a probe
+
+These were measured during the 2026-09-26 construction-by-context sweep and are recorded
+here because a measurement that lives only in a scratchpad is lost work. **None of them has
+a probe yet**; each row is a real program that was compiled and run, with the result the
+emulator gave against CPython.
+
+Every program seeds its values from `GPIOR0.value` rather than a literal, because with a
+literal the constant folder evaluates the call and the cell measures the folder instead of
+the construction. Three cells in this sweep looked healthy for exactly that reason.
+
+### Receiver that is not a name bound to an object
+
+`o.m()` where `o` is a temporary. Four receiver shapes, five positions. Each program also
+contains the bound-receiver control and **two temporaries of different values**, so a slot
+shared between them would show as two equal numbers rather than as a silent pass.
+
+| receiver | value | condition | argument | index | in a function |
+|---|---|---|---|---|---|
+| `Src(...).get()`, a constructor call | ok | ok | ok | ok | ok |
+| `h.inner.get()`, a field | ok | ok | ok | ok | **[#520](https://github.com/PyMCU/PyMCU/issues/520)** |
+| `make(2).get()`, a factory's result | refused | refused | refused | refused | refused |
+| `lst[i].get()`, an element of a list of instances | refused | refused | refused | refused | refused |
+
+The two refusals are loud, consistent across all five positions, and say:
+
+- `'.get()' cannot be dispatched: its receiver is not a name bound to an object, a register,
+  or a value PyMCU defines methods on.`
+- `'lst' is not addressable at run time here: it lives as separate variables, so it can only
+  be indexed with a constant. An array gets real storage when it is ...`
+
+**Read the first four columns narrowly.** They are all module-level reads; the fifth is the
+only one that reads from inside a real subroutine, which is why it is the only one that
+found anything. A probe for this row should vary the reading scope as well as the position.
+
+### Positions that came back clean
+
+Five constructions (a method call, `len()`, a subscript, a conditional expression and
+arithmetic) were each placed as a subscript index, as an f-string interpolation and as a
+ternary arm, with the plain spelling printed beside it as the control: all twenty agreed.
+`len()` was also taken out of `print()` into six other positions, all correct. Probes
+`420`-`424` cover these.
