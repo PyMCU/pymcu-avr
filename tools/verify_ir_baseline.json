@@ -1163,6 +1163,14 @@
     "unify-widths|storage-width|main|'b_v' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
   },
+  "294_generator_method_bound_receiver": {
+   "rc": 0,
+   "violations": []
+  },
+  "295_yield_from_delegation": {
+   "rc": 0,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": [
