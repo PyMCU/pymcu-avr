@@ -65,9 +65,23 @@ public static class AvrLinearScan
                         && (Wide(b.Src1) || Wide(b.Src2) || Wide(b.Dst)),
             AugAssign aa => IsDivMod(aa.Op) && Wide(aa.Target),
             GcRoot or GcUnroot => true,
+            InlineAsm ia => AsmClobbersTempPair(ia),
             _ => false,
         };
     }
+
+    // Hand-written asm goes into the listing as text the allocator cannot model. With operands
+    // the codegen stages %0..%3 through R16..R19, so the pair is written whatever the template
+    // says. Without them, the template writes the pair when it names R16 or R17, and any call
+    // it makes can write it too. A temp homed in the pair across either came back holding the
+    // asm's value: `(s + 300) + f()`, with `asm("ldi r16, 0x55")` inlined from f, printed
+    // 26198 instead of 301, and `for i in range(s + 3)` with the same asm in the body ran once.
+    private static readonly System.Text.RegularExpressions.Regex AsmTouchesPair = new(
+        @"\b(r1[67]|r?call|icall|eicall)\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static bool AsmClobbersTempPair(InlineAsm ia)
+        => ia.Operands is { Count: > 0 } || AsmTouchesPair.IsMatch(ia.Code);
 
     public static Dictionary<string, string> Allocate(Function func)
     {
