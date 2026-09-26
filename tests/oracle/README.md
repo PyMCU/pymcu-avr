@@ -65,14 +65,23 @@ shared between them would show as two equal numbers rather than as a silent pass
 | `Src(...).get()`, a constructor call | ok | ok | ok | ok | ok |
 | `h.inner.get()`, a field | ok | ok | ok | ok | **[#520](https://github.com/PyMCU/PyMCU/issues/520)** |
 | `make(2).get()`, a factory's result | refused | refused | refused | refused | refused |
-| `lst[i].get()`, an element of a list of instances | refused | refused | refused | refused | refused |
+| `lst[i].get()`, an element of a list of instances | ok | ok | ok | ok | ok |
 
-The two refusals are loud, consistent across all five positions, and say:
+The factory row is a real refusal, loud and consistent across all five positions:
 
 - `'.get()' cannot be dispatched: its receiver is not a name bound to an object, a register,
   or a value PyMCU defines methods on.`
-- `'lst' is not addressable at run time here: it lives as separate variables, so it can only
-  be indexed with a constant. An array gets real storage when it is ...`
+
+**Corrected after this table was first written.** The last row was recorded as refused in all
+five positions and that was wrong. The refusal came from the sweep's own control line,
+`bound = lst[i0]`, which binds a list element to a name; that spelling is refused with
+`'lst' is not addressable at run time here: it lives as separate variables, so it can only be
+indexed with a constant`, and so is a field read `lst[i0].base`. The construct the row was
+named for, a METHOD call at a runtime index, compiles and is correct. Probes `429` and `438`
+pin the two halves.
+
+A control that shares a line with the construct under test is not a control, which is the
+same lesson as retyping a file instead of copying it: both move two things at once.
 
 **Read the first four columns narrowly.** They are all module-level reads; the fifth is the
 only one that reads from inside a real subroutine, which is why it is the only one that
