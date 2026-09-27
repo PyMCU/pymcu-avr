@@ -4641,7 +4641,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private void CompileArrayLoad(ArrayLoad al)
     {
         var elemSize = al.ElemType.SizeOf();
-        var is16 = elemSize == 2;
+        var regs = ElementByteRegs(al.ElemType);
         if (!_stackLayout.TryGetValue(al.ArrayName, out int baseOffset))
         {
             EmitComment("ArrayLoad: array not in stack_layout -- skip");
@@ -4651,50 +4651,85 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         if (al.Index is Constant c)
         {
             var offset = baseOffset + c.Value * elemSize;
-            // LDD displacement is 6-bit (max 63): the high byte at offset+1 must also fit.
+            // LDD displacement is 6-bit (max 63): the element's last byte must also fit.
             if (offset + elemSize - 1 < 64)
             {
-                EmitSlotLoad("R24", offset);
-                if (is16) EmitSlotLoad("R25", offset + 1);
+                for (int k = 0; k < elemSize; k++) EmitSlotLoad(regs[k], offset + k);
             }
             else
             {
-                Emit("LDS", "R24", $"0x{RamStart() + offset:X4}");
-                if (is16) Emit("LDS", "R25", $"0x{RamStart() + offset + 1:X4}");
+                for (int k = 0; k < elemSize; k++)
+                    Emit("LDS", regs[k], $"0x{RamStart() + offset + k:X4}");
             }
         }
         else
         {
             EmitComment("ArrayLoad variable index via Z");
-            var absBase = RamStart() + baseOffset;
-            if (NeedsWideIndex(al.Count, elemSize))
-            {
-                // The byte offset does not fit in eight bits, so the index has to be carried
-                // as a PAIR. Loading it as one byte and adding the carry against R1 (which is
-                // zero) discarded the high half: every element past the first 256 bytes
-                // aliased back into them, silently. A uint16 array wrapped at index 128,
-                // because the doubling overflowed too.
-                LoadIntoReg(al.Index, "R24", DataType.UINT16);
-                if (elemSize == 2) { Emit("LSL", "R24"); Emit("ROL", "R25"); }
-                Emit("LDI", "R30", $"low({absBase})");
-                Emit("LDI", "R31", $"high({absBase})");
-                Emit("ADD", "R30", "R24");
-                Emit("ADC", "R31", "R25");
-            }
-            else
-            {
-                LoadIntoReg(al.Index, "R24");
-                if (elemSize == 2) Emit("LSL", "R24");
-                Emit("LDI", "R30", $"low({absBase})");
-                Emit("LDI", "R31", $"high({absBase})");
-                Emit("ADD", "R30", "R24"); // Add offset to Z low byte (Generates carry if overflow)
-                Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
-            }
-            Emit("LD", "R24", "Z");
-            if (is16) Emit("LDD", "R25", "Z+1");
+            EmitElementAddressIntoZ(al.Index, al.Count, elemSize, RamStart() + baseOffset);
+            Emit("LD", regs[0], "Z");
+            for (int k = 1; k < elemSize; k++) Emit("LDD", regs[k], $"Z+{k}");
         }
 
-        StoreRegInto("R24", al.Dst, al.ElemType);
+        StoreElementFromRegs(al.Dst, al.ElemType);
+    }
+
+    /// <summary>
+    /// The registers that carry an array element's bytes, in memory order. An integer uses the
+    /// uint32 layout LoadIntoReg/StoreRegInto speak (R24=b0, R25=b1, R22=b2, R23=b3); a float the
+    /// layout LoadFloatIntoRegs/StoreFloatFromRegs speak (R22=b0 .. R25=b3). The load and the
+    /// store moved only a uint16's two bytes, so an int32, uint32 or float element kept its low
+    /// byte (or two) and read the rest from whatever the registers last held, and a run-time
+    /// index was not scaled past x2: element k of an int32 array was read at byte k.
+    /// </summary>
+    private static string[] ElementByteRegs(DataType elemType) => elemType.SizeOf() switch
+    {
+        1 => ["R24"],
+        2 => ["R24", "R25"],
+        _ when elemType == DataType.FLOAT => ["R22", "R23", "R24", "R25"],
+        _ => ["R24", "R25", "R22", "R23"],
+    };
+
+    private void LoadElementIntoRegs(Val src, DataType elemType)
+    {
+        if (elemType == DataType.FLOAT) LoadFloatIntoRegs(src);
+        else LoadIntoReg(src, "R24", elemType);
+    }
+
+    private void StoreElementFromRegs(Val dst, DataType elemType)
+    {
+        if (elemType == DataType.FLOAT) StoreFloatFromRegs(dst);
+        else StoreRegInto("R24", dst, elemType);
+    }
+
+    /// <summary>
+    /// Z = <paramref name="absBase"/> + index * elemSize. Clobbers R24 (and R25 when the index is
+    /// carried as a pair) and nothing else, so an element value held in R18-R23 survives it.
+    /// </summary>
+    private void EmitElementAddressIntoZ(Val index, int count, int elemSize, int absBase)
+    {
+        if (NeedsWideIndex(count, elemSize))
+        {
+            // The byte offset does not fit in eight bits, so the index has to be carried as a
+            // PAIR. Loading it as one byte and adding the carry against R1 (which is zero)
+            // discarded the high half: every element past the first 256 bytes aliased back
+            // into them, silently. A uint16 array wrapped at index 128, because the doubling
+            // overflowed too.
+            LoadIntoReg(index, "R24", DataType.UINT16);
+            for (int s = elemSize; s > 1; s >>= 1) { Emit("LSL", "R24"); Emit("ROL", "R25"); }
+            Emit("LDI", "R30", $"low({absBase})");
+            Emit("LDI", "R31", $"high({absBase})");
+            Emit("ADD", "R30", "R24");
+            Emit("ADC", "R31", "R25");
+        }
+        else
+        {
+            LoadIntoReg(index, "R24");
+            for (int s = elemSize; s > 1; s >>= 1) Emit("LSL", "R24");
+            Emit("LDI", "R30", $"low({absBase})");
+            Emit("LDI", "R31", $"high({absBase})");
+            Emit("ADD", "R30", "R24"); // Add offset to Z low byte (Generates carry if overflow)
+            Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
+        }
     }
 
     // --- Constant fill runs -------------------------------------------------
@@ -4818,58 +4853,38 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     private void CompileArrayStore(ArrayStore ast)
     {
         var elemSize = ast.ElemType.SizeOf();
-        var is16 = elemSize == 2;
+        var regs = ElementByteRegs(ast.ElemType);
         if (!_stackLayout.TryGetValue(ast.ArrayName, out int baseOffset))
         {
             EmitComment("ArrayStore: array not in stack_layout -- skip");
             return;
         }
 
-        LoadIntoReg(ast.Src, "R24", ast.ElemType);
+        LoadElementIntoRegs(ast.Src, ast.ElemType);
 
         if (ast.Index is Constant c)
         {
             var offset = baseOffset + c.Value * elemSize;
-            // STD displacement is 6-bit (max 63): the high byte at offset+1 must also fit.
+            // STD displacement is 6-bit (max 63): the element's last byte must also fit.
             if (offset + elemSize - 1 < 64)
             {
-                EmitSlotStore(offset, "R24");
-                if (is16) EmitSlotStore(offset + 1, "R25");
+                for (int k = 0; k < elemSize; k++) EmitSlotStore(offset + k, regs[k]);
             }
             else
             {
-                Emit("STS", $"0x{RamStart() + offset:X4}", "R24");
-                if (is16) Emit("STS", $"0x{RamStart() + offset + 1:X4}", "R25");
+                for (int k = 0; k < elemSize; k++)
+                    Emit("STS", $"0x{RamStart() + offset + k:X4}", regs[k]);
             }
         }
         else
         {
-            Emit("MOV", "R18", "R24");
-            if (is16) Emit("MOV", "R19", "R25");
+            // The value moves out of the way of the index, which is computed in R24:R25.
+            string[] held = ["R18", "R19", "R20", "R21"];
+            for (int k = 0; k < elemSize; k++) Emit("MOV", held[k], regs[k]);
             EmitComment("ArrayStore variable index via Z");
-            var absBase = RamStart() + baseOffset;
-            if (NeedsWideIndex(ast.Count, elemSize))
-            {
-                // Same as the load side: past 256 bytes the index must be carried as a pair,
-                // or every store past the first 256 bytes lands back inside them.
-                LoadIntoReg(ast.Index, "R24", DataType.UINT16);
-                if (elemSize == 2) { Emit("LSL", "R24"); Emit("ROL", "R25"); }
-                Emit("LDI", "R30", $"low({absBase})");
-                Emit("LDI", "R31", $"high({absBase})");
-                Emit("ADD", "R30", "R24");
-                Emit("ADC", "R31", "R25");
-            }
-            else
-            {
-                LoadIntoReg(ast.Index, "R24");
-                if (elemSize == 2) Emit("LSL", "R24");
-                Emit("LDI", "R30", $"low({absBase})");
-                Emit("LDI", "R31", $"high({absBase})");
-                Emit("ADD", "R30", "R24"); // Z_low = Z_low + offset (Sets Carry if overflow)
-                Emit("ADC", "R31", "R1");  // R1 == 0; avoids clobbering an R16 the allocator may hold
-            }
-            Emit("ST", "Z", "R18");
-            if (is16) Emit("STD", "Z+1", "R19");
+            EmitElementAddressIntoZ(ast.Index, ast.Count, elemSize, RamStart() + baseOffset);
+            Emit("ST", "Z", held[0]);
+            for (int k = 1; k < elemSize; k++) Emit("STD", $"Z+{k}", held[k]);
         }
     }
 
