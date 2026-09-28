@@ -430,7 +430,7 @@
    "rc": 1,
    "violations": []
   },
-  "105_generator_expression_refused": {
+  "105_sum_generator_expression": {
    "rc": 0,
    "violations": []
   },
@@ -1755,6 +1755,38 @@
    "violations": []
   },
   "514_negative_index_into_a_heap_list": {
+   "rc": 0,
+   "violations": []
+  },
+  "520_pow_runtime_argument": {
+   "rc": 0,
+   "violations": []
+  },
+  "521_divmod_negative_operand": {
+   "rc": 0,
+   "violations": []
+  },
+  "522_sum_over_fixed_array": {
+   "rc": 0,
+   "violations": []
+  },
+  "523_sum_generator_without_start": {
+   "rc": 0,
+   "violations": []
+  },
+  "524_reversed_over_fixed_array": {
+   "rc": 0,
+   "violations": []
+  },
+  "525_chr_runtime_bound_to_a_name": {
+   "rc": 0,
+   "violations": []
+  },
+  "526_builtin_name_as_a_value": {
+   "rc": 1,
+   "violations": []
+  },
+  "527_power_of_an_expression_base": {
    "rc": 0,
    "violations": []
   },
