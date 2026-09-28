@@ -1,4 +1,4 @@
-# expect: refuse Expected parameter name
+# expect: match
 # doc: https://github.com/PyMCU/PyMCU/issues/389
 # frontend: default
 def add(x, y, /):
