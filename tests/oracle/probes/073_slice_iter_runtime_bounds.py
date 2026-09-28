@@ -1,6 +1,5 @@
 # expect: match
 # doc: docs/language/roadmap.md:62
-# tracked: #364
 def total(n):
     buf = bytearray(b"abcdef")
     s = 0
