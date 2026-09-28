@@ -1716,6 +1716,48 @@
    "rc": 1,
    "violations": []
   },
+  "504_integer_literal_where_a_float_is_wanted": {
+   "rc": 0,
+   "violations": []
+  },
+  "510_four_byte_array_elements": {
+   "rc": 0,
+   "violations": [
+    "canfail|index-width|main|array 'big' spans 320 bytes but index var 's' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "generate|index-width|main|array 'big' spans 320 bytes but index var 's' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "optimize|index-width|main|array 'big' spans 320 bytes but index var 's' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "unify-widths|index-width|main|array 'big' spans 320 bytes but index var 's' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)"
+   ]
+  },
+  "511_float_array_elements": {
+   "rc": 0,
+   "violations": [
+    "canfail|index-width|main|array 'a_v' spans 280 bytes but index var 'inline1.get.i' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "canfail|index-width|main|array 'a_v' spans 280 bytes but index var 'inline1.put.i' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "canfail|index-width|main|array 'a_v' spans 280 bytes but index var 's' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "generate|index-width|main|array 'a_v' spans 280 bytes but index var 'inline1.get.i' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "generate|index-width|main|array 'a_v' spans 280 bytes but index var 'inline1.put.i' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "generate|index-width|main|array 'a_v' spans 280 bytes but index var 's' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "optimize|index-width|main|array 'a_v' spans 280 bytes but index var 'inline1.get.i' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "optimize|index-width|main|array 'a_v' spans 280 bytes but index var 'inline1.put.i' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "optimize|index-width|main|array 'a_v' spans 280 bytes but index var 's' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "unify-widths|index-width|main|array 'a_v' spans 280 bytes but index var 'inline1.get.i' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "unify-widths|index-width|main|array 'a_v' spans 280 bytes but index var 'inline1.put.i' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)",
+    "unify-widths|index-width|main|array 'a_v' spans 280 bytes but index var 's' (UINT8) is UINT8 -- everything past offset 255 is unreachable (pymcu-avr#32)"
+   ]
+  },
+  "512_negative_index_into_a_field_array": {
+   "rc": 0,
+   "violations": []
+  },
+  "513_runtime_sized_bytearray_augassign_and_negative_index": {
+   "rc": 0,
+   "violations": []
+  },
+  "514_negative_index_into_a_heap_list": {
+   "rc": 0,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": [
