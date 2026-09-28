@@ -107,23 +107,19 @@ public class MpBusFixesTests
     }
 
     /// <summary>
-    /// The same nesting through `from machine import disable_irq, enable_irq`. A compiler
-    /// fault takes the result of an @inline function imported with `from` for an instance,
-    /// so the restore's `state != 0` folds to true and the inner enable_irq(s2) re-enables.
-    /// Fixed on PyMCU's branch fix/bytes-literal-and-from-import-print, not merged yet. This
-    /// pins TODAY's wrong output so it fails when that fix lands: then assert
-    /// "1\n0\n0\n0\n1\nEND\n", as the machine.-spelled test above does.
+    /// The same nesting through `from machine import disable_irq, enable_irq`, the spelling
+    /// most MicroPython code uses. The result of an @inline function imported with `from` was
+    /// taken for an instance, so the restore's `state != 0` folded to true and the inner
+    /// enable_irq(s2) re-enabled interrupts inside the outer section.
     /// </summary>
     [TestCase(false)]
     [TestCase(true)]
-    public void Irq_NestedSections_FromImport_KnownCompilerFault(bool pyParser)
+    public void Irq_NestedSections_FromImport_RestoreOnlyAtTheOuterSection(bool pyParser)
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(Build("mp-irq-nesting-from-import", pyParser));
-        RunToEnd(uno).Should().Be("1\n0\n0\n1\n1\nEND\n",
-            "KNOWN COMPILER FAULT (from-import of an @inline taken for an instance, "
-            + "PyMCU fix/bytes-literal-and-from-import-print): if this now reads 1 0 0 0 1 "
-            + "the fix has landed, and this test must be changed to expect it");
+        RunToEnd(uno).Should().Be("1\n0\n0\n0\n1\nEND\n",
+            "the inner enable_irq(s2) restores the disabled state; only the outer one re-enables");
     }
 
     // ── ADC ──────────────────────────────────────────────────────────────────
