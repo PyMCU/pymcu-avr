@@ -9,9 +9,10 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// <summary>
 /// bool interpolation: a name bound to True/False streams Python's words, both
 /// from an f-string and from print(). A bool folded to a constant prints its word
-/// with no branch; one decided at runtime picks the word with a branch. The
-/// frontier is deliberate — a comparison is an integer in PyMCU, not a bool, and
-/// so is a name that ever holds an integer, so both keep printing digits.
+/// with no branch; one decided at runtime picks the word with a branch. A name
+/// bound to a comparison is the bool CPython binds, so it spells True/False too
+/// -- the frontier is a name that ever holds an integer, which keeps printing
+/// digits at every read.
 /// </summary>
 [TestFixture]
 public class FStringBoolTests
@@ -54,11 +55,11 @@ public class FStringBoolTests
     }
 
     [Test]
-    public void ComparisonAndMixedName_StayNumeric()
+    public void BoundComparisonName_IsBool_MixedName_StaysNumeric()
     {
         var uno = Sim();
-        uno.RunUntilSerial(uno.Serial, "cmp=1 mixed=0\n", maxMs: 3000);
-        uno.Serial.Should().ContainLine("cmp=1 mixed=0");
+        uno.RunUntilSerial(uno.Serial, "cmp=True mixed=0\n", maxMs: 3000);
+        uno.Serial.Should().ContainLine("cmp=True mixed=0");
     }
 
     [Test]

@@ -1,9 +1,9 @@
 # fstring-bool: a bool interpolates as Python spells it -- True/False, not 1/0.
 #
 # A name bound to True/False everywhere it is written is a real bool, so both
-# f"{flag}" and print(flag) stream the words. The frontier: a comparison is an
-# integer in PyMCU (not a bool), and so is a name that ever holds one, so those
-# keep printing digits.
+# f"{flag}" and print(flag) stream the words. So is a name bound to a
+# comparison, which is the bool CPython binds. The frontier: a name that ever
+# holds an integer keeps printing digits at every read.
 #
 # Expected UART output:
 #   BOOL
@@ -11,7 +11,7 @@
 #   lit=True/False
 #   True False
 #   toggled=False
-#   cmp=1 mixed=0
+#   cmp=True mixed=0
 #   seen=False
 #   seen=True
 from pymcu.types import uint8
