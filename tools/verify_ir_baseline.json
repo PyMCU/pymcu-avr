@@ -2996,9 +2996,7 @@
   },
   "imported-module-init": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|pymcu_hal_avr_uart_avr_uart_write_fmt|'counter_n' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "imported-module-pin": {
    "rc": 0,
@@ -3296,7 +3294,35 @@
    "rc": 0,
    "violations": []
   },
+  "mp-adc-full-scale": {
+   "rc": 0,
+   "violations": []
+  },
   "mp-i2c-nack": {
+   "rc": 0,
+   "violations": []
+  },
+  "mp-i2c-repeated-start": {
+   "rc": 0,
+   "violations": []
+  },
+  "mp-irq-nesting": {
+   "rc": 0,
+   "violations": []
+  },
+  "mp-irq-nesting-from-import": {
+   "rc": 0,
+   "violations": []
+  },
+  "mp-pwm-retune": {
+   "rc": 0,
+   "violations": []
+  },
+  "mp-signal-pin-args": {
+   "rc": 0,
+   "violations": []
+  },
+  "mp-uart-frame": {
    "rc": 0,
    "violations": []
   },
@@ -3959,7 +3985,7 @@
   "surfacecov-debouncer": {
    "rc": 0,
    "violations": [
-    "generate|storage-width|_bound_b_update|'inline1_update_current_state' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+    "generate|storage-width|_bound_b_update|'inline1__bound_b_update_update_current_state' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
   },
   "surfacecov-dht": {
