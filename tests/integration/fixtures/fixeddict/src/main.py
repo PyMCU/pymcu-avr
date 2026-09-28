@@ -1,6 +1,8 @@
 # fixeddict: mutable fixed-capacity dict (pymcu.types.FixedDict) -- open
 # addressing over fixed arrays, no heap. Python semantics: KeyError on missing
 # key, ValueError on inserting into a full dict, in/len/get/pop/clear.
+# `in` under an integer annotation stores the byte the dunder returned (C:1/0);
+# unannotated it is Python's bool (bool(__contains__(...)) -- C2:True/False).
 #
 # Expected UART output:
 #   FXD
@@ -8,6 +10,8 @@
 #   G2:7
 #   C:1
 #   C:0
+#   C2:True
+#   C2:False
 #   L:2
 #   D:99
 #   P:7
@@ -39,6 +43,11 @@ def main():
     print(f"C:{c}")
     c = 9 in d
     print(f"C:{c}")
+
+    c2 = 300 in d
+    print(f"C2:{c2}")
+    c2 = 9 in d
+    print(f"C2:{c2}")
 
     n: uint8 = len(d)
     print(f"L:{n}")

@@ -36,6 +36,8 @@ public class FixedDictTests
         uno.RunUntilSerial(uno.Serial, "D:99\n", maxMs: 3000);
         uno.Serial.Should().ContainLine("C:1");
         uno.Serial.Should().ContainLine("C:0");
+        uno.Serial.Should().ContainLine("C2:True");
+        uno.Serial.Should().ContainLine("C2:False");
         uno.Serial.Should().ContainLine("L:2");
     }
 
