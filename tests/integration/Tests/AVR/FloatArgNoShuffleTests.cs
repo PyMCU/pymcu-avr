@@ -33,7 +33,7 @@ public class FloatArgNoShuffleTests
     {
         var uno = _session.Reset();
         uno.RunUntilSerial(uno.Serial, "D", maxMs: 4000);
-        // 0.625 is exact in binary, so the 7-significant-digit repr spells all
+        // 0.625 is exact in binary, so MicroPython's float32 print algorithm spells all
         // three of its digits (PyMCU's float print is MicroPython's policy, not
         // the two-fixed-decimals it used to be -- 0.625 used to round to "0.63").
         uno.Serial.Text.Should().Be("2.75\n2.25\n0.625\n10.0\n5.0\n7.5\nD",

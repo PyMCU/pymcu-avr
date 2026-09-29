@@ -7,10 +7,10 @@
 # to the signed helper (pymcu-avr#8).
 #
 # The small values are here because the fix changes how every float is printed, not only the
-# large ones. PyMCU's float print now follows MicroPython's policy (7 significant digits,
-# half-to-even, trailing zeros trimmed), not the old fixed-two-decimals formatter this
-# fixture's expected output used to pin -- 0.005/0.999/9.999 no longer round at the second
-# decimal, they print their own exact digits.
+# large ones. PyMCU's float print now follows MicroPython's REAL float32 print
+# algorithm (py/formatfloat.c's mp_format_float), not the old fixed-two-decimals
+# formatter this fixture's expected output used to pin -- 0.005/0.999/9.999 no longer
+# round at the second decimal, they print their own exact digits.
 #
 # Everything stays below 2**31 on purpose. Above that the answer also depends on
 # pymcu-avr#8, which uint32-from-float covers, and this fixture is about the printer.

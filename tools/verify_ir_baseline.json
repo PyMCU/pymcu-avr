@@ -4108,7 +4108,7 @@
    ]
   },
   "surfacecov-tcs34725-b": {
-   "rc": 1,
+   "rc": 0,
    "violations": [
     "canfail|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "canfail|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",

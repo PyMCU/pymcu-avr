@@ -191,15 +191,6 @@ public static class DifferentialCorpus
                 "the unoptimized build needs 2337 B of static data on a 2048 B part (the " +
                 "24-byte calibration buffer plus the driver's unoptimized temporaries); " +
                 "the optimized build is pinned by AdafruitBmp280UnmodifiedTests",
-            ["fixtures/adafruit-bmp280-unmodified-loop"] =
-                "the unoptimized build's .text no longer fits atmega328p's 32 KB flash as " +
-                "of PyMCU's float32 print/str/repr fix (MicroPython's 7-significant-digit " +
-                "policy, ~7.3 KB of _f32_repr/_f32_scale the first time a build prints a " +
-                "float -- see docs/language/limitations.md in the frontend repo): the " +
-                "unoptimized build already carries every temporary the optimizer would " +
-                "have removed, and this fixture prints a float once per loop iteration. " +
-                "The optimized build fits (73% of flash) and is pinned by " +
-                "AdafruitBmp280UnmodifiedLoopTests",
             ["fixtures/adafruit-ht16k33"] =
                 "the unoptimized build needs 3192 B of static data on a 2048 B part: the " +
                 "driver's whole call graph inlines into main, so the temporaries the " +
@@ -225,14 +216,8 @@ public static class DifferentialCorpus
                 "optimized through the surfacecov oracle pair",
             ["fixtures/surfacecov-tcs34725-b"] =
                 "the unoptimized build needs 4277 B of static data on a 2048 B part (the " +
-                "whole-surface program's temporaries without the optimizer). The optimized " +
-                "build no longer exists either as of PyMCU's float32 print/str/repr fix " +
-                "(mp_format_float's 7-significant-digit policy, replacing two fixed " +
-                "decimals): print(t.lux) and print(t.color_temperature) now pull in the " +
-                "correctly-rounded _f32_repr/_f32_scale pair (~7.3 KB together on AVR, " +
-                "see docs/language/limitations.md), which overflows this program's " +
-                ".text by ~490 B on a 32 KB atmega328p -- printing two sensor floats " +
-                "correctly costs more flash than printing them wrong did",
+                "whole-surface program's temporaries without the optimizer); it runs " +
+                "optimized through the surfacecov oracle pair",
             ["fixtures/surfacecov-dht"] =
                 "byte-identical upstream adafruit_dht.py drives four pins through the " +
                 "pulse HAL, whose ISR can sit at only one interrupt vector -- the build " +
