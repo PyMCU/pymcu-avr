@@ -10,8 +10,9 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 ///
 /// MicroPython-style LM35 driver using machine.ADC on channel A0.
 /// Conversion: Temp_C = ADC_raw * 0.4882813  (5 V ref, 10-bit)
-/// Printed via uart_write_float: two rounded decimals, trailing zero
-/// trimmed, e.g. "24.9" or "99.61".
+/// Printed via uart_write_float: MicroPython's float32 policy (7 significant
+/// digits, half-to-even, trailing zeros trimmed), e.g. "24.90235" or
+/// "99.60939" -- not the fixed two decimals it used to be.
 ///
 /// Boot banner: "LM35 ready\n"
 /// Loop output: "T: &lt;temp&gt; C\n"  (sep="", so no extra spaces)
@@ -55,31 +56,34 @@ public class Lm35SensorMpTests
     }
 
     [Test]
-    public void Raw51_Prints24Point9Celsius()
+    public void Raw51_Prints24Point90235Celsius()
     {
-        // raw = 51 => 51 * 0.4882813 = 24.90... => uart_write_float => "24.9"
+        // raw = 51 => 51 * 0.4882813 = 24.90... => uart_write_float (7 significant
+        // digits on the float32 value) => "24.90235"
         var uno = Sim();
         uno.AddAdc(AvrAdc.AdcConfig, out var adc);
         adc.ChannelValues[0] = 51.0 / 1024.0 * 5.0;
 
         uno.RunUntilSerial(uno.Serial, "LM35 ready\n", maxMs: 500);
-        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 24.9 C"), maxMs: 500);
+        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 24.90235 C"), maxMs: 500);
 
-        uno.Serial.Text.Should().Contain("T: 24.9 C");
+        uno.Serial.Text.Should().Contain("T: 24.90235 C");
     }
 
     [Test]
-    public void Raw204_Prints99Point61Celsius()
+    public void Raw204_Prints99Point60939Celsius()
     {
-        // raw = 204 => 204 * 0.4882813 = 99.609... => uart_write_float => "99.61"
+        // raw = 204 => 204.0f * 0.4882813f (both rounded to float32 before the
+        // multiply, one rounding on the product) = 99.60939025... => 7
+        // significant digits => "99.60939"
         var uno = Sim();
         uno.AddAdc(AvrAdc.AdcConfig, out var adc);
         adc.ChannelValues[0] = 204.0 / 1024.0 * 5.0;
 
         uno.RunUntilSerial(uno.Serial, "LM35 ready\n", maxMs: 500);
-        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 99.61 C"), maxMs: 500);
+        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 99.60939 C"), maxMs: 500);
 
-        uno.Serial.Text.Should().Contain("T: 99.61 C");
+        uno.Serial.Text.Should().Contain("T: 99.60939 C");
     }
 
     [Test]
@@ -91,13 +95,14 @@ public class Lm35SensorMpTests
         adc.ChannelValues[0] = 51.0 / 1024.0 * 5.0; // ~25 C
 
         uno.RunUntilSerial(uno.Serial, "LM35 ready\n", maxMs: 500);
-        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 24.9 C"), maxMs: 500);
+        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 24.90235 C"), maxMs: 500);
 
-        // Change to ~50 C (raw = 102 => 49.8)
+        // Change to ~50 C (raw = 102 => 49.804695... => "49.8047": the 7th
+        // significant digit is a trailing zero, trimmed)
         adc.ChannelValues[0] = 102.0 / 1024.0 * 5.0;
-        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 49.8 C"), maxMs: 1000);
+        uno.RunUntilSerial(uno.Serial, s => s.Contains("T: 49.8047 C"), maxMs: 1000);
 
-        uno.Serial.Text.Should().Contain("T: 49.8 C");
+        uno.Serial.Text.Should().Contain("T: 49.8047 C");
     }
 
     // ── Helper ───────────────────────────────────────────────────────────────

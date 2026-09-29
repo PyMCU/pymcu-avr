@@ -191,6 +191,15 @@ public static class DifferentialCorpus
                 "the unoptimized build needs 2337 B of static data on a 2048 B part (the " +
                 "24-byte calibration buffer plus the driver's unoptimized temporaries); " +
                 "the optimized build is pinned by AdafruitBmp280UnmodifiedTests",
+            ["fixtures/adafruit-bmp280-unmodified-loop"] =
+                "the unoptimized build's .text no longer fits atmega328p's 32 KB flash as " +
+                "of PyMCU's float32 print/str/repr fix (MicroPython's 7-significant-digit " +
+                "policy, ~7.3 KB of _f32_repr/_f32_scale the first time a build prints a " +
+                "float -- see docs/language/limitations.md in the frontend repo): the " +
+                "unoptimized build already carries every temporary the optimizer would " +
+                "have removed, and this fixture prints a float once per loop iteration. " +
+                "The optimized build fits (73% of flash) and is pinned by " +
+                "AdafruitBmp280UnmodifiedLoopTests",
             ["fixtures/adafruit-ht16k33"] =
                 "the unoptimized build needs 3192 B of static data on a 2048 B part: the " +
                 "driver's whole call graph inlines into main, so the temporaries the " +

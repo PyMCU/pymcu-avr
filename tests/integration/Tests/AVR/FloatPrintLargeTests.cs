@@ -14,6 +14,11 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 ///
 /// The small values are pinned as well: the fix changes how every float is printed, not only
 /// the large ones.
+///
+/// PyMCU's float print later moved again, from a fixed two decimals to MicroPython's
+/// 7-significant-digit policy (float32 print/str/repr fix): 0.005, 0.999 and 9.999 print
+/// their own exact digits now instead of rounding at the second decimal, so the two tests
+/// that pinned that rounding carry are pinning the new digits instead.
 /// </summary>
 [TestFixture]
 public class FloatPrintLargeTests
@@ -33,14 +38,17 @@ public class FloatPrintLargeTests
     [Test]
     public void SmallValuesAreUnchanged()
     {
-        Boot().Should().StartWith("3.5\n0.75\n-7.0\n0.01\n");
+        Boot().Should().StartWith("3.5\n0.75\n-7.0\n0.005\n");
     }
 
     [Test]
-    public void RoundingStillCarriesOutOfTheFraction()
+    public void ExactSmallFractionsPrintTheirOwnDigits()
     {
-        Boot().Should().Contain("1.0\n10.0\n0.0\n",
-            "0.999 is 1.00 and 9.999 is 10.00, never 0.100 and 9.100");
+        // 0.005, 0.999 and 9.999 are all exact at 3 or 4 significant digits, so
+        // MicroPython's 7-significant-digit policy prints them as spelled --
+        // the old fixed-two-decimals formatter this test used to pin rounded
+        // 0.999 up to "1.00" and 9.999 up to "10.00".
+        Boot().Should().Contain("0.999\n9.999\n0.0\n");
     }
 
     [Test]
