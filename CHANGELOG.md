@@ -1,6 +1,16 @@
 # Changelog — pymcu-avr
 
-## Unreleased
+## 0.1.0b1 (re-frozen from main at 07e307f, 2026-09-29)
+
+Beta 1: the AVR backend moves out of alpha alongside the frontend
+(`pymcu-compiler`/`pymcu-stdlib` 0.1.0b1), the CircuitPython layer and the
+MicroPython layer. Every fix below was exercised on real Arduino Uno
+silicon or the AVR8Sharp emulator with a regression fixture in the
+integration suite. The ARM/RP2040/RP2350, PIC, and RISC-V backends stay
+alpha on purpose. First frozen at `fc99c48` (2026-09-15); the 2026-09-25
+decision to ship from `main` rather than a static freeze applies here too,
+so this section is regenerated against `main` at `07e307f`, mirroring
+`pymcu-compiler`'s CHANGELOG.
 
 ### Added
 
@@ -78,6 +88,27 @@
   Nothing answers on the emulated bus, so the address is NACKed: the test now asserts the
   address clocks out, the payload does not, and the UART reports
   `E:OSError: [Errno 19] No such device`.
+
+### Fixed (2026-09-25 to 2026-09-29)
+
+Register allocation across a `CALL`, closing a family of miscompiles where the codegen
+treated a call as killing state it does not: a `CALL` clobbers whatever the callee's own
+ABI says, not every temp live across it.
+
+- **avr**: load an integer literal as the float it stands for (not its bit pattern).
+- **avr**: load and store a four-byte array element whole, instead of a partial
+  read/write.
+- **avr**: a temp passed as an `asm()` operand gets a stack slot instead of aliasing a
+  register the inline assembly also touches.
+- **avr**: a temp live across an `asm()` block that writes `R16:R17` is spilled first,
+  instead of being silently overwritten (see [[r16-pair-across-runtime-calls]]: a `CALL`
+  is not a kill for R16:R17 either).
+- **avr**: a call into an outlined region keeps the "park" (a value held in a register
+  across a call boundary) alive instead of treating the call as clobbering it.
+- **avr**: a park keeps collapsing (coalescing redundant moves) across a call that
+  clobbers the register it was parked in.
+- **avr**: a temp live across a routine call that writes `R16` is spilled first.
+- **avr**: a call is not treated as redefining a parked temp's value.
 
 ### Performance
 
