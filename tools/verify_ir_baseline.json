@@ -1790,6 +1790,22 @@
    "rc": 0,
    "violations": []
   },
+  "528_descriptor_value_named_widened": {
+   "rc": 0,
+   "violations": []
+  },
+  "529_descriptor_nondata_write_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "530_descriptor_class_level_read_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "531_descriptor_set_name_refused": {
+   "rc": 1,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": [
