@@ -1,10 +1,9 @@
 # expect: match
 # doc: docs/language/roadmap.md:27
-# A method called on the instance a factory RETURNED. The diagnostic names the rule rather
-# than the symptom: a receiver has to be a name bound to an object, a register, or a value
-# PyMCU defines methods on. Measured identical in all five positions (value, condition,
-# argument, index, return), so one probe pins the rule and the positions do not each need
-# their own.
+# A method called on the instance a factory RETURNED. It used to be refused: the receiver
+# was not a name bound to an object. Once the factory result temporary carries its instance
+# tag, the method dispatches and reads the instance the call produced, the same fix that
+# binds `rd(make(2))` parameters.
 from pymcu.types import uint8
 from pymcu.chips.atmega328p import GPIOR0
 
