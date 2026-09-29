@@ -4108,15 +4108,21 @@
    ]
   },
   "surfacecov-tcs34725-b": {
-   "rc": 0,
+   "rc": 1,
    "violations": [
     "canfail|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "canfail|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'main.iret_1_0' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_1_0' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_1_1' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'main.iret_1_1' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'main.iret_1_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_1_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'main.iret_2_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'main.iret_2_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "optimize|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "optimize|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",

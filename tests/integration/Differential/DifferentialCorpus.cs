@@ -216,8 +216,14 @@ public static class DifferentialCorpus
                 "optimized through the surfacecov oracle pair",
             ["fixtures/surfacecov-tcs34725-b"] =
                 "the unoptimized build needs 4277 B of static data on a 2048 B part (the " +
-                "whole-surface program's temporaries without the optimizer); it runs " +
-                "optimized through the surfacecov oracle pair",
+                "whole-surface program's temporaries without the optimizer). The optimized " +
+                "build no longer exists either as of PyMCU's float32 print/str/repr fix " +
+                "(mp_format_float's 7-significant-digit policy, replacing two fixed " +
+                "decimals): print(t.lux) and print(t.color_temperature) now pull in the " +
+                "correctly-rounded _f32_repr/_f32_scale pair (~7.3 KB together on AVR, " +
+                "see docs/language/limitations.md), which overflows this program's " +
+                ".text by ~490 B on a 32 KB atmega328p -- printing two sensor floats " +
+                "correctly costs more flash than printing them wrong did",
             ["fixtures/surfacecov-dht"] =
                 "byte-identical upstream adafruit_dht.py drives four pins through the " +
                 "pulse HAL, whose ISR can sit at only one interrupt vector -- the build " +
