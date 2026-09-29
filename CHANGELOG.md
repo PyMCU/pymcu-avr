@@ -1,6 +1,6 @@
 # Changelog — pymcu-avr
 
-## 0.1.0b1 (re-frozen from main at f8f053f, 2026-09-29)
+## 0.1.0b1 (re-frozen from main at ab5cf0e, 2026-09-29)
 
 Beta 1: the AVR backend moves out of alpha alongside the frontend
 (`pymcu-compiler`/`pymcu-stdlib` 0.1.0b1), the CircuitPython layer and the
@@ -9,8 +9,19 @@ silicon or the AVR8Sharp emulator with a regression fixture in the
 integration suite. The ARM/RP2040/RP2350, PIC, and RISC-V backends stay
 alpha on purpose. First frozen at `fc99c48` (2026-09-15); the 2026-09-25
 decision to ship from `main` rather than a static freeze applies here too,
-so this section is regenerated against `main` at `f8f053f`, mirroring
+so this section is regenerated against `main` at `ab5cf0e`, mirroring
 `pymcu-compiler`'s CHANGELOG.
+
+### Tests (2026-09-29, follows pymcu-compiler's descriptor protocol P0 fix)
+
+`pymcu-compiler`'s fix for a class attribute named `value` never calling its own
+descriptor protocol (silently, exactly the name `adafruit_register` and `digitalio` use)
+untracks oracle probe `080_descriptor_get_set.py`: it now matches CPython instead of
+being `xfail(strict)`. Four new probes (`528`-`531`) cover the shapes the fix refuses
+instead of silently miscompiling: a widened (non-`value`-colliding) descriptor still
+working, a write to a non-data descriptor refused, a class-level read (`Box.value`, no
+instance) refused, and a descriptor defining `__set_name__` refused.
+`tools/verify_ir_baseline.json` ratcheted for the four new probes.
 
 ### Fixed (2026-09-29, follows pymcu-compiler's float print policy change)
 
