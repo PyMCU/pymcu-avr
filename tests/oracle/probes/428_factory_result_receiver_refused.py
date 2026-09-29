@@ -1,4 +1,4 @@
-# expect: refuse cannot be dispatched
+# expect: match
 # doc: docs/language/roadmap.md:27
 # A method called on the instance a factory RETURNED. The diagnostic names the rule rather
 # than the symptom: a receiver has to be a name bound to an object, a register, or a value
