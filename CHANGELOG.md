@@ -1,6 +1,6 @@
 # Changelog — pymcu-avr
 
-## 0.1.0b1 (re-frozen from main at 07e307f, 2026-09-29)
+## 0.1.0b1 (re-frozen from main at f8f053f, 2026-09-29)
 
 Beta 1: the AVR backend moves out of alpha alongside the frontend
 (`pymcu-compiler`/`pymcu-stdlib` 0.1.0b1), the CircuitPython layer and the
@@ -9,8 +9,30 @@ silicon or the AVR8Sharp emulator with a regression fixture in the
 integration suite. The ARM/RP2040/RP2350, PIC, and RISC-V backends stay
 alpha on purpose. First frozen at `fc99c48` (2026-09-15); the 2026-09-25
 decision to ship from `main` rather than a static freeze applies here too,
-so this section is regenerated against `main` at `07e307f`, mirroring
+so this section is regenerated against `main` at `f8f053f`, mirroring
 `pymcu-compiler`'s CHANGELOG.
+
+### Fixed (2026-09-29, follows pymcu-compiler's float print policy change)
+
+`pymcu-compiler`'s float32 `print`/`str`/`repr` fix (two fixed decimals,
+silently wrong, replaced by MicroPython's real 6-9 significant-digit
+algorithm) moved every fixture that prints a float, and briefly broke two
+that print several: `surfacecov-tcs34725-b`'s optimized build and
+`adafruit-bmp280-unmodified-loop`'s optimized and unoptimized builds
+overflowed `atmega328p` flash under an intermediate exact-bignum design
+(~7.3 KB), then fit again once the frontend switched to a direct port of
+MicroPython's actual algorithm (~3.85 KB). Both are restored to
+compiling; their `DifferentialCorpus.ExpectedBuildFailures` entries and
+`tools/verify_ir_baseline.json` cells are back to their original,
+float-unrelated state, with nothing excluded for float size anymore.
+Three integration tests (`FloatArgNoShuffleTests`, `FloatPrintLargeTests`,
+`Lm35SensorMpTests`) that pinned the old, silently-wrong two-decimal
+output now pin MicroPython's real digits for those values, cross-checked
+against `numpy.float32` arithmetic. `compat-cp-blink`, the README's
+canonical CircuitPython blink, is pinned at 148 bytes (was 178, before
+`pymcu-compiler`'s exception-tail over-rooting fix), matching its
+MicroPython sibling `compat-mp-blink-toggle` (146) plus the 2 bytes
+`Direction.OUTPUT`'s PORT-before-DDR clear costs.
 
 ### Added
 
