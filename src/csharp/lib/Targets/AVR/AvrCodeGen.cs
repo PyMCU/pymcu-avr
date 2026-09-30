@@ -1305,20 +1305,31 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                                      .Select(g => g.Name).ToList();
         _needsHalt = false;
         _varSizes = allocator.VariableSizes;
-        // The startup clear loop (_bss_end, emitted below) has to cover every
-        // byte the program can read as zero-initialized, not just module
-        // globals: a function-local static the StackAllocator placed above the
-        // globals (fill_rect's inline width/height/end-coordinate locals, a
-        // delay helper's loop counter, an i2c scratch buffer, ...) lives at a
-        // higher _stack_base+N offset and was never included here, so it read
-        // whatever cold SRAM happened to hold on real silicon while the
-        // C#-array-backed emulator always sees it as zero (PyMCU#gemlife-life,
-        // avr8sharp cannot reproduce this by construction). _maxStaticUsage
-        // (set just above) is the true ceiling of everything the allocator
-        // placed, globals included, so it is always >= the globals-only sum;
-        // Math.Max is defensive, not a behavior choice.
-        _bssSize = Math.Max(_maxStaticUsage,
-            program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum());
+        // RFC 0013 (docs/rfcs/0013-memory-model.md, PyMCU-rfc13), section 2: the
+        // startup clear loop (_bss_end, emitted below) has to cover every byte of
+        // STATIC storage the program can read as zero-initialized -- module
+        // globals, program.StaticFields (a field of a module-level instance the
+        // frontend's own tracking found, PyMCU-gemlife-lockinit) and any field
+        // reached only through a held instance that flattens under a compiler-
+        // minted anonymous token (IsCompilerMintedStaticToken below) -- but NOT
+        // an ordinary AUTOMATIC local the static allocator packs above that
+        // region: Python's own rules already require a local be written before
+        // it is read (section 3), so leaving those bytes uncovered is not a gap,
+        // it is the zero-cost promise (section 6) -- a program with no static
+        // state must not gain a clear loop it does not need.
+        // allocator.StaticEnd is the contiguous region's own bound (globals plus
+        // program.StaticFields, which the allocator seeds into that same
+        // never-recycled region); the sweep below extends it only for a static
+        // object the frontend's tracking missed but whose OWN flattened name
+        // still carries the compiler's anonymous-instance marker.
+        int bssBound = allocator.StaticEnd;
+        foreach (var (name, offset) in _stackLayout)
+        {
+            if (!IsCompilerMintedStaticToken(name)) continue;
+            int sz = allocator.VariableSizes.GetValueOrDefault(name, 1);
+            bssBound = Math.Max(bssBound, offset + sz);
+        }
+        _bssSize = bssBound;
         _regLayout = AvrRegisterAllocator.Allocate(program, LoadProfileCounts(program));
 
         // Registers R2-R15 used as variable homes (including the high byte of a 16-bit home).
@@ -1367,21 +1378,46 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         _isrHomeRegs = homeRegs.Select(rn => "R" + rn).ToList();
 
-        // Every physical R2-R15 slot the allocator handed out as SOMEONE's home,
-        // global or not -- unlike homeRegs above, this one does NOT skip globals.
-        // homeRegs exists to decide what an ISR prologue must push (a register-homed
-        // global must NOT be saved/restored there, or the handler's own write gets
-        // undone on RETI); this set answers a different question, "does this
-        // register need a defined value before anything can read it", where a
-        // global homed in a register needs the guarantee exactly as much as a
-        // local one does -- SRAM-backed globals get it from _bss_end, but a global
-        // the allocator chose to keep in a register instead of SRAM gets it from
-        // neither list unless it is counted here too.
+        // RFC 0013 (docs/rfcs/0013-memory-model.md, PyMCU-rfc13), section 4: a
+        // register needs the boot-time zero-initialisation guarantee only when it
+        // homes an object of STATIC duration -- one whose value must survive from
+        // before any user code runs, because it is read before this program's own
+        // code would ever write it (a module global, or a field of an instance
+        // built at module level, such as busio.I2C's self._locked backing
+        // try_lock()/unlock()). The R2-R15 pool is also how this backend keeps an
+        // ordinary AUTOMATIC local in a register instead of a stack slot: the
+        // allocator hands out physical registers per NAME, and Python's own rule
+        // already requires a local be written before it is read (RFC 0013 section
+        // 3), so an automatic slot is safe by construction and never needs this.
+        //
+        // Unlike homeRegs above (which exists only to decide what an ISR prologue
+        // must push, and deliberately SKIPS globals: a register-homed global must
+        // not be saved/restored there, or the handler's own write gets undone on
+        // RETI), this set answers "does this register need a defined value before
+        // anything can read it" -- a global homed in a register needs that
+        // guarantee exactly as much as a static instance field does, so globals
+        // are INCLUDED here, not skipped.
+        //
+        // Deliberately NOT "name used in more than one function": that bare-name
+        // test cannot tell an escaping static field from a bound method's own
+        // parameter, marshaled into the same physical slot from every call site
+        // that invokes it -- the exact confusion that mis-sized the DSE protection
+        // this RFC's phase 0 keeps out of Optimizer.cs (see PyMCU-dse's reverted
+        // framebuf regression). Duration is decided by the OBJECT the name names:
+        // program.Globals (a real module global) or program.StaticFields (a field
+        // of a module-level instance, populated by the frontend's own module-
+        // instance tracking regardless of whether the narrower mutableGlobals
+        // promotion also fires for it) -- never by how many functions mention it.
+        var staticNames = globalNames;
+        if (program.StaticFields != null)
+            foreach (var sf in program.StaticFields.Keys) staticNames.Add(sf);
+
         var allPoolRegs = new SortedSet<int>();
         foreach (var (name, reg) in _regLayout)
         {
             int rn = ParseRegToken(reg);
             if (rn is < 2 or > 15) continue;
+            if (!staticNames.Contains(name) && !IsCompilerMintedStaticToken(name)) continue;
             allPoolRegs.Add(rn);
             if (_varSizes.TryGetValue(name, out int sz2) && sz2 == 2)
                 allPoolRegs.Add(rn + 1);
@@ -1880,6 +1916,34 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // places above byte address 0xFFFF; plain LPM only uses the 16-bit Z. RAMPZ is IO 0x3B.
     private bool LargeFlash
         => Geometry.RequireFlashSize("choose between LPM and ELPM for flash tables") > 0x10000;
+
+    // RFC 0013 (docs/rfcs/0013-memory-model.md, PyMCU-rfc13), phase 0: true when
+    // `name` flattens a field reached only through a HELD instance -- one
+    // object's field that itself holds another instance (busio.I2C's
+    // try_lock()/unlock(), invoked through adafruit_bus_device.I2CDevice's own
+    // `self.i2c` field, which I2CDevice's own constructor builds anonymously
+    // inside SSD1306's __init__). Such a field flattens under a compiler-minted
+    // anonymous-instance token the frontend's own module-instance tracking does
+    // not walk into (Call.cs's `bBase + ".__c" + id`; IRGenerator/Core.cs's own
+    // MintedName test: a segment starting with "__c" and a digit, excluding the
+    // "__ctseq"/"__ctcomp"/"__cttab" compile-time-only families that share the
+    // same prefix but never name a runtime object). Such a token is as static
+    // as a named module-level instance exactly when it was minted at module
+    // scope ("main." or an imported module's own "..._module_init." prefix) --
+    // the same instance built inside an ordinary function is function-scoped,
+    // automatic, and must not be swept in by this test.
+    private static bool IsCompilerMintedStaticToken(string name)
+    {
+        int dot = name.IndexOf('.');
+        if (dot <= 0) return false;
+        string prefix = name[..dot], seg = name[(dot + 1)..];
+        bool moduleLevel = prefix == "main" || prefix.EndsWith("___module_init", StringComparison.Ordinal);
+        if (!moduleLevel || !seg.StartsWith("__c", StringComparison.Ordinal)) return false;
+        if (seg.StartsWith("__ctseq", StringComparison.Ordinal)
+            || seg.StartsWith("__ctcomp", StringComparison.Ordinal)
+            || seg.StartsWith("__cttab", StringComparison.Ordinal)) return false;
+        return seg.Length > 3 && char.IsDigit(seg[3]);
+    }
 
     // Parse "R12" -> 12; pointer tokens "X"/"Y"/"Z" (and their +/- forms) -> the pair's low reg
     // (26/28/30); else -1. Used by the ISR-save trimmer to learn which registers a body touches.
