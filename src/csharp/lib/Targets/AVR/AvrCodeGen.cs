@@ -1408,7 +1408,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // of a module-level instance, populated by the frontend's own module-
         // instance tracking regardless of whether the narrower mutableGlobals
         // promotion also fires for it) -- never by how many functions mention it.
-        var staticNames = globalNames;
+        var staticNames = new HashSet<string>(globalNames, StringComparer.Ordinal);
         if (program.StaticFields != null)
             foreach (var sf in program.StaticFields.Keys) staticNames.Add(sf);
 
