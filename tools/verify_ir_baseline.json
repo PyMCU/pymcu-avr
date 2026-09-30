@@ -1857,6 +1857,10 @@
    "rc": 0,
    "violations": []
   },
+  "545_fstring_self_interpolation": {
+   "rc": 0,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": [
