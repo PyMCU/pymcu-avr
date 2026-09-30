@@ -539,9 +539,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         else
         {
-            // Float comparison via GCC __cmpsf2.
-            // Returns in R24: 0xFF if arg0<arg1, 0x00 if arg0==arg1, 0x01 if arg0>arg1.
-            EmitFloatRuntimeCall("__cmpsf2");
+            // Float comparison via GCC's libgcc soft-float compare routines.
+            // __cmpsf2 returns 0xFF if arg0<arg1, 0x00 if arg0==arg1, 0x01 if arg0>arg1 --
+            // but for an UNORDERED pair (either operand NaN) it answers 0x01, the same
+            // byte as "greater". That is harmless for ==/!=/</<= (NaN correctly reads as
+            // "not equal", "not less", "not less-or-equal" through those checks), but
+            // >/>= read 0x01 as "greater", so `float('nan') > 1.0` answered True instead
+            // of CPython's False (P2 AVR gaps bundle, item 5). __gtsf2/__gesf2 are
+            // libgcc's OWN routines for those two operators, sharing __cmpsf2's byte
+            // encoding for every ORDERED pair but answering 0xFF (unordered = "not
+            // greater") instead of 0x01 for NaN -- the pairing GCC documents them for.
+            string cmpSymbol = b.Op is IrBinOp.GreaterThan or IrBinOp.GreaterEqual
+                ? (b.Op == IrBinOp.GreaterThan ? "__gtsf2" : "__gesf2")
+                : "__cmpsf2";
+            EmitFloatRuntimeCall(cmpSymbol);
             string trueLabel = MakeLabel("L_FCMP_T");
             string doneLabel = MakeLabel("L_FCMP_D");
             switch (b.Op)
@@ -554,9 +565,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                     Emit("CPI", "R24", "0xFF"); Emit("BREQ", trueLabel); break;
                 case IrBinOp.LessEqual:    // true when R24 != 0x01 (covers 0x00 and 0xFF)
                     Emit("CPI", "R24", "0x01"); Emit("BRNE", trueLabel); break;
-                case IrBinOp.GreaterThan:  // true when R24 == 0x01 (a > b)
+                case IrBinOp.GreaterThan:  // __gtsf2: true when R24 == 0x01 (a > b, ordered)
                     Emit("CPI", "R24", "0x01"); Emit("BREQ", trueLabel); break;
-                case IrBinOp.GreaterEqual: // true when R24 != 0xFF (covers 0x00 and 0x01)
+                case IrBinOp.GreaterEqual: // __gesf2: true when R24 != 0xFF (covers 0x00, 0x01)
                     Emit("CPI", "R24", "0xFF"); Emit("BRNE", trueLabel); break;
                 default: throw Unsupported($"the AVR backend has no float lowering for {b.Op}. "
                     + "Reaching here with an arithmetic or bitwise operator means an earlier pass "
@@ -2773,7 +2784,9 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
             Emit("POP", "R24");
             Emit("POP", "R25");
         }
-        EmitFloatRuntimeCall("__cmpsf2");
+        // __gtsf2/__gesf2 for the two operators whose NaN answer __cmpsf2 gets wrong --
+        // see the identical note next to the boolean-value float compare above.
+        EmitFloatRuntimeCall(cond is "gt" or "ge" ? (cond == "gt" ? "__gtsf2" : "__gesf2") : "__cmpsf2");
         switch (cond)
         {
             case "eq": Emit("CPI", "R24", "0x00"); EmitBranch("BREQ", target); break;
