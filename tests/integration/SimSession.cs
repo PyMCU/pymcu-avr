@@ -1,4 +1,5 @@
 using Avr8Sharp.TestKit.Boards;
+using PyMCU.TestKit;
 
 namespace PyMCU.IntegrationTests;
 
@@ -64,6 +65,24 @@ public sealed class SimSession
     {
         // 1. Restore all CPU registers, I/O registers, and SRAM to the initial state.
         Array.Copy(_dataSnapshot, _sim.Data, _dataSnapshot.Length);
+
+        // 1b. RFC 0013 (docs/rfcs/0013-memory-model.md, PyMCU-rfc13), section 7.2:
+        // PYMCU_FORCE_POISON_COLD_BOOT (a byte 0-255) fills R0-R31 (except R1)
+        // and SRAM 0x100-0x8FF with a non-zero pattern here too, the same
+        // opt-in-by-env-var convention UnoTwiTrace.Record already applies --
+        // see ColdBootRealism's own doc comment for why this is off by default.
+        // SimSession is the entry point the MAJORITY of this suite's fixtures
+        // use (UnoTwiTrace.Record and this file's own poisonColdBoot-aware
+        // siblings are the exception, not the rule), so this is what makes
+        // "run the whole integration suite with poison" mean the whole suite,
+        // not only the handful of tests that build their own ArduinoUnoSimulation
+        // by hand. ColdBootRealism.Poison only ever touches 0x00-0x1F and
+        // 0x100-0x8FF, never the I/O register space (0x20-0xFF) the snapshot
+        // above just restored a peripheral's real reset value into (e.g.
+        // AvrUsart's UCSRA=32), so applying it here cannot undo that.
+        if (byte.TryParse(Environment.GetEnvironmentVariable("PYMCU_FORCE_POISON_COLD_BOOT"),
+                out var forcedPoison))
+            ColdBootRealism.Poison(_sim, forcedPoison);
 
         // 2. Reset timer internal counters, dividers, and OCR shadow registers.
         _sim.Timer0.Reset();
