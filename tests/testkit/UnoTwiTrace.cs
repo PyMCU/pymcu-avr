@@ -18,24 +18,32 @@ public static class UnoTwiTrace
     /// the recorder has always given.
     /// </param>
     public static WireTrace Record(string hex, byte address, int stopAfterCount,
-        double maxMs = 2000, double tailMs = 50, byte[]? readScript = null)
+        double maxMs = 2000, double tailMs = 50, byte[]? readScript = null,
+        byte? poisonColdBoot = null)
         => Record(hex, twi =>
         {
             var r = new TwiRecorder(twi, address);
             if (readScript != null)
                 foreach (var b in readScript) r.ReadBytes.Enqueue(b);
             return r;
-        }, stopAfterCount, maxMs, tailMs);
+        }, stopAfterCount, maxMs, tailMs, poisonColdBoot);
 
     /// <summary>
     /// Same run with a caller-supplied bus device -- a register file for a
     /// sensor whose driver validates chip id / calibration before streaming.
     /// </summary>
+    /// <param name="poisonColdBoot">
+    /// When set, fills R0-R31 (except R1) and SRAM with this byte before the
+    /// firmware's first instruction -- see <see cref="ColdBootRealism"/>.
+    /// Null (the default) leaves avr8sharp's own zeroed state alone.
+    /// </param>
     public static WireTrace Record(string hex, Func<AvrTwi, ITwiRecorder> makeDevice,
-        int stopAfterCount, double maxMs = 2000, double tailMs = 50)
+        int stopAfterCount, double maxMs = 2000, double tailMs = 50,
+        byte? poisonColdBoot = null)
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(hex);
+        if (poisonColdBoot is byte poison) ColdBootRealism.Poison(uno, poison);
         // The GPIO model drives PIN only from injected values -- the internal
         // pull-ups do not raise it -- so hold SDA/SCL high the way a wired bus
         // sits at idle, or CircuitPython's busio.I2C wiring check refuses it.

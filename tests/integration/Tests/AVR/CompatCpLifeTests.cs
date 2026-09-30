@@ -168,6 +168,12 @@ public abstract class CompatCpLifeBase(
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(hex);
+        // A real ATmega328P's R2-R15 pool and SRAM are undefined at cold
+        // boot; avr8sharp's are always zero. This family is exactly where
+        // that gap mattered (PyMCU-gemlife-lockinit): poison before running
+        // so this suite keeps demonstrating the firmware does not depend on
+        // it, instead of demonstrating only that the emulator is generous.
+        ColdBootRealism.Poison(uno, 0xFF);
         // Same as UnoTwiTrace.Record: the GPIO model does not drive PIN from
         // the internal pull-ups, so hold SDA/SCL high like a wired bus at idle,
         // or CircuitPython's busio.I2C wiring check refuses the bus.
