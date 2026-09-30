@@ -82,6 +82,7 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // An ISR prologue pushes all of them and TrimIsrContextSave takes back the ones this
     // handler's body provably never touches.
     private List<string> _isrHomeRegs = new();
+    private List<string> _allPoolHomeRegs = new();
     // For a pool register that is half of a 16-bit home, the other half. Touching either half
     // means the home is live, so both are saved together.
     private readonly Dictionary<int, int> _isrHomePartner = new();
@@ -1366,6 +1367,27 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         _isrHomeRegs = homeRegs.Select(rn => "R" + rn).ToList();
 
+        // Every physical R2-R15 slot the allocator handed out as SOMEONE's home,
+        // global or not -- unlike homeRegs above, this one does NOT skip globals.
+        // homeRegs exists to decide what an ISR prologue must push (a register-homed
+        // global must NOT be saved/restored there, or the handler's own write gets
+        // undone on RETI); this set answers a different question, "does this
+        // register need a defined value before anything can read it", where a
+        // global homed in a register needs the guarantee exactly as much as a
+        // local one does -- SRAM-backed globals get it from _bss_end, but a global
+        // the allocator chose to keep in a register instead of SRAM gets it from
+        // neither list unless it is counted here too.
+        var allPoolRegs = new SortedSet<int>();
+        foreach (var (name, reg) in _regLayout)
+        {
+            int rn = ParseRegToken(reg);
+            if (rn is < 2 or > 15) continue;
+            allPoolRegs.Add(rn);
+            if (_varSizes.TryGetValue(name, out int sz2) && sz2 == 2)
+                allPoolRegs.Add(rn + 1);
+        }
+        _allPoolHomeRegs = allPoolRegs.Select(rn => "R" + rn).ToList();
+
         // Build set of float-typed variable names for correct register assignment.
         _varIsFloat = [];
         foreach (var func in program.Functions)
@@ -1980,6 +2002,28 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                 Emit("BRNE", bssLoop);
                 EmitLabel(bssEnd);
             }
+            // The R2-R15 pool holds every name the allocator gives a persistent,
+            // whole-program-life home instead of a stack slot -- including a
+            // singleton object's escaping field, such as busio.I2C's
+            // self._locked backing try_lock()/unlock(). That field's own
+            // initializing store (self._locked = 0 in I2C.__init__) is written
+            // and read under DIFFERENT IR names before this allocation ever
+            // happens (inline expansion spells the same field differently at
+            // each call site; NameResolution.cs's own header says fields are
+            // deliberately out of its scope today), so a dead-store pass
+            // upstream can drop the one write that looks locally unread and
+            // never learn the two spellings were the same physical home. R1
+            // gets this same "starts at zero" guarantee unconditionally right
+            // above; every pool register deserves it for the identical reason
+            // _bss_end does: avr8sharp already zeroes fresh registers, same as
+            // fresh SRAM, so this is invisible in every emulator-only test,
+            // and a real ATmega328P's R2-R15 are as undefined at reset as its
+            // SRAM. Found diagnosing PyMCU-gemlife-lockinit: `while not
+            // try_lock(): pass` never exits if the register try_lock() and
+            // unlock() share happens to power up nonzero, hanging before any
+            // I2C traffic with no message on serial.
+            foreach (var r in _allPoolHomeRegs)
+                Emit("EOR", r, r);
             if (_needsGc)
             {
                 Emit("CALL", "gc_init");
