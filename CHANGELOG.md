@@ -1,6 +1,6 @@
 # Changelog — pymcu-avr
 
-## 0.1.0b1 (re-frozen from main at ab5cf0e, 2026-09-29)
+## 0.1.0b1 (re-frozen from main at 740fe5c, 2026-09-30)
 
 Beta 1: the AVR backend moves out of alpha alongside the frontend
 (`pymcu-compiler`/`pymcu-stdlib` 0.1.0b1), the CircuitPython layer and the
@@ -9,8 +9,51 @@ silicon or the AVR8Sharp emulator with a regression fixture in the
 integration suite. The ARM/RP2040/RP2350, PIC, and RISC-V backends stay
 alpha on purpose. First frozen at `fc99c48` (2026-09-15); the 2026-09-25
 decision to ship from `main` rather than a static freeze applies here too,
-so this section is regenerated against `main` at `ab5cf0e`, mirroring
+so this section is regenerated against `main` at `740fe5c`, mirroring
 `pymcu-compiler`'s CHANGELOG.
+
+### Fixed (2026-09-30, real-silicon hang, P0, RFC 0013 phase 0)
+
+`busio.I2C.try_lock()`/`unlock()`, reached through `adafruit_bus_device.I2CDevice`
+under a module-level held instance (an SSD1306 OLED driver wrapped in a Seesaw or
+similar, real bug reported dead on real silicon), could hang forever:
+`while not i2c.try_lock(): pass` never exits if the register the allocator homes
+`try_lock`'s and `unlock`'s shared lock state in happens to power on nonzero on a
+given chip. A real ATmega328P's `R2`-`R15` and SRAM are undefined at cold boot;
+AVR8Sharp, this suite's emulator, always starts both at zero, which hid the bug in
+every test that ever ran here.
+
+- **avr**: the boot-time clear loop now covers every offset of static duration
+  the frontend's `program.StaticFields`/`allocator.AutomaticNames` report (a
+  register or SRAM slot that is not a function's own parameter, local, or
+  temporary), not just `program.Globals`/`program.GlobalArrays`. The `_bssSize`
+  SRAM sum previously stopped short of the allocator's own true ceiling on any
+  program with non-trivial function-local statics; the R2-R15 pool-register clear
+  previously covered every pool register the allocator ever handed out (paying for
+  ordinary automatic locals that do not need it) and, separately, missed some
+  static-duration registers a name-shape guess could not recognize (a field
+  reached only through an anonymously-built held instance, `busio.I2C._locked`
+  through `I2CDevice.i2c`'s own construction inside `SSD1306.__init__`). Both are
+  now decided the same way, from the frontend's own object-identity tracking, not
+  from a name's shape or how many functions mention it.
+- **testkit**: the integration suite's cold boot now poisons `R0`-`R31` (except
+  `R1`, which the ABI already guarantees starts at zero) and all of SRAM with
+  `0xFF` **by default**, instead of only when an environment variable or an
+  explicit opt-in asked for it. Measured before flipping the default: full suite
+  4517 run/3961 correct/0 incorrect poisoned, 4523 run/3966 correct/0 incorrect
+  unpoisoned (the skip-count difference is environment gaps unrelated to
+  poisoning); oracle corpus identical poisoned and unpoisoned, both front ends.
+  Re-verified green after flipping. The real, unmodified Adafruit Seesaw driver
+  (`fixtures/adafruit-seesaw-unmodified`) now matches its CPython oracle
+  byte-for-byte under poisoning (15 I2C transactions, was 0, stuck before the
+  first one); the `compat-cp-life` family (Game of Life + SSD1306) went from 9
+  failing to 26/26.
+
+**Visible cost, accepted by the maintainer**: `compat-mp-blink-toggle` and
+`compat-cp-blink`, which have no static-duration register or SRAM offset, are
+unchanged at 138/148 bytes. `zca-mixed-fold-and-share` (two module globals that
+share a register pair) pays 4 bytes (930 to 934): a real, explained cost of a
+real static-duration register home, not a regression.
 
 ### Tests (2026-09-29, follows pymcu-compiler's descriptor protocol P0 fix)
 
