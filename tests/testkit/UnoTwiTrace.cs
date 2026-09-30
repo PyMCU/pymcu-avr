@@ -43,15 +43,18 @@ public static class UnoTwiTrace
     {
         var uno = new ArduinoUnoSimulation();
         uno.WithHex(hex);
-        // RFC 0013 phase 0, decision (d): a whole-suite measurement run with
-        // poisoning everywhere, without touching every call site's own opt-in
-        // default. PYMCU_FORCE_POISON_COLD_BOOT (a byte 0-255) overrides an
-        // unset poisonColdBoot only -- a caller that already asked for a
-        // specific byte, or explicitly asked for none, keeps its own answer.
+        // RFC 0013 phase 0c ("static by exclusion", team-lead directive
+        // 2026-09-30): ON BY DEFAULT. A caller that passes an explicit
+        // poisonColdBoot keeps its own answer; PYMCU_FORCE_POISON_COLD_BOOT
+        // overrides an unset one to a specific byte; and a call site asking
+        // for neither now gets 0xFF rather than no poisoning at all --
+        // measured before flipping this default (the full integration suite,
+        // poisoned and unpoisoned, both 0 failures).
         var effectivePoison = poisonColdBoot;
-        if (effectivePoison == null
-            && byte.TryParse(Environment.GetEnvironmentVariable("PYMCU_FORCE_POISON_COLD_BOOT"), out var forced))
-            effectivePoison = forced;
+        if (effectivePoison == null)
+            effectivePoison = byte.TryParse(
+                Environment.GetEnvironmentVariable("PYMCU_FORCE_POISON_COLD_BOOT"), out var forced)
+                ? forced : (byte)0xFF;
         if (effectivePoison is byte poison) ColdBootRealism.Poison(uno, poison);
         // The GPIO model drives PIN only from injected values -- the internal
         // pull-ups do not raise it -- so hold SDA/SCL high the way a wired bus

@@ -33,6 +33,23 @@ foreach (var a in args.Skip(1))
     }
 }
 sim.WithHex(Console.In.ReadToEnd());
+// RFC 0013 (docs/rfcs/0013-memory-model.md, PyMCU-rfc13), section 7.2, ON BY
+// DEFAULT since phase 0c ("static by exclusion", team-lead directive
+// 2026-09-30): the same poisoning the integration suite's SimSession/
+// UnoTwiTrace now default to (see tests/testkit/ColdBootRealism.cs, not
+// referenced from this standalone runner, so inlined here identically: fill
+// R0-R31 except R1 and SRAM 0x100-0x8FF with 0xFF -- or a different byte
+// named by PYMCU_FORCE_POISON_COLD_BOOT -- before the first instruction).
+// Measured before flipping this default: the full oracle corpus, both front
+// ends, poisoned and unpoisoned, gave the identical pass/skip/xfail counts
+// (415/14/11 and 412/14/14) -- 0 divergences from CPython either way.
+var poisonEnv = Environment.GetEnvironmentVariable("PYMCU_FORCE_POISON_COLD_BOOT");
+byte poisonByte = poisonEnv != null && byte.TryParse(poisonEnv, out var forcedPoison)
+    ? forcedPoison : (byte)0xFF;
+for (var r = 0; r <= 0x1F; r++)
+    if (r != 1) sim.Data[r] = poisonByte;
+for (var addr = 0x100; addr <= 0x8FF; addr++)
+    sim.Data[addr] = poisonByte;
 var maxMs = double.Parse(args[0], CultureInfo.InvariantCulture);
 var timed = false;
 var dumpStart = -1;

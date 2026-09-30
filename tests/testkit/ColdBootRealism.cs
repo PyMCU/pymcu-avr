@@ -23,13 +23,17 @@ namespace PyMCU.TestKit;
 /// demonstrates the firmware does not depend on an assumption avr8sharp
 /// happens to make true for free.
 ///
-/// Deliberately opt-in here, not the emulator's default: turning it on
-/// wholesale surfaces every existing fixture that relies on implicit zero
-/// somewhere, and each one needs its own look before anyone can tell a real
-/// bug from a false alarm (an oracle whose CPython reference also runs from
-/// a zeroed Python object, for instance, would need its own accounting, not
-/// silently start failing). Call it explicitly per test or test family
-/// while that triage happens.
+/// This class itself stays opt-in (a caller must call <see cref="Poison"/>);
+/// what changed under RFC 0013 phase 0c ("static by exclusion", team-lead
+/// directive 2026-09-30) is that the harness's own entry points --
+/// SimSession.Reset and UnoTwiTrace.Record -- now call it BY DEFAULT (0xFF
+/// unless PYMCU_FORCE_POISON_COLD_BOOT names a different byte, or a caller
+/// passes its own poisonColdBoot). Turning it on wholesale was deliberately
+/// deferred until this was actually true of the whole suite: measured before
+/// flipping the two defaults, the full integration run gave 0 failures both
+/// poisoned and unpoisoned. Before that point every existing fixture that
+/// relied on implicit zero somewhere needed its own look, which is why this
+/// class predates the flip by several days.
 /// </summary>
 public static class ColdBootRealism
 {
