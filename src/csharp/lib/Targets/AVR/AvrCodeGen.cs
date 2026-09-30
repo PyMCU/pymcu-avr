@@ -1305,28 +1305,31 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                                      .Select(g => g.Name).ToList();
         _needsHalt = false;
         _varSizes = allocator.VariableSizes;
-        // RFC 0013 (docs/rfcs/0013-memory-model.md, PyMCU-rfc13), phase 0b,
-        // section 2: the startup clear loop (_bss_end, emitted below) has to
-        // cover every byte of STATIC storage the program can read as
-        // zero-initialized -- module globals and program.StaticFields (every
-        // `self.field`/`obj.field` store the frontend ever flattens, recorded
-        // UNCONDITIONALLY since phase 0b, module-scoped or function-scoped --
-        // see StaticFields's own doc comment in Tacky.cs) -- but NOT an ordinary
-        // AUTOMATIC local the static allocator packs above that region: Python's
-        // own rules already require a local be written before it is read
-        // (section 3), so leaving those bytes uncovered is not a gap, it is the
-        // zero-cost promise (section 6) -- a program with no static state must
-        // not gain a clear loop it does not need.
+        // RFC 0013 (docs/rfcs/0013-memory-model.md, PyMCU-rfc13), phase 0c
+        // ("static by exclusion", team-lead directive 2026-09-30), section 2:
+        // the startup clear loop (_bss_end, emitted below) has to cover every
+        // byte of STATIC storage the program can read as zero-initialized.
+        // Phase 0c decides "static" by exclusion, in StackAllocator itself
+        // (RunAllocate's own pass, right after BuildGraph): AUTOMATIC is
+        // exclusively a parameter, local or temporary declared of a function
+        // (program.AutomaticLocals, the frontend's own binding bookkeeping,
+        // plus every name ever seen as a compiler Temporary), so ANY other
+        // name BuildGraph found needing a home -- most importantly a
+        // flattened `self.field`/`obj.field` storage path, however many hops
+        // separate it from a module-level root -- is given a home in this
+        // same leading, never-recycled region instead of the per-function
+        // frame-packing overlay, with no need to trace it back to a module-
+        // level root (program.StaticFields' narrower test) or recognise a
+        // compiler-minted token by its spelling (the retired
+        // IsCompilerMintedStaticToken). allocator.StaticEnd already reflects
+        // that decision (see StackAllocator.RunAllocate), so it is the bound
+        // directly, with no supplementary scan here.
         //
-        // Phase 0 also swept _stackLayout for any name matching a compiler-
-        // minted anonymous-instance token (IsCompilerMintedStaticToken), to
-        // catch a held instance's field the frontend's StaticFields tracking
-        // missed. Phase 0b's unconditional StaticFields recording makes that
-        // sweep redundant -- there is no longer a class of static field
-        // StaticFields can miss for this backend to catch by name-shape instead
-        // -- so allocator.StaticEnd (which already includes program.StaticFields,
-        // see StackAllocator.RunAllocate) is the bound directly, with no
-        // supplementary scan and no dependency on the token's naming pattern.
+        // An ordinary AUTOMATIC local is deliberately NOT covered: Python's
+        // own rules already require a local be written before it is read
+        // (section 3), so leaving those bytes uncovered is not a gap, it is
+        // the zero-cost promise (section 6) -- a program with no static state
+        // must not gain a clear loop it does not need.
         _bssSize = allocator.StaticEnd;
         _regLayout = AvrRegisterAllocator.Allocate(program, LoadProfileCounts(program));
 
@@ -1396,28 +1399,28 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         // guarantee exactly as much as a static instance field does, so globals
         // are INCLUDED here, not skipped.
         //
-        // Deliberately NOT "name used in more than one function": that bare-name
-        // test cannot tell an escaping static field from a bound method's own
-        // parameter, marshaled into the same physical slot from every call site
-        // that invokes it -- the exact confusion that mis-sized the DSE protection
-        // this RFC's phase 0 keeps out of Optimizer.cs (see PyMCU-dse's reverted
-        // framebuf regression), and the same confusion would misclassify a
-        // parameter shared by inlining as static here too. Duration is decided by
-        // the OBJECT the name names: program.Globals (a real module global) or
-        // program.StaticFields (RFC 0013 phase 0b: every `self.field`/`obj.field`
-        // store the frontend ever flattens, module-scoped or function-scoped,
-        // recorded unconditionally -- see StaticFields's own doc comment in
-        // Tacky.cs) -- never by how many functions mention it.
-        //
-        // Phase 0 additionally swept _regLayout for IsCompilerMintedStaticToken,
-        // to catch a held instance's field StaticFields' then-narrower (module-
-        // root-provable-only) population missed. Phase 0b's unconditional
-        // StaticFields recording makes that sweep redundant -- see the identical
-        // note beside _bssSize above -- so this set is exactly globalNames union
-        // program.StaticFields.Keys, with no name-shape fallback.
-        var staticNames = new HashSet<string>(globalNames, StringComparer.Ordinal);
-        if (program.StaticFields != null)
-            foreach (var sf in program.StaticFields.Keys) staticNames.Add(sf);
+        // RFC 0013 phase 0c ("static by exclusion", team-lead directive
+        // 2026-09-30): a register home is static -- needs the boot-time EOR --
+        // whenever its name is NOT one the allocator recognised as AUTOMATIC
+        // (allocator.AutomaticNames: every function's own parameter, local or
+        // temporary, including @inline expansion locals under their expansion
+        // prefix -- see StackAllocator.RunAllocate and AutomaticNames' own doc
+        // comment). This replaces the earlier globalNames-union-StaticFields
+        // test: a flattened `self.field`/`obj.field` storage path is never a
+        // function's own parameter/local/temporary, so it falls out of
+        // AutomaticNames automatically, with no need to trace it back to a
+        // module-level root (StaticFields' own test) or recognise a compiler-
+        // minted token by its spelling (the retired IsCompilerMintedStaticToken)
+        // -- and unlike "name used in more than one function" (deliberately
+        // never used here: it mis-sized the DSE protection this RFC's phase 0
+        // keeps out of Optimizer.cs, see PyMCU-dse's reverted framebuf
+        // regression, and would misclassify a parameter shared by inlining),
+        // AutomaticNames answers per NAME's own binding role, not by counting
+        // how many functions mention it.
+        var staticNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (name, _) in _regLayout)
+            if (!allocator.AutomaticNames.Contains(name))
+                staticNames.Add(name);
 
         var allPoolRegs = new SortedSet<int>();
         foreach (var (name, reg) in _regLayout)
