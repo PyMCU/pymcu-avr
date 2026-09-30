@@ -1841,6 +1841,22 @@
    "rc": 0,
    "violations": []
   },
+  "541_float_inf_nan_literals": {
+   "rc": 0,
+   "violations": []
+  },
+  "542_math_isnan_isinf_isfinite": {
+   "rc": 0,
+   "violations": []
+  },
+  "543_nan_comparisons_are_all_false": {
+   "rc": 0,
+   "violations": []
+  },
+  "544_nan_in_if_while_branches": {
+   "rc": 0,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": [
