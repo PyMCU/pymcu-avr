@@ -1304,7 +1304,20 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
                                      .Select(g => g.Name).ToList();
         _needsHalt = false;
         _varSizes = allocator.VariableSizes;
-        _bssSize = program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum();
+        // The startup clear loop (_bss_end, emitted below) has to cover every
+        // byte the program can read as zero-initialized, not just module
+        // globals: a function-local static the StackAllocator placed above the
+        // globals (fill_rect's inline width/height/end-coordinate locals, a
+        // delay helper's loop counter, an i2c scratch buffer, ...) lives at a
+        // higher _stack_base+N offset and was never included here, so it read
+        // whatever cold SRAM happened to hold on real silicon while the
+        // C#-array-backed emulator always sees it as zero (PyMCU#gemlife-life,
+        // avr8sharp cannot reproduce this by construction). _maxStaticUsage
+        // (set just above) is the true ceiling of everything the allocator
+        // placed, globals included, so it is always >= the globals-only sum;
+        // Math.Max is defensive, not a behavior choice.
+        _bssSize = Math.Max(_maxStaticUsage,
+            program.Globals.Sum(g => g.Type.SizeOf()) + program.GlobalArrays.Values.Sum());
         _regLayout = AvrRegisterAllocator.Allocate(program, LoadProfileCounts(program));
 
         // Registers R2-R15 used as variable homes (including the high byte of a 16-bit home).
