@@ -30,7 +30,7 @@ public class ZcaMixedFoldAndShareTests
     public void BuildFirmware() => _session = new SimSession(PymcuCompiler.BuildFixture("zca-mixed-fold-and-share"));
 
     [Test]
-    public void FlashSize_Is938Bytes()
+    public void FlashSize_Is934Bytes()
     {
         // 602 B without any observable output (the number RFC 0006's first draft
         // measured); printing the five values so behaviour is checkable, not just
@@ -46,7 +46,16 @@ public class ZcaMixedFoldAndShareTests
         // 938 -> 930: the RFC 0011 generator campaign's AVR collector and codegen
         // improvements shrank the outlined body's marshaling: -8 B. RFC 0009
         // (tagged unions) leaves the fixture byte-identical to main.
-        FlashBytes(PymcuCompiler.BuildFixture("zca-mixed-fold-and-share")).Should().Be(930,
+        // 930 -> 934: RFC 0013 phase 0 (docs/rfcs/0013-memory-model.md,
+        // PyMCU-rfc13), the memory model's C++ storage-duration rules: this
+        // fixture's own module-level `x`/`y` (each set from a SoftUart
+        // instance's send_marker(), then compared) are real module globals,
+        // and the register allocator homes them in R11/R12. The startup EOR
+        // that guarantees a register-homed static reads zero before any user
+        // code runs now applies to both -- +4 B, two instructions, a real
+        // correctness cost paid by a real static-duration register home, not
+        // a regression.
+        FlashBytes(PymcuCompiler.BuildFixture("zca-mixed-fold-and-share")).Should().Be(934,
             "this fixture's baseline before RFC 0006's per-field fold (Phase 3) lands; " +
             "a change here needs the RFC's baseline JSON updated alongside it, not silently");
     }
