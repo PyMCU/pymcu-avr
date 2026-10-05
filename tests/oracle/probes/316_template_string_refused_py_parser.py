@@ -1,6 +1,7 @@
-# expect: refuse :9:9: error: SyntaxError: TemplateStr is not supported here
+# expect: refuse :10:9: error: SyntaxError: TemplateStr is not supported here
 # doc: https://github.com/PyMCU/PyMCU/issues/524
 # frontend: py-parser
+# python: >=3.14
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8
 
