@@ -89,6 +89,9 @@ def parse_expectation(src: str) -> Expectation:
     if expect == "match":
         return Expectation("match", None, doc, tracked=tracked, frontend=frontend,
                            python=python_version)
+    if expect == "compile":
+        return Expectation("compile", None, doc, tracked=tracked, frontend=frontend,
+                           python=python_version)
     if expect.startswith("refuse "):
         return Expectation(
             "refuse", expect.removeprefix("refuse ").strip(), doc,
@@ -455,10 +458,22 @@ def evaluate_probe(probe: Path, tmp_path: Path, pymcu: Path, runner: Path) -> Or
     feature = probe.stem.removeprefix("p").replace("_", " ")
     if expectation.kind == "match":
         expect_label = "match"
+    elif expectation.kind == "compile":
+        expect_label = "compile"
     elif expectation.kind == "divergence":
         expect_label = f"divergence {expectation.divergence_doc}"
     else:
         expect_label = f"refuse {expectation.diagnostic}"
+
+    if expectation.kind == "compile":
+        # The whole assertion is the build itself: a program whose entry file
+        # carries no executable statements still must link (the linker needs a
+        # `main`), and there is nothing to compare with CPython or the emulator
+        # afterwards -- an empty program prints nothing and never prints END.
+        if compile_result.returncode == 0 and compile_result.hex_text is not None:
+            return OracleOutcome(probe.name, feature, expect_label, "compiled", "")
+        detail = (compile_result.log.strip().splitlines() or [""])[-1][:180]
+        return OracleOutcome(probe.name, feature, expect_label, "compile-fail", detail)
 
     if expectation.kind == "refuse":
         if compile_result.returncode != 0:
@@ -543,8 +558,10 @@ def test_probe_matches_cpython_or_refuses_as_documented(
         # run. The parser that matters under the py-parser front end is the
         # translator's: PYMCU_PYTHON, else the python3 pymcuc would spawn. For
         # `match` and `divergence` probes the CPython oracle half must also run
-        # the source, so the host version counts too. A `refuse` probe under the
-        # default front end involves no Python parser at all and is never gated.
+        # the source, so the host version counts too. `refuse` and `compile`
+        # probes never run the source anywhere, so only the translator's
+        # interpreter counts -- and a default-front-end `refuse` probe involves
+        # no Python parser at all.
         required = expectation.python
         wanted = f">={required[0]}.{required[1]}"
         if running_py_parser:
@@ -556,7 +573,7 @@ def test_probe_matches_cpython_or_refuses_as_documented(
                     f"the translator's interpreter ({interpreter}) is "
                     f"{version[0]}.{version[1]}"
                 )
-        if expectation.kind != "refuse" and sys.version_info[:2] < required:
+        if expectation.kind not in ("refuse", "compile") and sys.version_info[:2] < required:
             pytest.skip(
                 f"probe needs Python {wanted} for its CPython oracle half; "
                 f"running {sys.version.split()[0]}"
@@ -572,7 +589,6 @@ def test_probe_matches_cpython_or_refuses_as_documented(
             )
         )
     outcome = evaluate_probe(probe, tmp_path, pymcu, avr_runner)
-    assert outcome.outcome in {"match", "refused"}, (
+    assert outcome.outcome in {"match", "refused", "compiled"}, (
         f"{outcome.probe}: {outcome.outcome}\n{outcome.first_difference}"
     )
-
