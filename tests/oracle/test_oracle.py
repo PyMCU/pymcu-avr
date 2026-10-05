@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import io
 import os
+import re
+import shutil
 import subprocess
 import sys
 import types
@@ -33,6 +36,7 @@ class Expectation:
     divergence_doc: str | None = None
     tracked: str | None = None
     frontend: str | None = None
+    python: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +64,7 @@ def parse_expectation(src: str) -> Expectation:
     doc = None
     tracked = None
     frontend = None
+    python = None
     for line in src.splitlines()[:8]:
         if line.startswith("# expect: "):
             expect = line.removeprefix("# expect: ").strip()
@@ -69,16 +74,25 @@ def parse_expectation(src: str) -> Expectation:
             tracked = line.removeprefix("# tracked: ").strip()
         if line.startswith("# frontend: "):
             frontend = line.removeprefix("# frontend: ").strip()
+        if line.startswith("# python: "):
+            python = line.removeprefix("# python: ").strip()
     if expect is None or doc is None:
         raise AssertionError("probe is missing # expect or # doc header")
     if frontend not in (None, "default", "py-parser"):
         raise AssertionError(f"unknown oracle frontend restriction: {frontend}")
+    python_version = None
+    if python is not None:
+        requirement = re.fullmatch(r">=(\d+)\.(\d+)", python)
+        if requirement is None:
+            raise AssertionError(f"unknown oracle python requirement: {python}")
+        python_version = (int(requirement.group(1)), int(requirement.group(2)))
     if expect == "match":
-        return Expectation("match", None, doc, tracked=tracked, frontend=frontend)
+        return Expectation("match", None, doc, tracked=tracked, frontend=frontend,
+                           python=python_version)
     if expect.startswith("refuse "):
         return Expectation(
             "refuse", expect.removeprefix("refuse ").strip(), doc,
-            tracked=tracked, frontend=frontend,
+            tracked=tracked, frontend=frontend, python=python_version,
         )
     if expect.startswith("divergence "):
         return Expectation(
@@ -86,10 +100,38 @@ def parse_expectation(src: str) -> Expectation:
             None,
             doc,
             divergence_doc=expect.removeprefix("divergence ").strip(),
-            tracked=tracked,
-            frontend=frontend,
+            tracked=tracked, frontend=frontend, python=python_version,
         )
     raise AssertionError(f"unknown oracle expectation: {expect}")
+
+
+@functools.lru_cache(maxsize=None)
+def _python_version_of(executable: str) -> tuple[int, int] | None:
+    """The major.minor of the interpreter pymcuc would spawn as the translator.
+
+    The py-parser front end parses through `python3` on PATH unless
+    PYMCU_PYTHON says otherwise (src/compiler/Frontend/PythonAstReader.cs), so
+    that is the interpreter whose ast grammar bounds what a probe can assert.
+    None when the interpreter cannot be resolved or refuses to answer -- the
+    gate then lets the build itself report the problem.
+    """
+    resolved = shutil.which(executable)
+    if resolved is None:
+        return None
+    try:
+        out = subprocess.run(
+            [resolved, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    try:
+        major, minor = out.stdout.strip().split(".")[:2]
+        return int(major), int(minor)
+    except ValueError:
+        return None
 
 
 # Known, documented CPython/emulator divergences: each maps the doc citation named in a
@@ -476,6 +518,7 @@ def test_probe_matches_cpython_or_refuses_as_documented(
 ):
     pymcu = pymcu_bin()
     expectation = parse_expectation(probe.read_text())
+    running_py_parser = bool(os.environ.get("PYMCU_PY_PARSER"))
     if expectation.frontend is not None:
         # The two front ends are supposed to accept the same language subset, but a probe
         # marked `# frontend: default` / `# frontend: py-parser` documents a real, filed gap
@@ -484,12 +527,39 @@ def test_probe_matches_cpython_or_refuses_as_documented(
         # `# expect:` that is honest under both engines, so it runs -- and is asserted --
         # only under the front end it names; the other run skips it rather than treating an
         # inherently one-sided assertion as a false pass or a false failure.
-        running_py_parser = bool(os.environ.get("PYMCU_PY_PARSER"))
         wants_py_parser = expectation.frontend == "py-parser"
         if running_py_parser != wants_py_parser:
             pytest.skip(
                 f"probe is restricted to the {expectation.frontend} front end "
                 "(the two front ends disagree here; see the probe's # doc: issue)"
+            )
+    if expectation.python is not None:
+        # A construct only reaches the diagnostic (or the behaviour) a probe asserts
+        # once an interpreter new enough to lex it parses the source. An older
+        # Python fails the construct inside ast.parse() with a version-dependent
+        # syntax error -- not the diagnostic the probe is written for, and a
+        # refusal measured there would report "different diagnostic" for what is
+        # really a different question. On such an interpreter the probe does not
+        # run. The parser that matters under the py-parser front end is the
+        # translator's: PYMCU_PYTHON, else the python3 pymcuc would spawn. For
+        # `match` and `divergence` probes the CPython oracle half must also run
+        # the source, so the host version counts too. A `refuse` probe under the
+        # default front end involves no Python parser at all and is never gated.
+        required = expectation.python
+        wanted = f">={required[0]}.{required[1]}"
+        if running_py_parser:
+            interpreter = os.environ.get("PYMCU_PYTHON") or "python3"
+            version = _python_version_of(interpreter)
+            if version is not None and version < required:
+                pytest.skip(
+                    f"probe needs Python {wanted} to express its expectation; "
+                    f"the translator's interpreter ({interpreter}) is "
+                    f"{version[0]}.{version[1]}"
+                )
+        if expectation.kind != "refuse" and sys.version_info[:2] < required:
+            pytest.skip(
+                f"probe needs Python {wanted} for its CPython oracle half; "
+                f"running {sys.version.split()[0]}"
             )
     if expectation.tracked:
         # A `# tracked: #N` probe is a known compiler bug: xfail(strict) so the suite stays
@@ -505,3 +575,4 @@ def test_probe_matches_cpython_or_refuses_as_documented(
     assert outcome.outcome in {"match", "refused"}, (
         f"{outcome.probe}: {outcome.outcome}\n{outcome.first_difference}"
     )
+
