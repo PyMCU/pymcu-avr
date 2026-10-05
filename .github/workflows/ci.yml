@@ -504,7 +504,9 @@ jobs:
           repository: PyMCU/PyMCU
           ref: main
           path: PyMCU
-          submodules: false
+          # recursive: the SSD1306 fixtures import the CircuitPython layer
+          # (and its `micropython` module), which lives in PyMCU/external.
+          submodules: recursive
 
       - name: Checkout RP2040Sharp
         uses: actions/checkout@v4
@@ -538,6 +540,7 @@ jobs:
         run: |
           uv venv .venv
           uv pip install --python .venv --no-sources pytest -e ../PyMCU/lib -e ../PyMCU/extensions/pymcu-sdk -e ../PyMCU -e .
+          uv pip install --python .venv --no-deps -e ../PyMCU/external/pymcu-micropython -e ../PyMCU/external/pymcu-circuitpython
 
       # The pinned UF2 plus the prepared 2 MiB flash snapshot (libraries
       # installed over the REPL); the stamp inside rebuilds the snapshot when a
