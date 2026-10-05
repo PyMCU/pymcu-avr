@@ -1805,19 +1805,19 @@
    "rc": 1,
    "violations": []
   },
-  "532_hex_bin_oct_negative_constant": {
+  "546_hex_bin_oct_negative_constant": {
    "rc": 0,
    "violations": []
   },
-  "533_oct_runtime_supported": {
+  "547_oct_runtime_supported": {
    "rc": 0,
    "violations": []
   },
-  "534_hex_bound_to_a_name": {
+  "548_hex_bound_to_a_name": {
    "rc": 0,
    "violations": []
   },
-  "535_hex_of_a_string_refused": {
+  "549_hex_of_a_string_refused": {
    "rc": 1,
    "violations": []
   },
