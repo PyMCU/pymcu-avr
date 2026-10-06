@@ -1957,6 +1957,22 @@
    "rc": 1,
    "violations": []
   },
+  "583_divmod_int32_quotient_overflow_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "584_inline_bare_raise_restores_record": {
+   "rc": 0,
+   "violations": []
+  },
+  "585_except_two_subtree_bases": {
+   "rc": 0,
+   "violations": []
+  },
+  "586_handler_fresh_raise_keeps_no_snapshot": {
+   "rc": 0,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": []
