@@ -137,11 +137,45 @@ def _python_version_of(executable: str) -> tuple[int, int] | None:
         return None
 
 
+def _oserror_errno_lines(text: str) -> str:
+    # A one-argument `raise OSError(n)` is MicroPython's spelling, not CPython's:
+    # the integer is e.errno (CPython leaves it None unless the raise passes an
+    # errno+strerror pair) and print(e) renders `[Errno n] NAME` from the errno
+    # table, or the bare number for a code the table does not name
+    # (limitations.md:286). Probes tag the values they print so this rewrite is
+    # unambiguous: `ERR <arg0> <errno>` and `MSG <str(e)>`.
+    import re
+
+    names = {
+        1: "EPERM", 2: "ENOENT", 5: "EIO", 9: "EBADF", 11: "EAGAIN",
+        12: "ENOMEM", 13: "EACCES", 17: "EEXIST", 19: "ENODEV", 21: "EISDIR",
+        22: "EINVAL", 95: "EOPNOTSUPP", 98: "EADDRINUSE", 103: "ECONNABORTED",
+        104: "ECONNRESET", 105: "ENOBUFS", 107: "ENOTCONN", 110: "ETIMEDOUT",
+        111: "ECONNREFUSED", 113: "EHOSTUNREACH", 114: "EALREADY",
+        115: "EINPROGRESS",
+    }
+    out = []
+    for line in text.split("\n"):
+        m = re.fullmatch(r"ERR (\d+) None", line)
+        if m:
+            out.append(f"ERR {m.group(1)} {m.group(1)}")
+            continue
+        m = re.fullmatch(r"MSG (\d+)", line)
+        if m:
+            name = names.get(int(m.group(1)))
+            out.append(
+                f"MSG [Errno {m.group(1)}] {name}" if name is not None else line)
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 # Known, documented CPython/emulator divergences: each maps the doc citation named in a
 # probe's `# expect: divergence <citation>` header to the transform that turns CPython's
 # raw output into the form the docs say the emulator prints instead. A probe whose citation
 # is not one of these keys is a broken header, not a silent pass.
 DIVERGENCE_TRANSFORMS: dict[str, "callable[[str], str]"] = {
+    "docs/language/limitations.md:286": _oserror_errno_lines,
     # `bool` is an alias of uint8 that folds True/False to 1/0 (type-system.md:20); any/all,
     # `in`/`not in`, `is`/`is not`, and dict/set membership all return a bool.
     "docs/language/type-system.md:20": lambda text: "\n".join(
