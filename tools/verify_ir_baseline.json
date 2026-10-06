@@ -1805,32 +1805,20 @@
    "rc": 1,
    "violations": []
   },
-  "546_hex_bin_oct_negative_constant": {
+  "532_inline_tuple_slots_unique": {
    "rc": 0,
    "violations": []
   },
-  "547_oct_runtime_supported": {
+  "533_scalar_wraps_tuple_element": {
    "rc": 0,
    "violations": []
   },
-  "548_hex_bound_to_a_name": {
+  "534_samename_locals_interleaved": {
    "rc": 0,
    "violations": []
   },
-  "549_hex_of_a_string_refused": {
-   "rc": 1,
-   "violations": []
-  },
-  "553_errno_read_on_non_oserror_handler_refused": {
-   "rc": 1,
-   "violations": []
-  },
-  "554_errno_read_with_mixed_raise_sites_refused": {
-   "rc": 1,
-   "violations": []
-  },
-  "555_errno_read_on_tuple_handler_refused": {
-   "rc": 1,
+  "535_import_only_entry_file": {
+   "rc": 0,
    "violations": []
   },
   "536_round_two_arg_float": {
@@ -1873,135 +1861,85 @@
    "rc": 0,
    "violations": []
   },
+  "546_hex_bin_oct_negative_constant": {
+   "rc": 0,
+   "violations": []
+  },
+  "547_oct_runtime_supported": {
+   "rc": 0,
+   "violations": []
+  },
+  "548_hex_bound_to_a_name": {
+   "rc": 0,
+   "violations": []
+  },
+  "549_hex_of_a_string_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "550_oserror_int_argument_args_semantics": {
+   "rc": 0,
+   "violations": []
+  },
+  "551_oserror_errno_micropython_spelling": {
+   "rc": 0,
+   "violations": []
+  },
+  "552_errno_module_and_string_message": {
+   "rc": 0,
+   "violations": []
+  },
+  "553_errno_read_on_non_oserror_handler_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "554_errno_read_with_mixed_raise_sites_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "555_errno_read_on_tuple_handler_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "570_append_single_field_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "571_append_multi_field_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "572_extend_stores_elements": {
+   "rc": 0,
+   "violations": []
+  },
+  "573_extend_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "574_tuple_buffer_return": {
+   "rc": 0,
+   "violations": []
+  },
+  "575_extend_evaluates_argument_first": {
+   "rc": 0,
+   "violations": []
+  },
+  "576_tuple_buffer_two_calls": {
+   "rc": 0,
+   "violations": []
+  },
+  "577_nested_list_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
-   "violations": [
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "adafruit-bmp280-unmodified-loop": {
    "rc": 0,
-   "violations": [
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__0' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__1' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__10' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__11' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__2' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__3' is written at UINT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__4' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__5' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__6' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__7' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__8' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'inline3._read_coefficients.coeff__9' is written at INT16 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "adafruit-dht-none-cached": {
    "rc": 0,
@@ -2494,6 +2432,8 @@
   "compat-cp-neopixel": {
    "rc": 0,
    "violations": [
+    "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
@@ -4228,6 +4168,9 @@
    "violations": [
     "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
+    "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
     "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
   },
@@ -4252,26 +4195,7 @@
   },
   "surfacecov-tcs34725-b": {
    "rc": 0,
-   "violations": [
-    "canfail|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "canfail|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_1_0' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_1_0' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_1_1' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_1_1' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_1_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_1_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_2_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'main.iret_2_2' is written at UINT8 but used at INT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "optimize|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'main.iret_2_0' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "unify-widths|storage-width|main|'main.iret_2_1' is written at UINT8 but used at FLOAT elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "t-flag-demo": {
    "rc": 0,
@@ -4327,9 +4251,7 @@
   },
   "tuple-return-annotation": {
    "rc": 0,
-   "violations": [
-    "generate|storage-width|main|'main.iret_1_1' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
-   ]
+   "violations": []
   },
   "tuple-return-print": {
    "rc": 0,
