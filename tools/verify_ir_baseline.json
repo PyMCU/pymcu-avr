@@ -1821,6 +1821,10 @@
    "rc": 0,
    "violations": []
   },
+  "560_dead_write_after_raise_keeps_string_arg": {
+   "rc": 1,
+   "violations": []
+  },
   "536_round_two_arg_float": {
    "rc": 0,
    "violations": []
