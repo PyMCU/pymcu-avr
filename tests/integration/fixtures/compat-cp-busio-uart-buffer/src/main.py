@@ -1,5 +1,6 @@
 # CircuitPython busio.UART: in_waiting counts, and readinto honours the timeout
-# (pymcu-circuitpython#22).
+# (pymcu-circuitpython#22). The timeout is spelled in seconds, as
+# CircuitPython defines it: 0.02 s is the 20 ms window this fixture wants.
 #
 # in_waiting was the receive-complete flag, so it answered 0 or 1 however many bytes had
 # arrived, and readinto blocked on every byte for ever: a sensor that stopped answering hung
@@ -23,7 +24,7 @@ from pymcu.types import asm, uint8, uint16
 
 
 def main():
-    uart = UART(board.TX, board.RX, baudrate=115200, timeout=20)
+    uart = UART(board.TX, board.RX, baudrate=115200, timeout=0.02)
     buf = bytearray(4)
 
     asm("BREAK")                      # the test feeds the line during the wait below
