@@ -23,7 +23,8 @@ public class CompatCpUartTimeoutTests
             ? PymcuCompiler.BuildFixturePyParser("compat-cp-uart-timeout-seconds")
             : PymcuCompiler.BuildFixture("compat-cp-uart-timeout-seconds"));
         uno.RunMilliseconds(2000);
-        uno.Serial.Text.Replace("\r\n", "\n").Should().Be("1.0\n0.25\n",
-            "timeout=1 reads back 1.0 seconds and the setter takes the same spelling");
+        uno.Serial.Text.Replace("\r\n", "\n").Should().Be("1.0\n0.25\n0.0\n",
+            "timeout=1 reads back 1.0 seconds, the setter takes the same spelling, " +
+            "and timeout=0.0005 truncates to 0 ms like CircuitPython (never rounds to 0.001)");
     }
 }

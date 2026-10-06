@@ -10,3 +10,7 @@ uart = UART(board.TX, board.RX, baudrate=115200, timeout=1)
 print(uart.timeout)
 uart.timeout = 0.25
 print(uart.timeout)
+# Upstream assigns timeout * 1000 into the integer field, which truncates:
+# half a millisecond stores 0 ms and the getter answers 0.0, not 0.001.
+uart.timeout = 0.0005
+print(uart.timeout)
