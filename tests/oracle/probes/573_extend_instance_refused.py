@@ -1,5 +1,5 @@
 # expect: refuse '.extend()' cannot take an instance of 'Counter'
-# doc: docs/language/limitations.md:983
+# doc: https://docs.pymcu.org/limitations/#iterators-and-comprehensions
 from pymcu.types import uint8
 
 

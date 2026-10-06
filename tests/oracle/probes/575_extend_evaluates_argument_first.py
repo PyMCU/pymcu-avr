@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:63
+# doc: https://docs.pymcu.org/roadmap/#language
 # CPython evaluates the extend() argument before the receiver mutates: len(xs)
 # inside it still answers the size before the bump, so the grown element is 1.
 # Lowering the argument after the bump read the grown length and stored 2.

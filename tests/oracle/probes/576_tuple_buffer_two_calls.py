@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:63
+# doc: https://docs.pymcu.org/roadmap/#language
 # Two calls to a function returning (buffer, scalar) give different objects in
 # CPython: f's local buf is one cell every call shares, so an unpack target
 # aliasing it read the last call's write for both names.
