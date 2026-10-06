@@ -848,7 +848,9 @@ public class AVRCodeGenTests
 
         var asm = Compile(prog);
 
-        Assert.Contains("CALL\t__cmpsf2", asm);
+        // `>` goes through libgcc's own __gtsf2, not __cmpsf2: __cmpsf2 answers a
+        // comparison against NaN as "greater", where CPython says False.
+        Assert.Contains("CALL\t__gtsf2", asm);
     }
 
     [Fact]
