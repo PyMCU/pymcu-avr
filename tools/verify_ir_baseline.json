@@ -1821,6 +1821,18 @@
    "rc": 1,
    "violations": []
   },
+  "553_errno_read_on_non_oserror_handler_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "554_errno_read_with_mixed_raise_sites_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "555_errno_read_on_tuple_handler_refused": {
+   "rc": 1,
+   "violations": []
+  },
   "536_round_two_arg_float": {
    "rc": 0,
    "violations": []
