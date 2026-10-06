@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:708
+# doc: https://docs.pymcu.org/limitations/#iterators-and-comprehensions
 # The corpus had 24 comprehensions at module level, one in a method and NONE in a function.
 # This is the single-clause, unfiltered form (the supported one) in all five scopes,
 # including an @inline method, which no probe had used for anything.

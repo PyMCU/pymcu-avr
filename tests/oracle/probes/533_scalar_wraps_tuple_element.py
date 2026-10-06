@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # A scalar-producing expression built around a tuple-returning @inline call must
 # not read the inner expansion's result slots back as its own value: the result
 # list is consumed by the site that asked for it and cleared. print() of such an

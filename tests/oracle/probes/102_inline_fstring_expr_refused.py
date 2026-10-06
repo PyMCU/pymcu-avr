@@ -1,5 +1,5 @@
 # expect: refuse f-string
-# doc: docs/language/limitations.md:53
+# doc: https://docs.pymcu.org/limitations/#dynamic-memory-and-containers
 def use(s):
     print(s)
 x = 7

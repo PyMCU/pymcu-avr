@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:58
+# doc: https://docs.pymcu.org/roadmap/#language
 # tracked: #394
 class Pin:
     def __init__(self, n):

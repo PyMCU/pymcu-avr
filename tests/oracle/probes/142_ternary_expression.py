@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:23
+# doc: https://docs.pymcu.org/roadmap/#language
 def sign(n: int) -> int:
     return 1 if n >= 0 else -1
 print(sign(5))

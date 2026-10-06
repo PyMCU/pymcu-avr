@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:64
+# doc: https://docs.pymcu.org/roadmap/#language
 # tracked: #395
 class Num:
     def __init__(self, v):

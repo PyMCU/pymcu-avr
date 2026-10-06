@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:54
+# doc: https://docs.pymcu.org/roadmap/#language
 first, *rest, last = (1, 2, 3, 4)
 print(first)
 print(rest[0])

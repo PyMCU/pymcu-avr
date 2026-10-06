@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # Two functions may declare a local with the same source name: the IR qualifies
 # each binding by its function (f.acc / g.acc) and by inline prefix
 # (inline{d}.<caller>_<fn>.acc), so same-named locals never share identity or

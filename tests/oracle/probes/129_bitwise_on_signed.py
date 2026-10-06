@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/type-system.md:156
+# doc: https://docs.pymcu.org/language-reference/#type-casts
 from pymcu.types import int8
 def band(a: int8, b: int8) -> int8:
     return a & b

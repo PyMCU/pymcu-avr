@@ -1,5 +1,5 @@
 # expect: refuse does not run the iterator protocol
-# doc: docs/language/roadmap.md:19
+# doc: https://docs.pymcu.org/roadmap/#language
 class Counter:
     def __init__(self, n):
         self.n = n

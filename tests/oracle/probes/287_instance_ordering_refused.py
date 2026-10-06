@@ -1,5 +1,5 @@
 # expect: refuse defines no __lt__
-# doc: docs/language/limitations.md:412
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 class Plain:
     def __init__(self, n):
         self.n = n

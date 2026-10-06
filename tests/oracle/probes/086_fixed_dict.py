@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:70
+# doc: https://docs.pymcu.org/roadmap/#language
 from pymcu.collections import FixedDict
 d = FixedDict(4)
 d[1] = 7

@@ -1,6 +1,6 @@
 # PyMCU#427 -- a nested function decorated @inline, defined inside a method and reading and
 # writing `self` of the enclosing method, is the documented way to write a closure
-# (docs/language/limitations.md:287). No `nonlocal self` declaration is needed or valid here:
+# (https://docs.pymcu.org/limitations/#functions-and-closures). No `nonlocal self` declaration is needed or valid here:
 # only self's ATTRIBUTE is mutated, self itself is never rebound.
 #
 # Nothing forwarded the enclosing method's own `self` binding into the nested function's own

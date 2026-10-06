@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:73
+# doc: https://docs.pymcu.org/roadmap/#language
 import asyncio
 async def worker(n):
     total = 0

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1055
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # chr() of a run-time code point written straight into print(), and ord() of a character
 # indexed out of a string at a run-time index. Probe 124 folds both. A chr() that lost its
 # character prints 66, and an ord() that read the wrong index prints 65 or 67.

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:117
+# doc: https://docs.pymcu.org/roadmap/#language
 # A method called on a receiver that is NOT a name bound to an object. The corpus had this
 # shape in twelve probes, all at module level or inside a method, and never in a condition,
 # as an argument or as an index.

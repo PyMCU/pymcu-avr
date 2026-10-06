@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:78
+# doc: https://docs.pymcu.org/limitations/#dynamic-memory-and-containers
 VALUE = 3
 print(VALUE)
 VALUE = 9

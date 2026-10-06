@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:27
+# doc: https://docs.pymcu.org/roadmap/#language
 # A method called on the instance a factory RETURNED. It used to be refused: the receiver
 # was not a name bound to an object. Once the factory result temporary carries its instance
 # tag, the method dispatches and reads the instance the call produced, the same fix that

@@ -1,5 +1,5 @@
 # expect: refuse Callable array
-# doc: docs/language/limitations.md:317
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 def double(n):
     return n * 2
 

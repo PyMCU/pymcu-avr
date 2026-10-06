@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:33
+# doc: https://docs.pymcu.org/roadmap/#language
 class SensorError(Exception):
     pass
 def risky(x):

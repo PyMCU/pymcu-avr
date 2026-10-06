@@ -175,32 +175,32 @@ def _oserror_errno_lines(text: str) -> str:
 # raw output into the form the docs say the emulator prints instead. A probe whose citation
 # is not one of these keys is a broken header, not a silent pass.
 DIVERGENCE_TRANSFORMS: dict[str, "callable[[str], str]"] = {
-    "docs/language/limitations.md:286": _oserror_errno_lines,
+    "https://docs.pymcu.org/limitations/#exception-handling": _oserror_errno_lines,
     # `bool` is an alias of uint8 that folds True/False to 1/0 (type-system.md:20); any/all,
     # `in`/`not in`, `is`/`is not`, and dict/set membership all return a bool.
-    "docs/language/type-system.md:20": lambda text: "\n".join(
+    "https://docs.pymcu.org/language-reference/#primitive-types": lambda text: "\n".join(
         "1" if line == "True" else "0" if line == "False" else line
         for line in text.split("\n")
     ),
     # A triple-quoted string's leading newline, right after the opening quote, is stripped
     # (roadmap.md:65).
-    "docs/language/roadmap.md:65": lambda text: text[1:] if text.startswith("\n") else text,
+    "https://docs.pymcu.org/roadmap/#language": lambda text: text[1:] if text.startswith("\n") else text,
     # __del__ is emitted nowhere: storage is static, nothing collects an instance, and `del`
     # is refused for the same reason, so there is no moment a destructor could run at
     # (limitations.md:388). Whatever the body prints is therefore absent from the firmware's
     # output, which is what this drops from CPython's.
-    "docs/language/limitations.md:388": lambda text: "\n".join(
+    "https://docs.pymcu.org/limitations/#classes-and-inheritance (destructors never run)": lambda text: "\n".join(
         line for line in text.split("\n") if line != "DEL"
     ),
     # A field read before any write reachable from it executes: the interpreters resolve
     # attribute existence dynamically, per instance, by execution order and raise
     # AttributeError; PyMCU lays the field out statically and cannot see that the write comes
     # later in THIS run, so it reads the zero-initialized default instead (limitations.md:372).
-    "docs/language/limitations.md:372": lambda text: text.replace("AttributeError", "0", 1),
+    "https://docs.pymcu.org/limitations/#classes-and-inheritance (a field read before its write)": lambda text: text.replace("AttributeError", "0", 1),
     # `int` is 16-bit and a `uint8`-annotated parameter is a fixed 8-bit storage width, not
     # CPython's arbitrary-precision int (type-system.md:242): a value that does not fit wraps
     # silently at the width instead of being carried in full.
-    "docs/language/type-system.md:242": lambda text: "\n".join(
+    "https://docs.pymcu.org/language-reference/#type-casts": lambda text: "\n".join(
         str(int(line) & 0xFF) if line.lstrip("-").isdigit() else line
         for line in text.split("\n")
     ),

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # oct() used to be entirely unimplemented (the generic "builtin PyMCU does not provide"
 # refusal). The P2 AVR gaps bundle added it alongside hex()/bin(): a compile-time constant
 # interns its spelling, and it takes a run-time argument too (see 498/499).

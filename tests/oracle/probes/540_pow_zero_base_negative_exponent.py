@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # 0.0 ** -1 and pow(0.0, -1) used to raise ValueError (borrowed from math.pow's domain
 # check, the shared __pymcu_powf routine's own). CPython's ** and pow() raise
 # ZeroDivisionError for this value -- a genuine run-time exception, catchable with

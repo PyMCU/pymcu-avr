@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # `or` as a value inside an `@inline` method. The corpus had `and`/`or` in one condition and
 # nowhere else, and never inside an expansion.
 #

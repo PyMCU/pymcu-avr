@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1050
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # pow() with a run-time integer argument is integer exponentiation, the same unroll `**`
 # lowers. It was forwarded to the float routine with integer bit patterns and printed 1.0
 # (1 through an int16 annotation) whichever argument was the run-time one. `b ** 5` on the

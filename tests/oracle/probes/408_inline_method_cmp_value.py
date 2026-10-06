@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # The same comparison bound to a name first, which goes through VisitBinary instead. 407 and
 # 408 are the value-versus-condition pair for a comparison inside an `@inline` method.
 #

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # `len()` inside an `@inline` method. In the corpus `len()` lived entirely inside `print()`:
 # twelve probes, no other position, and never in an expansion.
 #

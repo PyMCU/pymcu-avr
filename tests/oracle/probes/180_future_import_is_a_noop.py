@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 from __future__ import annotations
 
 def f(x: int) -> int:

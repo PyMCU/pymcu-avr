@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # A field read bound to a local first inside an `@inline` method, so each expansion needs its
 # own local slot for `v`.
 #

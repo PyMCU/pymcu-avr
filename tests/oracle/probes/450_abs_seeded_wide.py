@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1041
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # abs() with a run-time argument. Probe 121 passes a literal through a one-call-site
 # function, so the folder evaluates it. Every value here comes from GPIOR0 and the
 # magnitudes do not fit a byte: an abs() that narrowed or read the operand unsigned

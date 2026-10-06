@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 class Life:
     def __init__(self, seed):
         self.rng = seed

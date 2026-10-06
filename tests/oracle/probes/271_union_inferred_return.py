@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # RFC 0009 phase 3 (6.1): no annotation -- the member list is inferred from the
 # return statements themselves (int on one arm, float on another, None at the
 # end), and the tag is the same byte a declared union would carry.

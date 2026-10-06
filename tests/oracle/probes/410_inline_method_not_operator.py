@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # `not`, which had ZERO probes in the whole corpus: it appeared only inside `is not None` and
 # in comment text. This is its first appearance as an operator, and inside an expansion.
 #

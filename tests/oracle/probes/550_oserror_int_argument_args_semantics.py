@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:286
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 # An integer raise argument is the exception's one argument: e.args, e.args[0]
 # and len(e.args) are identical between CPython and PyMCU -- this half of the
 # feature is not a divergence. The same for a raise propagated through a call

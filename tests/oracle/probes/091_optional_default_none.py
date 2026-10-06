@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:382
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 try:
     from typing import Optional
 except ImportError:

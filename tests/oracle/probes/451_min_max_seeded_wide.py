@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1042
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # min() and max() on run-time values that do not fit a byte, signed and unsigned mixed,
 # as scalars, over a list, over fixed arrays, over a bytearray, and with key=. Probe 121
 # passes literals. 300 and 299 differ only above the low byte, so a comparison done on

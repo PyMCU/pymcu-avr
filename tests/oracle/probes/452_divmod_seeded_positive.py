@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1049
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # divmod() with run-time operands, both non-negative, the dividend wider than a byte.
 # Probe 054 divides two literals and measures the folder. A divmod that divided on eight
 # bits would print 3 and 5 (1000 mod 256 is 232) instead of 142 and 6.

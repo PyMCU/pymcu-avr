@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:18
+# doc: https://docs.pymcu.org/roadmap/#language
 for name in ["PD2", "PD3"]:
     print(name)
 print("END")

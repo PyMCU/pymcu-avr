@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:27
+# doc: https://docs.pymcu.org/roadmap/#language
 # A method called on an element of a list of instances, indexed at RUN TIME. It works, at a
 # constant index and at a runtime one, and the two elements must answer differently for the
 # probe to be able to tell a working index from a folded one.

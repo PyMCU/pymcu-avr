@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:30
+# doc: https://docs.pymcu.org/roadmap/#language
 class Gate:
     def __init__(self, v):
         self.v = v

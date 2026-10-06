@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:33
+# doc: https://docs.pymcu.org/roadmap/#language
 def risky(x):
     if x > 2:
         raise ValueError("large")

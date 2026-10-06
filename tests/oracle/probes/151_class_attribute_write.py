@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:26
+# doc: https://docs.pymcu.org/roadmap/#language
 class Device:
     SCALE = 5
 d = Device()

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:15
+# doc: https://docs.pymcu.org/roadmap/#language
 for i in range(3):
     print(i)
 else:

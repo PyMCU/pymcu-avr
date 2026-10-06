@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:69
+# doc: https://docs.pymcu.org/roadmap/#language
 d = {0: 10, "mid": 2}
 print(d[0])
 print(d["mid"])

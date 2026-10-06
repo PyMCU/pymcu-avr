@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:62
+# doc: https://docs.pymcu.org/roadmap/#language
 def total(n):
     buf = bytearray(b"abcdef")
     s = 0

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:49
+# doc: https://docs.pymcu.org/roadmap/#language
 buf = bytearray(3)
 buf[0] = 65
 buf[1] = 66

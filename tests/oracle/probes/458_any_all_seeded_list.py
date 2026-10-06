@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1047
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # any() and all() over list literals of run-time elements, read through a branch so the
 # bool's printed form does not enter. Probe 057 folds literals. 256 is truthy with a zero
 # low byte: an element tested on eight bits turns the third and fourth answers around.

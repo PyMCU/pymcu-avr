@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:71
+# doc: https://docs.pymcu.org/roadmap/#language
 """Fixed at #399: a character indexed out of a runtime string prints as itself.
 
 s[2] used to print 48, the code of '0'. Python has no char type: s[2] is the

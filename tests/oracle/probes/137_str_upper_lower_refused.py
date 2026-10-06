@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 s = "Hello World"
 print(s.upper())
 print("END")

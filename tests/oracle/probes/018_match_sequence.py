@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:22
+# doc: https://docs.pymcu.org/roadmap/#language
 # tracked: #401
 pair = [4, 5]
 match pair:

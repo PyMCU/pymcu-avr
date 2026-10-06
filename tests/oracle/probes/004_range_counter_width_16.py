@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:15
+# doc: https://docs.pymcu.org/roadmap/#language
 from pymcu.types import uint16
 n: uint16 = 300
 c: uint16 = 0

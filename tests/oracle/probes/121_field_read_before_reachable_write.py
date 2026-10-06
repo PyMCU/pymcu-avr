@@ -1,5 +1,5 @@
-# expect: divergence docs/language/limitations.md:372
-# doc: docs/language/limitations.md:372
+# expect: divergence https://docs.pymcu.org/limitations/#classes-and-inheritance (a field read before its write)
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 #
 # PyMCU#441: `setup` is called directly from __init__, so `self.x` is a real field of C (the
 # fix this probe guards). But `check`, ALSO called directly from __init__, runs FIRST and

@@ -1,5 +1,5 @@
 # expect: refuse has no field
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 class C:
     def __init__(self):
         self.x = 0

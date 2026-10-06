@@ -1,5 +1,5 @@
-# expect: divergence docs/language/limitations.md:388
-# doc: docs/language/limitations.md:388
+# expect: divergence https://docs.pymcu.org/limitations/#classes-and-inheritance (destructors never run)
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 class Held:
     def __init__(self, n):
         self.n = n

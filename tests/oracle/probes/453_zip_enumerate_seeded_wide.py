@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1044
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # zip() and enumerate() over run-time elements wider than a byte, over lists and over
 # fixed arrays. Probes 011 and 013 iterate literal lists. Each line combines both halves
 # into one number, so a swapped, narrowed or repeated element prints a different value.

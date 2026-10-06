@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:729
+# doc: https://docs.pymcu.org/limitations/#slices
 try:
     from pymcu.types import uint8
 except ImportError:

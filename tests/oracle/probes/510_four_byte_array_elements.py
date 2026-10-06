@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:53
+# doc: https://docs.pymcu.org/limitations/#dynamic-memory-and-containers
 # An int32, uint32 or float array element is four bytes. The backend's element load and store
 # moved only a uint16's two, and scaled a run-time index by at most two: `buf[i] = v` kept the
 # low byte of v and `buf[i]` read the rest from whatever the registers last held, so the

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1050
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # `**` with a constant exponent of 3 or more and a base that is an expression, not a name.
 # The base parked in R16:R17 was lost across the first __mul32 (2295 for 3 ** 3). The same
 # base bound to a name first is the control.

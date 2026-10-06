@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # RFC 0009 phase 3: `match` on a tagged union compares the tag -- `case None:`,
 # `case int():`, `case float():` name members; a literal compares the payload;
 # inside an arm the subject narrows to that member.

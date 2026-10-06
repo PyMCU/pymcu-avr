@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8
 

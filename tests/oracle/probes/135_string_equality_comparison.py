@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:802
+# doc: https://docs.pymcu.org/limitations/#imports-and-modules
 """Fixed at #438: a condition compares two strings by their text.
 
 `x == "abc"` on a name bound to a multi-character string used to be folded

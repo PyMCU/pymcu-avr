@@ -1,5 +1,5 @@
 # expect: refuse len() argument must be a fixed-size
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 from pymcu.types import uint8, uint16
 
 def fill(buf: bytearray):

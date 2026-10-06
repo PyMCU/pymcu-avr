@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:60
+# doc: https://docs.pymcu.org/roadmap/#language
 # A constant-sized bytearray is zero filled. The AVR backend replaces the run of
 # identical constant stores by a counted loop, so every size that changes the shape
 # of that loop is exercised here: past 256 (16-bit counter), exactly 256 (the 8-bit

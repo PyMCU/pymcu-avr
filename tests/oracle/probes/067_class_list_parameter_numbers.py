@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:60
+# doc: https://docs.pymcu.org/roadmap/#language
 class Table:
     def __init__(self, values):
         self.values = values

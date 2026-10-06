@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:64
+# doc: https://docs.pymcu.org/roadmap/#language
 class Slot:
     def __get__(self, obj, typ=None):
         return obj.raw + 1

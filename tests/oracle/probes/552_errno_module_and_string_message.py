@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:286
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 # `import errno` binds the POSIX-stable constants and folds errorcode lookups;
 # EIO is 5 on every platform so the raise's argument is the same integer on
 # both interpreters. A string raise keeps its message reads unchanged.

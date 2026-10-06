@@ -1,5 +1,5 @@
 # expect: refuse is first typed as str and is later given a numeric value
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 class Rec:
     def __init__(self):
         self.x = "first"

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1048
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # sum(genexp) over run-time elements with no start or with start 0. The optimizer recorded
 # `t = 0 + x` as a copy of x and kept forwarding x after the unroll rebound it, so the
 # second element was counted where the first belonged ([1, 2, 4, 8] printed 16). The

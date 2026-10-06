@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:283
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 class Box:
     def __init__(self, value):
         self.value = value

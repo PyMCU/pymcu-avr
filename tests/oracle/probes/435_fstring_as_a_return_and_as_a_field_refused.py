@@ -1,5 +1,5 @@
 # expect: refuse f-string
-# doc: docs/language/limitations.md:149
+# doc: https://docs.pymcu.org/limitations/#string-operations
 # An f-string is supported streamed to a sink and assigned to a name, and refused in other
 # expression positions. A `return` is one of them, and so is an instance field; probe 102
 # covers a call argument and 423 a ternary arm.

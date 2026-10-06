@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:35
+# doc: https://docs.pymcu.org/roadmap/#language
 x = 5 / 2
 print(x)
 print("END")

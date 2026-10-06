@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # RFC 0009 phase 3: Union without None -- two value members still take a tag
 # when which one a call returns is only a run-time fact.
 from typing import Union

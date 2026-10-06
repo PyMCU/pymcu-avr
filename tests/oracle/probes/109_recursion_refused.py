@@ -1,5 +1,5 @@
 # expect: refuse recursive
-# doc: docs/language/limitations.md:279
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 def f(n):
     if n == 0:
         return 0

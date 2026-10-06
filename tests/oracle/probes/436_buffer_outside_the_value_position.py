@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:58
+# doc: https://docs.pymcu.org/roadmap/#language
 # Buffers had sixteen probes as a value, seven as a field and one as an argument, and none in
 # a condition, as a subscript index or as a return. A driver reads a buffer in all three.
 #

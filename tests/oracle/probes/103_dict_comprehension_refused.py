@@ -1,5 +1,5 @@
 # expect: refuse not supported
-# doc: docs/language/limitations.md:523
+# doc: https://docs.pymcu.org/limitations/#pointer-arithmetic
 d = {x: x + 1 for x in [1, 2, 3]}
 print(d[1])
 print("END")

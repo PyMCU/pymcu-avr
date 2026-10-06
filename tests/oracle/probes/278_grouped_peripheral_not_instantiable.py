@@ -1,5 +1,5 @@
 # expect: refuse not a class to instantiate
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 from pymcu.types import ptr, uint8, const
 
 BASE: const[uint8] = 0x04

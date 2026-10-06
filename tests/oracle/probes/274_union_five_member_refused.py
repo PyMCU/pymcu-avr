@@ -1,5 +1,5 @@
 # expect: refuse tagged unions carry at most 4
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # RFC 0009 section 6/6.1: the tag byte holds a member index and the reader
 # count grows with the member count -- five is past the design ceiling.
 from typing import Union

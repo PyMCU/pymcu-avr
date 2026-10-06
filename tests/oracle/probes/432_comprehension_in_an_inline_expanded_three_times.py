@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # A comprehension inside an @inline method, expanded THREE times with different values.
 #
 # This is 431's row measured again under the property that found #519: with one expansion

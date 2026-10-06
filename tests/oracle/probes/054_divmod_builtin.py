@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:42
+# doc: https://docs.pymcu.org/roadmap/#language
 q, r = divmod(17, 5)
 print(q)
 print(r)

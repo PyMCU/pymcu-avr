@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/type-system.md:20
+# doc: https://docs.pymcu.org/language-reference/#primitive-types
 # A comparison as a call ARGUMENT, as an instance FIELD and as a subscript INDEX. The corpus
 # had 48 comparisons in a condition, eleven inside print() and exactly one as a value, and
 # none at all in these three.

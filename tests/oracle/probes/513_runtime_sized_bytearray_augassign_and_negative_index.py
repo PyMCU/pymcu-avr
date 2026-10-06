@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:55
+# doc: https://docs.pymcu.org/limitations/#dynamic-memory-and-containers
 # A runtime-sized bytearray lives in the arena, and its element is the buffer's offset plus the
 # index. `x[i] += v` had no arena hook, so it was refused as "Bit index must be constant for
 # augmented assignment", and `x[-1]` added -1 to the offset and read the byte in front of the

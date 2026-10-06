@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # Plain arithmetic over a field and a parameter inside an `@inline` method, the shape every
 # HAL driver is made of.
 #

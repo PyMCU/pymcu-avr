@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:33
+# doc: https://docs.pymcu.org/roadmap/#language
 from pymcu.types import inline
 @inline
 def risky(x):

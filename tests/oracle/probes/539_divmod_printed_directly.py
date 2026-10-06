@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # print(divmod(a, b)) directly, no assignment first -- the other shape 538 covers.
 from pymcu.chips.atmega328p import GPIOR0
 

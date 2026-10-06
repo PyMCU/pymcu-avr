@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:38
+# doc: https://docs.pymcu.org/roadmap/#language
 print(3.25)
 print(-2.25)
 print(0.05)

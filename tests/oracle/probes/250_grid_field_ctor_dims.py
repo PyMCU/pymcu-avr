@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:698
+# doc: https://docs.pymcu.org/limitations/#iterators-and-comprehensions
 class Grid:
     def __init__(self, width, height):
         self.width = width

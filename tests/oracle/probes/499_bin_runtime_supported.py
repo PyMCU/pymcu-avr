@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # bin() used to refuse any argument that was not a compile-time constant. A run-time value
 # now builds the same spelling into a buffer through pymcu.strfmt, streamed by print().
 from pymcu.chips.atmega328p import GPIOR0

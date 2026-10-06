@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1046
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # reversed() over a list of run-time elements, one of them wider than a byte. Probe 014
 # reverses a literal list. The three values are distinct, so an unreversed walk prints
 # 300 first and a narrowed one prints 44.

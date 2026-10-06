@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # An f-string inside an `@inline` method. `print` dispatches on the syntactic shape of its
 # argument through a long ladder, so a new position for a formatted value is a new branch of
 # it; the corpus had f-strings at module and function level only, never in a method.

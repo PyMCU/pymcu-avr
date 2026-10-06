@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:53
+# doc: https://docs.pymcu.org/limitations/#dynamic-memory-and-containers
 # A list[T] element lives at base + 2 + index * size, and `xs[-1]` used -1 as it was: the
 # read, the store and `+=` addressed the list header and printed or wrote its bytes.
 from pymcu.types import uint8, uint16, int32

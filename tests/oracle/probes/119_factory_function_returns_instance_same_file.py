@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:24
+# doc: https://docs.pymcu.org/roadmap/#language
 class Sensor:
     def __init__(self, base):
         self.base = base

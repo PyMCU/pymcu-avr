@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # An @inline callee's tuple results live in named result slots
 # (<caller>.iret_<depth>_<seq>_<k>) that used to repeat for every expansion at the
 # same depth. Two expansions consumed through sibling reads then shared the slot:

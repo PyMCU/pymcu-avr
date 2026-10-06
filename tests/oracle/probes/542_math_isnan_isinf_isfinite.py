@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # math.isnan/isinf/isfinite, previously absent. @inline, three bit operations each, reading
 # the same exponent/mantissa split _f32_repr already used to print inf/nan correctly.
 import math

@@ -1,5 +1,5 @@
 # expect: refuse does not fit in 'x', which is declared uint8
-# doc: docs/language/type-system.md:242
+# doc: https://docs.pymcu.org/language-reference/#type-casts
 """A literal a parameter's width cannot hold is refused, since PyMCU#af166930.
 
 This probe used to be `# expect: divergence type-system.md:242`: the argument

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # Inside a function the same capture stays function-scoped, and the local fold the name
 # carried from the declaration above the match does not survive the bind: the arm used
 # to return the declared 4 instead of the captured field.

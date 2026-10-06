@@ -1,5 +1,5 @@
 # expect: refuse only supported where it fills a fixed array
-# doc: docs/language/limitations.md:708
+# doc: https://docs.pymcu.org/limitations/#iterators-and-comprehensions
 # A comprehension is supported where it fills a fixed array whose length is a compile-time
 # constant, and refused everywhere else. Measured identical at module scope and inside a
 # function for three positions: as an instance field, as a return value and as a call

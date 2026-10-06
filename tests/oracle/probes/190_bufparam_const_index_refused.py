@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:24 -- buffer param indexed by a >255 const into a u16 array; pymcu-avr#32
+# doc: https://docs.pymcu.org/roadmap/#language -- buffer param indexed by a >255 const into a u16 array; pymcu-avr#32
 from pymcu.types import uint8, uint16
 
 def poke_far(buf: bytearray):

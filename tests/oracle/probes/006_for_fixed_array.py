@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:16
+# doc: https://docs.pymcu.org/roadmap/#language
 from pymcu.types import uint8
 xs: uint8[4] = [2, 4, 6, 8]
 s = 0

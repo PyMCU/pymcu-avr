@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:28
+# doc: https://docs.pymcu.org/roadmap/#language
 class Base:
     def __init__(self, value):
         self.value = value

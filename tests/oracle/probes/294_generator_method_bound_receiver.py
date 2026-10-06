@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:115
+# doc: https://docs.pymcu.org/roadmap/#language
 class Steps:
     def __init__(self, seed):
         self.total = seed

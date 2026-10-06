@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:23
+# doc: https://docs.pymcu.org/roadmap/#language
 GAIN = 4
 def scale(x, mul=GAIN):
     return x * mul

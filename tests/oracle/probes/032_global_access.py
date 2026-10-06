@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:32
+# doc: https://docs.pymcu.org/roadmap/#language
 count = 1
 def inc():
     global count

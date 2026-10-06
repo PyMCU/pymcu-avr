@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/type-system.md:20
+# doc: https://docs.pymcu.org/language-reference/#primitive-types
 def check(a: int, b: int, c: int) -> bool:
     return a < b < c
 print(check(1, 2, 3))

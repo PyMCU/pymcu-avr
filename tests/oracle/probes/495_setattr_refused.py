@@ -1,5 +1,5 @@
 # expect: refuse 'setattr' is runtime reflection
-# doc: docs/language/roadmap.md:253
+# doc: https://docs.pymcu.org/roadmap/#not-planned
 # CPython runs it; PyMCU must refuse it at compile time with a diagnostic that names the
 # builtin, not with a link error, an undefined-function message, or a silent value.
 from pymcu.chips.atmega328p import GPIOR0

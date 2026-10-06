@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # A local buffer built inside an `@inline` method and passed to a real subroutine, which is
 # how a driver hands a frame to a bus write.
 #

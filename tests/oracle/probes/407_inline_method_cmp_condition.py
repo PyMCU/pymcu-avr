@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # A comparison as the test of an `if`, the lowering EmitOptimizedConditionalJump takes. The
 # two calls land on DIFFERENT arms on purpose (3 > 50 is false, 10 > 2 is true).
 #

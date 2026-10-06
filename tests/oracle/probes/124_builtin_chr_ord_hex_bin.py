@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:785
+# doc: https://docs.pymcu.org/limitations/#async-and-concurrency
 def make(n: int) -> int:
     return n
 print(chr(make(66)))

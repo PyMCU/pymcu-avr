@@ -1,5 +1,5 @@
 # expect: refuse __new__' is defined, but PyMCU never calls it
-# doc: docs/language/limitations.md:386
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 class Cached:
     def __new__(cls, n):
         return 0

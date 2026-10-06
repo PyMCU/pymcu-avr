@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:115
+# doc: https://docs.pymcu.org/roadmap/#mcu-extensions
 def gen(n):
     for i in range(n):
         yield i * 2

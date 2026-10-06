@@ -1,5 +1,5 @@
 # expect: refuse __set_name__
-# doc: docs/language/limitations.md:454
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 class Slot:
     def __set_name__(self, owner, name):
         self.name = name

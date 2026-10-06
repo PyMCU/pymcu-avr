@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:97
+# doc: https://docs.pymcu.org/roadmap/#language
 class Util:
     @staticmethod
     def double(n):

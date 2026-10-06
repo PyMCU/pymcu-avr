@@ -1,5 +1,5 @@
-# expect: divergence docs/language/limitations.md:286
-# doc: docs/language/limitations.md:286
+# expect: divergence https://docs.pymcu.org/limitations/#exception-handling
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 # MicroPython semantics PyMCU implements: a one-argument integer raise sets
 # e.errno, and print(e) renders [Errno n] NAME from the errno table (the bare
 # number when the code is unknown). CPython leaves .errno unset on OSError(n)

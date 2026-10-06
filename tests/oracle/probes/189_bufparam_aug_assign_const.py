@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 from pymcu.types import uint8
 
 def bump(buf: bytearray):

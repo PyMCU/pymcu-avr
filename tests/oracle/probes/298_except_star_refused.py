@@ -1,5 +1,5 @@
 # expect: refuse 'except*' (exception groups) is not supported
-# doc: docs/language/limitations.md:276
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8
 

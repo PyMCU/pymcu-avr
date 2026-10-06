@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:35
+# doc: https://docs.pymcu.org/roadmap/#language
 # math.sqrt / exp / log / radians -- the four the measured corpus demands.
 # Each result is scaled to an integer before printing: PyMCU carries float32 and
 # CPython float64, so the two agree to about seven digits and disagree in the

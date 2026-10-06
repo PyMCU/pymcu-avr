@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:13
+# doc: https://docs.pymcu.org/roadmap/#language
 x = 7
 if x < 3:
     print("low")

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:35
+# doc: https://docs.pymcu.org/roadmap/#language
 def quot(a, b):
     return a // b
 try:

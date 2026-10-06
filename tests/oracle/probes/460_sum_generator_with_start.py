@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1048
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # sum(genexp, start) over a fixed array of run-time bytes, the total past 255. The start
 # argument is the documented half of the generator form. Every element is distinct, so
 # a dropped or repeated one changes the total.

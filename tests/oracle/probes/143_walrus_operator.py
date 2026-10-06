@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:23
+# doc: https://docs.pymcu.org/roadmap/#language
 def double(n: int) -> int:
     return n * 2
 def run() -> int:

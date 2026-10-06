@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:23
+# doc: https://docs.pymcu.org/roadmap/#language
 def tune(x, *, gain=2, offset=1):
     return x * gain + offset
 print(tune(5))

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # An indexed WRITE inside an @inline method, expanded twice at two different indices, so each
 # expansion needs its own buffer and its own index. The corpus had 17 indexed writes at
 # module level, 13 in a function, four in a method and none inside an expansion.

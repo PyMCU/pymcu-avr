@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1043
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # sum() over a fixed array or a bytearray reads the array. It read flattened slots no store
 # writes and printed 0, or whatever the previous expression left behind (the shape of
 # #81), and added at the element width, so 200 + 100 + 50 wrapped. The explicit additions

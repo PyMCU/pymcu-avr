@@ -1,5 +1,5 @@
 # expect: refuse 'dev' is an integer
-# doc: docs/language/limitations.md:286
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 class Sensor:
     def __init__(self):
         self.count = 0

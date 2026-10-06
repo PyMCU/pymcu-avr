@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1046
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # reversed() over a fixed array or a bytearray reads the array backwards. It read flattened
 # slots no store writes and yielded zeros, with literal and with run-time elements. The
 # index loop is the control; the list literal form is probe 454.

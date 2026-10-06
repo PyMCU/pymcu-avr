@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:67
+# doc: https://docs.pymcu.org/roadmap/#language
 def run():
     print("running")
 if __name__ == "__main__":

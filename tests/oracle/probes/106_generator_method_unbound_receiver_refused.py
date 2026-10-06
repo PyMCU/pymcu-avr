@@ -1,5 +1,5 @@
 # expect: refuse cannot tell which class
-# doc: docs/language/roadmap.md:115
+# doc: https://docs.pymcu.org/roadmap/#language
 class Gen:
     def values(self):
         yield 1

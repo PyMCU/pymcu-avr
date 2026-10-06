@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:139
+# doc: https://docs.pymcu.org/limitations/#string-operations
 # The same five constructions inside an f-string interpolation. print() dispatches on the
 # SYNTACTIC SHAPE of its argument through a long ladder, so each spelling that reaches it is
 # a separate branch, and a formatted value is a different branch from a bare one. No probe

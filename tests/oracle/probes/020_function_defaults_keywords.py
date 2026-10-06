@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:23
+# doc: https://docs.pymcu.org/roadmap/#language
 def scale(x, mul=2, add=1):
     return x * mul + add
 print(scale(3))

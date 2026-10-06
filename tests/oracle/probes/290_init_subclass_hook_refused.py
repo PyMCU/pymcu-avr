@@ -1,5 +1,5 @@
 # expect: refuse __init_subclass__' is defined, but PyMCU never calls it
-# doc: docs/language/limitations.md:387
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 class Base:
     def __init__(self, n):
         self.n = n

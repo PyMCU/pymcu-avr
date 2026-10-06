@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:283
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 class Sensor:
     def __init__(self):
         self.count = 0

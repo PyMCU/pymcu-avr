@@ -1,5 +1,5 @@
 # expect: refuse 'del' is not supported: storage here is static
-# doc: docs/language/limitations.md:388
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8
 

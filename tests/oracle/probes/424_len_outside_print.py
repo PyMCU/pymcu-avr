@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:58
+# doc: https://docs.pymcu.org/roadmap/#language
 # Every one of the corpus's thirteen `len()` probes called it inside print(). Bound to a
 # name, in a condition, as an argument, as an index, as a return value and interpolated were
 # all empty cells, which matters because a diagnostic elsewhere in the compiler is known to

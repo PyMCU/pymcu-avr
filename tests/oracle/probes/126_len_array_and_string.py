@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:773
+# doc: https://docs.pymcu.org/limitations/#async-and-concurrency
 from pymcu.types import uint8
 a: uint8[5] = [1, 2, 3, 4, 5]
 print(len(a))

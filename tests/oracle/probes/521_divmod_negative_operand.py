@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1049
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # divmod() floors like // and % and its results keep the division's width and sign. The
 # fold truncated toward zero and stored the pair as bytes (253, 254 for -17, 5), and with a
 # run-time int16 dividend the unpack targets were uint8 (113 for -143). The `//` and `%`

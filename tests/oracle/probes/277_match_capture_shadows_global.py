@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # A `match` class-pattern capture is a BINDING: at module level it binds the module
 # global of that name, exactly as CPython does, so every read inside the arm sees the
 # captured field and not the global's old value. The capture used to be filed under

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:52
+# doc: https://docs.pymcu.org/roadmap/#language
 s = r"a\nb"
 print(s)
 print("END")

@@ -1,4 +1,4 @@
 # expect: match
-# doc: docs/language/roadmap.md:24
+# doc: https://docs.pymcu.org/roadmap/#language
 print("top")
 print("END")

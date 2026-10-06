@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:769
+# doc: https://docs.pymcu.org/limitations/#async-and-concurrency
 def clamp(n: int) -> int:
     return abs(n)
 print(clamp(-7))

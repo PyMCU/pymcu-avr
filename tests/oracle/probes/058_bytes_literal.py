@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:48
+# doc: https://docs.pymcu.org/roadmap/#language
 b = b"AZ"
 print(len(b))
 for x in b:

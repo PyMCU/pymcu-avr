@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # `if n > 1.0:` on a NaN n used to take the THEN branch instead of CPython's else: an `if`'s
 # jump-to-else used to negate a comparison by swapping to the algebraically opposite
 # operator (NOT(a<b) == a>=b), true for every ORDERED pair but false whenever an operand is

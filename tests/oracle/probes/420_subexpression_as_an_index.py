@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:53
+# doc: https://docs.pymcu.org/limitations/#dynamic-memory-and-containers
 # Five constructions used as the INDEX of a subscript. That column of the corpus was empty:
 # nothing but a bare name, a literal or plain arithmetic had ever appeared inside `[...]`,
 # so `a[o.m()]`, `a[len(b)]`, `a[b[i]]` and `a[x if c else y]` were all unexercised.

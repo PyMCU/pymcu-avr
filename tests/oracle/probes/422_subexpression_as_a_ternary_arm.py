@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:53
+# doc: https://docs.pymcu.org/roadmap/#language
 # The same five constructions as the ARM of a conditional expression, a position no probe
 # had used for anything but a literal or a name. The guard is runtime-seeded so the arm is
 # not folded away, and the control above each line is the same value written plainly.

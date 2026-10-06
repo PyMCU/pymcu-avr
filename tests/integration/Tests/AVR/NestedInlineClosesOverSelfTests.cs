@@ -7,7 +7,7 @@ namespace PyMCU.IntegrationTests.Tests.AVR;
 /// <summary>
 /// Integration test for fixtures/nested-inline-closes-over-self -- PyMCU#427. A nested
 /// function decorated @inline, defined inside a method and reading/writing `self` of the
-/// enclosing method, is the documented closure pattern (docs/language/limitations.md:287).
+/// enclosing method, is the documented closure pattern (https://docs.pymcu.org/limitations/#functions-and-closures).
 /// Nothing forwarded the enclosing method's own `self` binding into the nested function's own
 /// fresh inline frame, so every write inside it was invisible outside the call:
 /// Counter(5).bump_twice() printed 5 (bump() a no-op) instead of 7 (5 + 1 + 1).

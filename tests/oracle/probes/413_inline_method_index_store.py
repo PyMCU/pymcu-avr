@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # An indexed WRITE and read-back inside an `@inline` method, at two different indices, so each
 # expansion needs its own buffer as well as its own index.
 #

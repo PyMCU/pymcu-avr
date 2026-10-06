@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:14
+# doc: https://docs.pymcu.org/roadmap/#language
 def run() -> int:
     total = 0
     for i in range(3):

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # s = hex(v) on a run-time v used to fall to the generic scalar Copy path and take the
 # digit buffer's first byte as a plain number -- s = hex(x + 200); print(s) printed "255"
 # instead of "0xc8": a silent wrong answer. The assignment now binds the same buffer

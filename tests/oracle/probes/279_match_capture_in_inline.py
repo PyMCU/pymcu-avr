@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # The capture's qualifier was the only one of the seven that never consulted the inline
 # prefix, so two expansions of one @inline shared a single capture slot and both read
 # the module global instead of their own field.

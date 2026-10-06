@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:68
+# doc: https://docs.pymcu.org/roadmap/#language
 from pymcu.types import uint8
 xs: list[uint8] = list()
 xs.append(2)

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # RFC 0009 phase 3: a declared Union[int, float, None] return carries a member
 # tag + widest-member payload; readers narrow before the payload is read.
 from typing import Union

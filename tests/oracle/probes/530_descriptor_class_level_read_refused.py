@@ -1,5 +1,5 @@
 # expect: refuse through the class itself
-# doc: docs/language/limitations.md:455
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 class Slot:
     def __get__(self, obj, typ=None):
         if obj is None:

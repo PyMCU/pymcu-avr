@@ -1,5 +1,5 @@
 # expect: refuse a grid's dimensions must be compile-time constants
-# doc: docs/language/limitations.md:698
+# doc: https://docs.pymcu.org/limitations/#iterators-and-comprehensions
 def cols():
     return 4
 

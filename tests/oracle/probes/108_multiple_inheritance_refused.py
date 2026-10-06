@@ -1,5 +1,5 @@
 # expect: refuse inheritance
-# doc: docs/language/limitations.md:323
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 class A:
     pass
 class B:

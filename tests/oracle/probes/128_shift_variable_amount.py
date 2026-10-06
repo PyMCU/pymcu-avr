@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:34
+# doc: https://docs.pymcu.org/roadmap/#language
 from pymcu.types import uint8, int8
 def shl(x: uint8, n: uint8) -> uint8:
     return x << n

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:1043
+# doc: https://docs.pymcu.org/limitations/#built-ins-summary
 # sum() over a list literal of run-time elements whose total does not fit a byte. Probe
 # 057 sums literals. An accumulator sized from the elements prints 94.
 from pymcu.chips.atmega328p import GPIOR0

@@ -1,5 +1,5 @@
 # expect: refuse not addressable at run time
-# doc: docs/language/roadmap.md:27
+# doc: https://docs.pymcu.org/roadmap/#language
 # The counterpart to 429: the same list of instances at the same runtime index, reading a
 # FIELD instead of calling a method. The method call compiles and is correct; the field read
 # is refused, because the list lives as separate variables and only a constant index can

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # Every comparison with a NaN is False in CPython except != (always True). The AVR backend
 # used GCC's __cmpsf2 for every comparison, which answers "greater" (0x01) for an
 # unordered (NaN) pair -- harmless for == != < <=, but > and >= read that as a genuine

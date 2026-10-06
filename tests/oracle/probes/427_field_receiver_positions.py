@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:117
+# doc: https://docs.pymcu.org/roadmap/#language
 # `h.inner.get()`, a method on a class-typed FIELD, which roadmap.md:117 names as the shape
 # the compat layers are built on. Four positions, each with the bound-receiver control and
 # two holders of different values.

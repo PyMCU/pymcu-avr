@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:222
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 def risky():
     raise ValueError("bad reading")
 

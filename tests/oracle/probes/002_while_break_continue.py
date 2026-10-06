@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:14
+# doc: https://docs.pymcu.org/roadmap/#language
 i = 0
 s = 0
 while i < 8:

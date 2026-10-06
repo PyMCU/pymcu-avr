@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:61
+# doc: https://docs.pymcu.org/roadmap/#language
 s = "-".join(["A", "B", "C"])
 print(s)
 print("END")

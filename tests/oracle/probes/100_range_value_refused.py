@@ -1,5 +1,5 @@
 # expect: refuse range
-# doc: docs/language/limitations.md:772
+# doc: https://docs.pymcu.org/limitations/#async-and-concurrency
 r = range(4)
 print(r)
 print("END")

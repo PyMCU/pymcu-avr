@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:335
+# doc: https://docs.pymcu.org/limitations/#functions-and-closures
 # A list comprehension inside an `@inline` method, read at two different indices.
 #
 # Both halves are the SAME body, once in an `@inline` method and once in a plain one, so a

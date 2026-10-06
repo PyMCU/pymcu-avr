@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:785
+# doc: https://docs.pymcu.org/limitations/#iterators-and-comprehensions
 """Fixed at #436: chr() keeps its character across a return.
 
 The caller used to print 66, the code point, because the only site that ever

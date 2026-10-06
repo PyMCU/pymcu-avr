@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:62
+# doc: https://docs.pymcu.org/roadmap/#language
 buf = bytearray(b"abcdef")
 buf[1:4] = b"XYZ"
 print(buf)

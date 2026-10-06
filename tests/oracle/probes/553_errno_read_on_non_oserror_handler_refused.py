@@ -1,5 +1,5 @@
 # expect: refuse 'e.errno' is the error code of an OSError
-# doc: docs/language/limitations.md:286
+# doc: https://docs.pymcu.org/limitations/#exception-handling
 # A handler spelling that can catch something that is not an OSError has no
 # error code to read -- the compiler refuses instead of inventing one.
 try:

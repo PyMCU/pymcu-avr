@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:27
+# doc: https://docs.pymcu.org/roadmap/#language
 class Outer:
     class Inner:
         A = 7

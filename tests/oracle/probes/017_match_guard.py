@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:22
+# doc: https://docs.pymcu.org/roadmap/#language
 x = 12
 match x:
     case n if n > 10:

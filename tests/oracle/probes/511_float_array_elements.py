@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:53
+# doc: https://docs.pymcu.org/limitations/#dynamic-memory-and-containers
 # A float array element is four bytes in the float register layout. Same defect as 510: the
 # element load and store moved two bytes, and a field array of floats did not assemble.
 from pymcu.types import uint8, inline

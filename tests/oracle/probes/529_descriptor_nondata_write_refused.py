@@ -1,5 +1,5 @@
 # expect: refuse non-data descriptor
-# doc: docs/language/limitations.md:456
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 class Slot:
     def __get__(self, obj, typ=None):
         return obj.raw + 1

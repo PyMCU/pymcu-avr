@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:41
+# doc: https://docs.pymcu.org/roadmap/#language
 x = None
 print(x is None)
 print(x is not None)

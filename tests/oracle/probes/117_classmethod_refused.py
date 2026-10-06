@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:117
+# doc: https://docs.pymcu.org/roadmap/#mcu-extensions
 class Util:
     @classmethod
     def make(cls):

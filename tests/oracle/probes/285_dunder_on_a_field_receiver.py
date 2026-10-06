@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:397
+# doc: https://docs.pymcu.org/limitations/#classes-and-inheritance
 class Cell:
     def __init__(self, n):
         self.n = n

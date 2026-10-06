@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:53
+# doc: https://docs.pymcu.org/roadmap/#language
 """Fixed at #378: a conditional expression that yields a str writes its text.
 
 It used to write the interned id of the arm it selected, as a decimal number,

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # RFC 0009 phase 3: a union lives in an object field and forwards through a
 # getter -- the field stores payload+tag and the reader narrows after the call.
 from typing import Union

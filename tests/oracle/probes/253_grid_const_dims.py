@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:698
+# doc: https://docs.pymcu.org/limitations/#iterators-and-comprehensions
 from pymcu.types import const
 
 W: const[int] = 4

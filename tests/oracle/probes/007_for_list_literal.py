@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:16
+# doc: https://docs.pymcu.org/roadmap/#language
 # tracked: #364
 s = 0
 for x in [3, 1, 4, 1]:

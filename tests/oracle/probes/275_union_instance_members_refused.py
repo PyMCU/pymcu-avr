@@ -1,5 +1,5 @@
 # expect: refuse a union of instance types is not supported
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # RFC 0009 decision 4: instances are storage, not values a tag byte can switch
 # between -- a union of class instances is refused, naming the member.
 from typing import Union

@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:31
+# doc: https://docs.pymcu.org/roadmap/#language
 x = 4
 assert x == 4, "x"
 print(x)

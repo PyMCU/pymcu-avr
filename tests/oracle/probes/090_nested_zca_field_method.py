@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:74
+# doc: https://docs.pymcu.org/roadmap/#language
 class Pin:
     def __init__(self, v):
         self.v = v

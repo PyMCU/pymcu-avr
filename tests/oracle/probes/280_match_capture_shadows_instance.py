@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md
+# doc: https://docs.pymcu.org/roadmap/
 # A sub-pattern capture holds the FIELD's value, a scalar. Inheriting the class of the
 # global it shadows refused `f"{px}"` inside the arm as "an instance of 'P'", a
 # rejection of a program CPython runs. The `as` capture, which DOES hold the subject,

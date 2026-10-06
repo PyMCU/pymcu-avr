@@ -11,10 +11,12 @@ one test per probe file.
 The corpus lives in this repository (moved out of the `PyMCU` compiler repo,
 where the 2026-06 split left it) because every probe needs both halves of
 the product: the compiler front ends *and* this repo's `pymcuc-avr` backend
-plus the AVR emulator. Probe `# doc:` citations (`docs/language/...`) resolve
-against the `PyMCU` checkout, where the language documentation lives; see
-`docs/language/oracle.md` there for the header grammar, the divergence-citation
-registry, and the running log of what the oracle has caught.
+plus the AVR emulator. Probe `# doc:` citations are URLs of the section of the
+documentation site (https://docs.pymcu.org) that documents the behaviour; see
+https://docs.pymcu.org/language-oracle/ for the header grammar, the
+divergence-citation registry, and the running log of what the oracle has caught.
+A divergence citation may carry a short parenthesised label after the URL when two
+documented divergences live in the same section.
 
 ## Running
 
@@ -161,5 +163,5 @@ name, refused in other expression positions. Probe `423` pins the ternary-arm ca
 The `0`/`1` rows are [PyMCU#386](https://github.com/PyMCU/PyMCU/issues/386): the same boolean
 prints as `False` when written straight into `print()`, read from a field, or negated, and as
 `0` when it arrives through a name binding, a function return, or an `or`. Six positions, one
-program, two representations. `docs/language/type-system.md:20` says `True`/`False` fold to
+program, two representations. The type-system section of the language reference (https://docs.pymcu.org/language-reference/#primitive-types) says `True`/`False` fold to
 `1`/`0`, so three of the six follow the documentation and three follow CPython.

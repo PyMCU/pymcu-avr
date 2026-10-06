@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:44
+# doc: https://docs.pymcu.org/roadmap/#language
 """Fixed at #393: hex() and bin() of a constant print their text.
 
 They used to print the interned id of the folded string as a decimal number,

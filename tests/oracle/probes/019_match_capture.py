@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/roadmap.md:22
+# doc: https://docs.pymcu.org/roadmap/#language
 x = 9
 match x:
     case value:

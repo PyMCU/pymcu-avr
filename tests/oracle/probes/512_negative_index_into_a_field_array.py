@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md:53
+# doc: https://docs.pymcu.org/limitations/#dynamic-memory-and-containers
 # `self.buf[-1]` is the last element. The named-array read normalized a negative constant
 # index, but the stores and every access through a field handed it to the backend as it was:
 # the field read printed the bytes in front of the array and the stores did not assemble.

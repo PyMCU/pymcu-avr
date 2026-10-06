@@ -1,5 +1,5 @@
 # expect: refuse Nested function
-# doc: docs/language/roadmap.md:90
+# doc: https://docs.pymcu.org/roadmap/#language
 def outer(x: int) -> int:
     def inner(y: int) -> int:
         return y + 1

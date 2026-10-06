@@ -1,5 +1,5 @@
 # expect: match
-# doc: docs/language/limitations.md
+# doc: https://docs.pymcu.org/limitations/
 # round(x, n) on a float, n a compile-time constant -- previously a flat refusal. Half-to-even
 # on the EXACT decimal expansion of the float32 value, like round(x, n) is on a float64 in
 # CPython. GPIOR0 keeps x from folding away entirely.
