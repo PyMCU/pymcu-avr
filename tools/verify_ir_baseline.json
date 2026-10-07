@@ -4536,6 +4536,30 @@
   "604_exception_mro_builtin_edge_refused": {
    "rc": 1,
    "violations": []
+  },
+  "605_divmod_int32min_exact_divisor": {
+   "rc": 0,
+   "violations": []
+  },
+  "606_bare_raise_non_inline_helper_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "607_exception_name_rebound_as_subclass": {
+   "rc": 0,
+   "violations": []
+  },
+  "608_exception_mro_builtin_ancestor_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "609_exception_mro_mixin_order_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "610_exception_mro_mixin_consistent": {
+   "rc": 0,
+   "violations": []
   }
  },
  "version": 1
