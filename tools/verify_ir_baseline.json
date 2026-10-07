@@ -4557,8 +4557,32 @@
    "rc": 1,
    "violations": []
   },
-  "610_exception_mro_mixin_consistent": {
+  "630_exception_mro_mixin_consistent": {
    "rc": 0,
+   "violations": []
+  },
+  "631_divmod_uint32_literal_folds": {
+   "rc": 0,
+   "violations": []
+  },
+  "632_divmod_uint32_quotient_unsigned": {
+   "rc": 0,
+   "violations": []
+  },
+  "633_exception_mro_rebound_self_subclass": {
+   "rc": 0,
+   "violations": []
+  },
+  "634_exception_rebound_to_plain_mixin": {
+   "rc": 0,
+   "violations": []
+  },
+  "635_exception_base_shadows_unmodelled_builtin": {
+   "rc": 0,
+   "violations": []
+  },
+  "636_exception_base_undefined_refused": {
+   "rc": 1,
    "violations": []
   }
  },
