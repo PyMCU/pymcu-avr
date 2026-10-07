@@ -1821,10 +1821,6 @@
    "rc": 0,
    "violations": []
   },
-  "560_dead_write_after_raise_keeps_string_arg": {
-   "rc": 1,
-   "violations": []
-  },
   "536_round_two_arg_float": {
    "rc": 0,
    "violations": []
@@ -1903,6 +1899,38 @@
   },
   "555_errno_read_on_tuple_handler_refused": {
    "rc": 1,
+   "violations": []
+  },
+  "556_round_beyond_nine_digits": {
+   "rc": 0,
+   "violations": []
+  },
+  "557_round_negative_zero": {
+   "rc": 0,
+   "violations": []
+  },
+  "558_hex_bin_oct_call_signed": {
+   "rc": 0,
+   "violations": []
+  },
+  "559_divmod_mixed_signedness": {
+   "rc": 0,
+   "violations": []
+  },
+  "560_dead_write_after_raise_keeps_string_arg": {
+   "rc": 1,
+   "violations": []
+  },
+  "561_nested_except_keeps_outer_args": {
+   "rc": 0,
+   "violations": []
+  },
+  "562_except_multi_base_subclass": {
+   "rc": 0,
+   "violations": []
+  },
+  "563_inline_overload_scalar_shadows_array": {
+   "rc": 0,
    "violations": []
   },
   "570_append_single_field_instance_refused": {
@@ -1993,6 +2021,30 @@
    "rc": 0,
    "violations": []
   },
+  "600_divmod_int32min_literal_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "601_inline_bare_raise_via_handler_def": {
+   "rc": 0,
+   "violations": []
+  },
+  "605_divmod_int32min_exact_divisor": {
+   "rc": 0,
+   "violations": []
+  },
+  "606_bare_raise_non_inline_helper_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "631_divmod_uint32_literal_folds": {
+   "rc": 0,
+   "violations": []
+  },
+  "632_divmod_uint32_quotient_unsigned": {
+   "rc": 0,
+   "violations": []
+  },
   "640_tuple_return_getitem_receiver_instance_refused": {
    "rc": 1,
    "violations": []
@@ -2039,6 +2091,26 @@
   },
   "651_tuple_return_ternary_scalar": {
    "rc": 0,
+   "violations": []
+  },
+  "652_tuple_return_produced_instance_scalar_field": {
+   "rc": 0,
+   "violations": []
+  },
+  "653_tuple_return_len_of_produced_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "654_tuple_return_method_ret_instance_scalar_field": {
+   "rc": 0,
+   "violations": []
+  },
+  "655_tuple_return_walrus_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "656_tuple_return_or_left_instance_refused": {
+   "rc": 1,
    "violations": []
   },
   "adafruit-bmp280-unmodified": {
@@ -2627,6 +2699,10 @@
    "violations": []
   },
   "compat-cp-uart-115200-u2x": {
+   "rc": 0,
+   "violations": []
+  },
+  "compat-cp-uart-timeout-seconds": {
    "rc": 0,
    "violations": []
   },
@@ -4562,30 +4638,6 @@
    "violations": []
   },
   "zca-slot": {
-   "rc": 0,
-   "violations": []
-  },
-  "600_divmod_int32min_literal_refused": {
-   "rc": 1,
-   "violations": []
-  },
-  "601_inline_bare_raise_via_handler_def": {
-   "rc": 0,
-   "violations": []
-  },
-  "605_divmod_int32min_exact_divisor": {
-   "rc": 0,
-   "violations": []
-  },
-  "606_bare_raise_non_inline_helper_refused": {
-   "rc": 1,
-   "violations": []
-  },
-  "631_divmod_uint32_literal_folds": {
-   "rc": 0,
-   "violations": []
-  },
-  "632_divmod_uint32_quotient_unsigned": {
    "rc": 0,
    "violations": []
   }
