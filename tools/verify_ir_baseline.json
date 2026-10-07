@@ -2013,6 +2013,34 @@
    "rc": 0,
    "violations": []
   },
+  "645_tuple_return_ternary_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "646_tuple_return_and_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "647_tuple_return_or_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "648_tuple_return_variadic_splice_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "649_tuple_return_unannotated_relay_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "650_tuple_return_ternary_outlined_call_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "651_tuple_return_ternary_scalar": {
+   "rc": 0,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": []
