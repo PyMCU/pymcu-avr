@@ -4640,6 +4640,34 @@
   "zca-slot": {
    "rc": 0,
    "violations": []
+  },
+  "611_enumerate_element_to_buffer_param": {
+   "rc": 1,
+   "violations": []
+  },
+  "612_subscript_element_to_buffer_param": {
+   "rc": 1,
+   "violations": []
+  },
+  "615_value_tracking_alias_to_buffer_param": {
+   "rc": 1,
+   "violations": []
+  },
+  "616_for_tuple_eager_evaluation": {
+   "rc": 0,
+   "violations": []
+  },
+  "617_for_tuple_last_value_after_loop": {
+   "rc": 0,
+   "violations": []
+  },
+  "618_grid_row_slice_negative_step": {
+   "rc": 0,
+   "violations": []
+  },
+  "619_for_loop_var_reuse_across_loops": {
+   "rc": 0,
+   "violations": []
   }
  },
  "version": 1
