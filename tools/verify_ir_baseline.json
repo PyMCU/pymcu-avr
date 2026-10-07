@@ -1993,6 +1993,26 @@
    "rc": 0,
    "violations": []
   },
+  "640_tuple_return_getitem_receiver_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "641_tuple_return_getitem_instance_element_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "642_tuple_return_super_receiver_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "643_tuple_return_getitem_multifield_call_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "644_tuple_return_getitem_scalar_call": {
+   "rc": 0,
+   "violations": []
+  },
   "adafruit-bmp280-unmodified": {
    "rc": 0,
    "violations": []
