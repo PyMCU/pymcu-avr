@@ -4516,6 +4516,26 @@
   "zca-slot": {
    "rc": 0,
    "violations": []
+  },
+  "600_divmod_int32min_literal_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "601_inline_bare_raise_via_handler_def": {
+   "rc": 0,
+   "violations": []
+  },
+  "602_exception_mro_inconsistent_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "603_exception_mro_consistent_diamond": {
+   "rc": 0,
+   "violations": []
+  },
+  "604_exception_mro_builtin_edge_refused": {
+   "rc": 1,
+   "violations": []
   }
  },
  "version": 1
