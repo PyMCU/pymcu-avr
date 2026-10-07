@@ -4525,18 +4525,6 @@
    "rc": 0,
    "violations": []
   },
-  "602_exception_mro_inconsistent_refused": {
-   "rc": 1,
-   "violations": []
-  },
-  "603_exception_mro_consistent_diamond": {
-   "rc": 0,
-   "violations": []
-  },
-  "604_exception_mro_builtin_edge_refused": {
-   "rc": 1,
-   "violations": []
-  },
   "605_divmod_int32min_exact_divisor": {
    "rc": 0,
    "violations": []
@@ -4545,44 +4533,12 @@
    "rc": 1,
    "violations": []
   },
-  "607_exception_name_rebound_as_subclass": {
-   "rc": 0,
-   "violations": []
-  },
-  "608_exception_mro_builtin_ancestor_refused": {
-   "rc": 1,
-   "violations": []
-  },
-  "609_exception_mro_mixin_order_refused": {
-   "rc": 1,
-   "violations": []
-  },
-  "630_exception_mro_mixin_consistent": {
-   "rc": 0,
-   "violations": []
-  },
   "631_divmod_uint32_literal_folds": {
    "rc": 0,
    "violations": []
   },
   "632_divmod_uint32_quotient_unsigned": {
    "rc": 0,
-   "violations": []
-  },
-  "633_exception_mro_rebound_self_subclass": {
-   "rc": 0,
-   "violations": []
-  },
-  "634_exception_rebound_to_plain_mixin": {
-   "rc": 0,
-   "violations": []
-  },
-  "635_exception_base_shadows_unmodelled_builtin": {
-   "rc": 0,
-   "violations": []
-  },
-  "636_exception_base_undefined_refused": {
-   "rc": 1,
    "violations": []
   }
  },
