@@ -552,9 +552,7 @@
   },
   "134_string_concatenation_literals": {
    "rc": 0,
-   "violations": [
-    "generate|write-exceeds-slot|main|copy 260 -> var 's' (UINT8): value 260 cannot fit UINT8"
-   ]
+   "violations": []
   },
   "135_string_equality_comparison": {
    "rc": 0,
@@ -4351,11 +4349,7 @@
    "rc": 0,
    "violations": [
     "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot",
-    "generate|storage-width|main|'inline2._set_item.offset' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
+    "generate|storage-width|main|'inline2._getitem.start' is written at UINT8 but used at UINT16 elsewhere -- the backend homes a name once, so the wider use overflows its slot"
    ]
   },
   "surfacecov-pcf8574": {
