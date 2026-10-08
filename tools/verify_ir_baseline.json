@@ -4706,6 +4706,50 @@
   "728_ternary_both_arms_scalar_refused": {
    "rc": 1,
    "violations": []
+  },
+  "740_instance_on_one_branch_arm_tuple_return_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "741_instance_on_one_branch_arm_single_return_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "742_produced_instance_alias_survives_label_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "743_scalar_rebind_after_instance_returns_scalar": {
+   "rc": 0,
+   "violations": []
+  },
+  "744_walrus_scalar_rebind_after_instance_returns_scalar": {
+   "rc": 0,
+   "violations": []
+  },
+  "745_for_literal_scalar_rebind_after_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "746_for_range_scalar_rebind_after_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "747_for_array_scalar_rebind_after_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "748_for_over_instance_tuple_reads_fields": {
+   "rc": 0,
+   "violations": []
+  },
+  "749_for_over_instance_post_loop_still_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "750_foreign_module_local_never_unmarks_entry_instance": {
+   "rc": 0,
+   "violations": []
   }
  },
  "version": 1
