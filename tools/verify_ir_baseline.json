@@ -4662,6 +4662,14 @@
   "619_for_loop_var_reuse_across_loops": {
    "rc": 0,
    "violations": []
+  },
+  "669_for_tuple_int32_uint32_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "670_for_tuple_float_int_refused": {
+   "rc": 1,
+   "violations": []
   }
  },
  "version": 1
