@@ -1,10 +1,10 @@
 # expect: match
 # doc: https://github.com/PyMCU/PyMCU/issues/522
-# tracked: #522
-# A sequence pattern is lowered to a plain list expression, which carries no length test, so
-# every arm below is taken whatever the subject's length is. Each arm prints a constant, so
-# the phantom-capture read of #401 cannot reach the output: what is measured here is only
-# whether the arm was taken.
+# Fixed alongside #401 (same root cause: a sequence pattern's subject with no real array
+# storage, a pure compile-time constant sequence, read arraySizes instead of
+# ResolveConstSequence for its length, so the arity check never ran). Each arm prints a
+# constant, so the phantom-capture read of #401 cannot reach the output: what is measured
+# here is only whether the arm was taken.
 short = [7, 8]
 match short:
     case [a, b, c]:
