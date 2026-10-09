@@ -1,6 +1,5 @@
 # expect: match
 # doc: https://docs.pymcu.org/roadmap/#language
-# tracked: #400
 from enum import Enum
 class Mode(Enum):
     OFF = 0
