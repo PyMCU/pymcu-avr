@@ -623,6 +623,16 @@ def test_probe_matches_cpython_or_refuses_as_documented(
             )
         )
     outcome = evaluate_probe(probe, tmp_path, pymcu, avr_runner)
-    assert outcome.outcome in {"match", "refused", "compiled"}, (
-        f"{outcome.probe}: {outcome.outcome}\n{outcome.first_difference}"
+    # The only green outcome is the one the `# expect:` header asks for: a refuse
+    # probe that compiles is a silently miscompiled program, not a pass, and a
+    # match/divergence probe that merely built never compared outputs.
+    accepted = {
+        "match": "match",
+        "divergence": "match",
+        "compile": "compiled",
+        "refuse": "refused",
+    }[expectation.kind]
+    assert outcome.outcome == accepted, (
+        f"{outcome.probe}: expected {accepted} for a {expectation.kind} probe, "
+        f"got {outcome.outcome}\n{outcome.first_difference}"
     )
