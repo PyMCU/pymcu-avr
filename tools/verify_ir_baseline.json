@@ -1077,7 +1077,7 @@
    "violations": []
   },
   "262_grid_row_slice_refused": {
-   "rc": 1,
+   "rc": 0,
    "violations": []
   },
   "263_grid_row_cmp_refused": {
