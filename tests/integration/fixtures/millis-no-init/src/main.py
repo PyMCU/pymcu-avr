@@ -15,8 +15,20 @@
 #
 # Expected: after a real delay, millis() reads a nonzero, realistic elapsed
 # count instead of 0.
+#
+# GPIOR2 is claimed and zeroed too: millis() reads _millis_fract (ISR-shared,
+# single byte) on every call, which makes AvrGpiorPromotion eligible to
+# promote it onto the one free GPIOR in the optimized build only (GPIOR0/1
+# are already claimed above). Its value at BREAK would then be the ISR's
+# cycle-exact fractional carry -- legitimately a few units different between
+# an optimized and an unoptimized build that reach the same delay_ms(20) exit
+# a few cycles apart -- which the differential harness's generic snapshot
+# otherwise compares unconditionally. Claiming GPIOR2 here (the promotion
+# pass skips any GPIOR the program already references) keeps this fixture's
+# own checkpoint -- GPIOR0/GPIOR1, millis()'s actual value, the thing this
+# fixture exists to assert on -- under comparison.
 from pymcu.types import uint8, uint32, asm
-from pymcu.chips.atmega328p import GPIOR0, GPIOR1
+from pymcu.chips.atmega328p import GPIOR0, GPIOR1, GPIOR2
 from pymcu.time import millis, delay_ms
 
 
@@ -25,6 +37,7 @@ def main():
     t: uint32 = millis()
     GPIOR0.value = uint8(t & 0xFF)
     GPIOR1.value = uint8((t >> 8) & 0xFF)
+    GPIOR2.value = 0
     asm("BREAK")
     while True:
         pass

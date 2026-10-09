@@ -15,10 +15,23 @@
 #   4. Continue until millis() >= 50, then BREAK again.
 #
 # Data-space addresses (ATmega328P):
-#   GPIOR0 = 0x3E   GPIOR1 = 0x4A
+#   GPIOR0 = 0x3E   GPIOR1 = 0x4A   GPIOR2 = 0x4B
 #
+# GPIOR2 is claimed and zeroed at each checkpoint too, even though this fixture
+# has no use for it: millis() now reads _millis_fract (ISR-shared, single
+# byte) on every call, which makes AvrGpiorPromotion eligible to promote it
+# onto the one free GPIOR in the optimized build only (GPIOR0/1 are already
+# claimed by this fixture's own checkpoint) -- its value at BREAK is then the
+# ISR's cycle-exact fractional carry, which legitimately differs by a few
+# units between an optimized and an unoptimized build that reach the same
+# busy-wait exit a few cycles apart, and the differential harness's generic
+# snapshot compares GPIOR0-2 unconditionally. Explicitly claiming GPIOR2 (the
+# promotion pass skips any GPIOR the program already references) keeps this
+# fixture's own checkpoint -- GPIOR0/GPIOR1, millis()'s actual value -- the
+# thing under comparison, rather than exempting the whole fixture from the
+# differential suite over a register it never meant to assert on.
 from pymcu.types import uint8, uint32, asm
-from pymcu.chips.atmega328p import GPIOR0, GPIOR1
+from pymcu.chips.atmega328p import GPIOR0, GPIOR1, GPIOR2
 from pymcu.time import millis_init, millis
 
 
@@ -31,6 +44,7 @@ def main():
     t1: uint32 = millis()
     GPIOR0.value = uint8(t1 & 0xFF)
     GPIOR1.value = uint8((t1 >> 8) & 0xFF)
+    GPIOR2.value = 0
     asm("BREAK")
 
     # --- Checkpoint 2: wait until millis() >= 50 ---
@@ -39,6 +53,7 @@ def main():
     t2: uint32 = millis()
     GPIOR0.value = uint8(t2 & 0xFF)
     GPIOR1.value = uint8((t2 >> 8) & 0xFF)
+    GPIOR2.value = 0
     asm("BREAK")
 
     while True:
