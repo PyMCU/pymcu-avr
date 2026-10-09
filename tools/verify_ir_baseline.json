@@ -4938,6 +4938,78 @@
   "770_unpack_of_instance_call_result_aliases": {
    "rc": 0,
    "violations": []
+  },
+  "800_chip_fact_from_import_folds": {
+   "rc": 0,
+   "violations": []
+  },
+  "801_chip_fact_alias_folds": {
+   "rc": 0,
+   "violations": []
+  },
+  "802_chip_freq_from_import_folds": {
+   "rc": 0,
+   "violations": []
+  },
+  "803_chips_module_alias_folds": {
+   "rc": 0,
+   "violations": []
+  },
+  "804_chip_fact_rebind_shadow_wins": {
+   "rc": 0,
+   "violations": []
+  },
+  "805_chip_descriptor_member_value": {
+   "rc": 0,
+   "violations": []
+  },
+  "806_chip_fcpu_from_import": {
+   "rc": 0,
+   "violations": []
+  },
+  "807_chip_fcpu_alias": {
+   "rc": 0,
+   "violations": []
+  },
+  "808_chip_timebase_from_import": {
+   "rc": 0,
+   "violations": []
+  },
+  "809_chip_size_members": {
+   "rc": 0,
+   "violations": []
+  },
+  "810_chip_name_bare_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "811_fcpu_bare_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "812_chip_arch_condition_unbound_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "813_timebase_bare_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "814_sys_platform_unbound_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "815_uname_unbound_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "816_user_sys_shadow_no_fold": {
+   "rc": 0,
+   "violations": []
+  },
+  "817_chips_module_member_compile": {
+   "rc": 0,
+   "violations": []
   }
  },
  "version": 1
