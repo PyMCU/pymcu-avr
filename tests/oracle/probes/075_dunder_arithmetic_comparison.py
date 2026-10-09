@@ -1,6 +1,5 @@
 # expect: match
 # doc: https://docs.pymcu.org/roadmap/#language
-# tracked: #395
 class Num:
     def __init__(self, v):
         self.v = v
