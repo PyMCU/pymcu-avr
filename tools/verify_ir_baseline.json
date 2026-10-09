@@ -5034,6 +5034,22 @@
   "865_annotated_list_of_lists_repeat_refused": {
    "rc": 1,
    "violations": []
+  },
+  "870_class_str_attribute_declared_in_body": {
+   "rc": 0,
+   "violations": []
+  },
+  "871_class_str_attribute_assigned_after_body": {
+   "rc": 0,
+   "violations": []
+  },
+  "872_instance_overrides_class_str_attribute": {
+   "rc": 0,
+   "violations": []
+  },
+  "873_class_str_attribute_passed_to_function": {
+   "rc": 0,
+   "violations": []
   }
  },
  "version": 1
