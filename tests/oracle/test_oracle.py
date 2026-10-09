@@ -414,6 +414,8 @@ def install_cpython_shims() -> dict[str, types.ModuleType | None]:
     time_mod.delay_us = lambda *_args, **_kwargs: None
     time_mod.millis = lambda: 42
     time_mod.micros = lambda: 4242
+    time_mod.monotonic = lambda: 42.0
+    time_mod.monotonic_ns = lambda: 42000000
 
     sys.modules.update(
         {
