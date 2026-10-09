@@ -4670,6 +4670,42 @@
   "674_for_tuple_float_int_refused": {
    "rc": 1,
    "violations": []
+  },
+  "720_for_loop_element_over_real_buffer_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "721_tuple_unpack_element_from_subscript_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "722_inline_proven_scalar_return_passed_directly_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "723_noninline_proven_scalar_return_passed_directly_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "724_proven_scalar_return_assigned_first_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "725_field_subscript_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "726_slice_element_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "727_walrus_of_subscript_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "728_ternary_both_arms_scalar_refused": {
+   "rc": 1,
+   "violations": []
   }
  },
  "version": 1
