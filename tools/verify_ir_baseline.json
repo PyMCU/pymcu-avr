@@ -4750,6 +4750,194 @@
   "750_foreign_module_local_never_unmarks_entry_instance": {
    "rc": 0,
    "violations": []
+  },
+  "610_heap_row_alias": {
+   "rc": 0,
+   "violations": []
+  },
+  "613_for_tuple_runtime_elements": {
+   "rc": 0,
+   "violations": []
+  },
+  "614_grid_row_slice_copy": {
+   "rc": 0,
+   "violations": []
+  },
+  "620_proven_pow2_mod_negative_dividend": {
+   "rc": 0,
+   "violations": []
+  },
+  "621_proven_pow2_mod_toroidal_boundary": {
+   "rc": 0,
+   "violations": []
+  },
+  "622_mod_divisor_not_narrowable_stays_correct": {
+   "rc": 0,
+   "violations": []
+  },
+  "623_proven_pow2_mod_mask_keeps_original_width": {
+   "rc": 0,
+   "violations": []
+  },
+  "624_proven_pow2_mod_shared_param_not_specialized": {
+   "rc": 0,
+   "violations": []
+  },
+  "625_proven_pow2_mod_shared_param_reversed_calls": {
+   "rc": 0,
+   "violations": []
+  },
+  "626_proven_pow2_mod_shared_param_def_before_caller": {
+   "rc": 0,
+   "violations": []
+  },
+  "627_proven_pow2_mod_field_write_in_loop_voids_proof": {
+   "rc": 0,
+   "violations": []
+  },
+  "628_proven_pow2_mod_alias_outline_field_write": {
+   "rc": 0,
+   "violations": []
+  },
+  "629_proven_pow2_mod_reassign_in_if_break": {
+   "rc": 0,
+   "violations": []
+  },
+  "630_proven_pow2_mod_reassign_before_raise": {
+   "rc": 0,
+   "violations": []
+  },
+  "660_buffer_param_local_alias_forwarded": {
+   "rc": 0,
+   "violations": []
+  },
+  "661_for_tuple_break_keeps_executed_element": {
+   "rc": 0,
+   "violations": []
+  },
+  "662_inner_empty_range_keeps_outer_loop_var": {
+   "rc": 0,
+   "violations": []
+  },
+  "663_tuple_unpack_buffer_alias_forwarded": {
+   "rc": 0,
+   "violations": []
+  },
+  "664_call_result_buffer_alias_forwarded": {
+   "rc": 0,
+   "violations": []
+  },
+  "665_rebind_drops_stale_proven_scalar_mark": {
+   "rc": 0,
+   "violations": []
+  },
+  "666_for_tuple_break_keeps_wider_width": {
+   "rc": 0,
+   "violations": []
+  },
+  "667_for_tuple_no_break_keeps_wider_width": {
+   "rc": 0,
+   "violations": []
+  },
+  "668_for_tuple_signed_unsigned_width_join": {
+   "rc": 0,
+   "violations": []
+  },
+  "670_exception_handler_never_proves_pretry_divisor": {
+   "rc": 0,
+   "violations": []
+  },
+  "671_exception_handler_plain_read_still_sees_the_write": {
+   "rc": 0,
+   "violations": []
+  },
+  "672_walrus_short_circuit_never_proves_divisor": {
+   "rc": 0,
+   "violations": []
+  },
+  "673_walrus_in_while_never_proves_divisor_for_any_iteration": {
+   "rc": 0,
+   "violations": []
+  },
+  "751_tuple_unpack_rebind_clears_maybe_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "752_unpack_of_maybe_instance_element_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "753_unpack_of_instance_element_aliases_the_object": {
+   "rc": 0,
+   "violations": []
+  },
+  "754_ternary_wrapping_maybe_instance_return_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "755_or_wrapping_maybe_instance_return_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "756_and_wrapping_maybe_instance_return_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "757_with_as_rebind_clears_maybe_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "758_except_as_rebind_clears_maybe_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "759_walrus_rebind_clears_maybe_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "760_augassign_on_maybe_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "761_assign_of_wrapped_maybe_instance_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "762_scalar_rebind_clears_const_tuple_print": {
+   "rc": 0,
+   "violations": []
+  },
+  "763_scalar_rebind_clears_array_print": {
+   "rc": 0,
+   "violations": []
+  },
+  "764_fstring_self_rebind_keeps_buffer": {
+   "rc": 0,
+   "violations": []
+  },
+  "765_for_tuple_iter_rebind_clears_maybe_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "766_match_capture_rebind_clears_maybe_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "767_chained_assign_rebind_clears_maybe_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "768_unpack_starred_rebind_clears_maybe_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "769_unpack_call_result_rebind_clears_maybe_instance": {
+   "rc": 0,
+   "violations": []
+  },
+  "770_unpack_of_instance_call_result_aliases": {
+   "rc": 0,
+   "violations": []
   }
  },
  "version": 1
