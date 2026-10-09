@@ -5010,6 +5010,26 @@
   "817_chips_module_member_compile": {
    "rc": 0,
    "violations": []
+  },
+  "787_ternary_between_two_buffers_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "788_list_of_buffers_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "789_alias_reassigned_under_true_branch_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "790_alias_reassigned_under_false_branch_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "792_alias_bound_only_inside_an_if_refused": {
+   "rc": 1,
+   "violations": []
   }
  },
  "version": 1
