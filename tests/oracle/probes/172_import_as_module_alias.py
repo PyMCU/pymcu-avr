@@ -1,6 +1,5 @@
 # expect: match
 # doc: https://docs.pymcu.org/roadmap/#language
-# tracked: #449
 import pymcu.types as t
 x: t.uint8 = 200
 y: t.uint8 = 100
