@@ -384,6 +384,21 @@ def install_cpython_shims() -> dict[str, types.ModuleType | None]:
     chips_pkg.__CHIP__ = chip_mod.__CHIP__
     chips_pkg.__FREQ__ = pymcu.__FREQ__
 
+    # pymcu.asyncio ticks() reads the armed microsecond counter; CPython's asyncio
+    # module -- which probes DO want, for run()/sleep()/gather() -- has no such
+    # name. Patch it on the real module rather than replacing asyncio wholesale,
+    # and with a fixed nonzero answer so a probe asserting "the counter moves"
+    # stays deterministic on both engines.
+    import asyncio as _cpython_asyncio
+    _cpython_asyncio.ticks = lambda: 4242
+    # pymcu.time needs the same treatment for delay_ms/millis/micros: real on the
+    # chip, a no-op stub here -- probes pace loops with them, never measure them.
+    time_mod = types.ModuleType("pymcu.time")
+    time_mod.delay_ms = lambda *_args, **_kwargs: None
+    time_mod.delay_us = lambda *_args, **_kwargs: None
+    time_mod.millis = lambda: 42
+    time_mod.micros = lambda: 4242
+
     sys.modules.update(
         {
             "pymcu": pymcu,
@@ -395,6 +410,7 @@ def install_cpython_shims() -> dict[str, types.ModuleType | None]:
             "pymcu.chips.atmega328p": chip_mod,
             "pymcu.hal": hal_pkg,
             "pymcu.hal.console": console_mod,
+            "pymcu.time": time_mod,
         }
     )
     return previous
