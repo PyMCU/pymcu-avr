@@ -5030,6 +5030,10 @@
   "792_alias_bound_only_inside_an_if_refused": {
    "rc": 1,
    "violations": []
+  },
+  "865_annotated_list_of_lists_repeat_refused": {
+   "rc": 1,
+   "violations": []
   }
  },
  "version": 1
