@@ -5050,6 +5050,18 @@
   "873_class_str_attribute_passed_to_function": {
    "rc": 0,
    "violations": []
+  },
+  "874_from_import_rebind_top_level": {
+   "rc": 0,
+   "violations": []
+  },
+  "875_from_import_rebind_inside_if": {
+   "rc": 0,
+   "violations": []
+  },
+  "876_from_import_no_rebind_keeps_source_value": {
+   "rc": 0,
+   "violations": []
   }
  },
  "version": 1
