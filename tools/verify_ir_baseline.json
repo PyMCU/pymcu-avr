@@ -5062,6 +5062,10 @@
   "876_from_import_no_rebind_keeps_source_value": {
    "rc": 0,
    "violations": []
+  },
+  "877_from_import_rebind_only_inside_function_refused": {
+   "rc": 1,
+   "violations": []
   }
  },
  "version": 1
