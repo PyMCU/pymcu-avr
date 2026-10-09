@@ -72,12 +72,61 @@ public static class DifferentialCorpus
             "out in decides whether it prints a reading or an error",
         ["fixtures/dht-sensor-mp"] = "same bit-banged 1-wire timeout as examples/dht-sensor",
         ["fixtures/dht-sensor-dht22"] = "same bit-banged 1-wire timeout as examples/dht-sensor",
+        ["fixtures/adafruit-dht-optprint"] =
+            "same bit-banged 1-wire timeout as examples/dht-sensor -- which microsecond the " +
+            "read times out in (now cycle-exact, same as millis()) decides whether it prints a " +
+            "reading or \"read error\"; measured: UART byte 11 is the first to differ (0x4E " +
+            "'N' optimized vs 0x72 'r' unoptimized -- the point where one build's loop iteration " +
+            "has already moved on to the next read attempt and the other has not)",
         ["fixtures/async-timebase"] =
             "asyncio polls a millisecond time base; the number of not-ready polls before a task " +
             "becomes runnable falls straight out of the execution speed",
         ["fixtures/factory-pin-through-constructor"] =
             "PYMCU_NO_OPT force-inlines the large constructor into labels avr-as rejects " +
             "(`expected symbol name`); FactoryPinThroughConstructorTests covers both front ends",
+        ["fixtures/compat-cp-pwmio-timebase"] =
+            "the printed \"dt\" is millis() across a measured interval; millis() now folds in " +
+            "the in-progress Timer0 overflow (TCNT0 plus the ISR's carried fraction, " +
+            "_millis_fract) instead of only counting complete overflows, so its value depends " +
+            "on exactly how many cycles the optimized vs unoptimized build took to reach the " +
+            "read -- a genuine +/-1 ms at this resolution, not a wrong answer from either " +
+            "build. Worked out by hand for the ~100 ms interval this fixture measures: by " +
+            "t=100000 us, 97 complete Timer0 overflows (1.024 ms each) have run, and the " +
+            "ISR's fractional carry is floor(97*3/125) = 2, so _millis_ms = 99 going into the " +
+            "read. The in-progress (98th) overflow is 672 us along (tc = 168 Timer0 ticks, 4 " +
+            "us/tick) with 41 eighths-of-a-ms still uncarried in _millis_fract; millis()'s " +
+            "read-time correction adds extra_us = 41*8 + 168*4 = 1000 us, which crosses the " +
+            ">=1000 us carry threshold EXACTLY and rounds up to the mathematically correct " +
+            "100. A build-to-build skew of only a few cycles moves tc by a few ticks either " +
+            "side of 168, flipping which side of that exact knife-edge the read lands on -- " +
+            "99, 100 or 101 all legitimately answer \"how many milliseconds have elapsed\" to " +
+            "within the +/-1 ms this correction promises; the OLD, coarse-quantized millis() " +
+            "(whole overflows only, ~16384-cycle steps) never exposed this because no ordinary " +
+            "optimizer skew is anywhere near that wide",
+        ["fixtures/pwm-timer0-timebase"] =
+            "same millis()-across-a-measured-interval timing sensitivity, same 1000 us " +
+            "carry-threshold mechanism, as fixtures/compat-cp-pwmio-timebase",
+        ["fixtures/millis-no-init"] =
+            "millis() now folds in the in-progress Timer0 overflow, so a SINGLE read with no " +
+            "convergence loop (unlike fixtures/millis-micros, which spins until millis() >= " +
+            "50 and so lands on the same value either way) can legitimately disagree by one " +
+            "millisecond depending on exactly how many cycles the optimized vs unoptimized " +
+            "build took to reach it. Measured: this fixture reads millis() once right after " +
+            "delay_ms(20) -- optimized checkpoint GPIOR0 = 0x15 (21), unoptimized = 0x14 (20). " +
+            "Both are the mathematically correct elapsed time to within the +/-1 ms this " +
+            "correction promises; a few-cycle build skew around the 20 ms mark decides which " +
+            "side of the exact millisecond boundary the read lands on, the same knife-edge as " +
+            "fixtures/compat-cp-pwmio-timebase's 1000 us carry threshold, just without an " +
+            "averaging loop to smooth it over",
+        ["fixtures/compat-cp-supervisor"] =
+            "same single-read, no-convergence-loop timing sensitivity as fixtures/millis-" +
+            "no-init: supervisor.ticks_ms() calls millis() once, a handful of instructions " +
+            "after millis_init() arms the timebase, with nothing before it to average the " +
+            "read over. Measured: optimized sent 0x01, unoptimized sent 0x00 -- CircuitPython " +
+            "does not promise ticks_ms() == 0 at boot (its guarantee is the difference between " +
+            "two reads, not this one's absolute value; CompatCpSupervisorTests checks a small " +
+            "bound instead of an exact 0 for exactly this reason), and both answers are a " +
+            "legitimate count of the handful of cycles elapsed since the timebase armed",
     };
 
     /// <summary>
