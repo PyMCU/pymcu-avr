@@ -530,7 +530,8 @@ public static class AvrPeephole
         }
 
         // --- Dead temporary-register move elimination (R16/R17) ---
-        EliminateDeadTempMoves(result, outlinedSubroutines ?? new HashSet<string>());
+        EliminateDeadTempMoves(result, outlinedSubroutines ?? new HashSet<string>(),
+            clobberingCallTargets ?? new HashSet<string>());
 
         // --- Fuse adjacent immediate ORI/ANDI on the same register ---
         // The @inline driver composition emits split constant masks (e.g.
@@ -1409,9 +1410,23 @@ public static class AvrPeephole
     /// `MOV R16,R24` that hands the region's value back, and the caller then read
     /// whatever R16 happened to hold — a UART-ready flag, in the bmp280 example, so a
     /// 16-bit sensor reading printed as 0x0001.
+    ///
+    /// <paramref name="clobberingCallTargets"/> names the callees whose convention CAN
+    /// reach R16/R17 as an argument: an IR Call target, a GC allocation, a 32-bit
+    /// division (see AvrCodeGen's AssignArgLocations/ArgBaseRegs, which packs register
+    /// arguments downward from R25 and lands the 5th/6th argument in R16/R17 once a
+    /// function takes five or more <=2-byte parameters). A CALL/RCALL to any other name
+    /// is the FIXED-ABI math runtime (__mul32, __div8/16/32, ...), which never takes an
+    /// R16/R17 argument and preserves them across the call, so it does not read the
+    /// temps. Treating a call to a clobberingCallTargets member as not reading R16/R17
+    /// deleted the MOV that loaded a 5th/6th register argument from a variable's home
+    /// register whenever an earlier call to the SAME callee had loaded a compile-time
+    /// literal there instead (an LDI, which this pass never touches): the second call to
+    /// `_f32_emit_digits` in the "dd.ddd" branch of `_f32_repr` lost its `start` argument
+    /// this way.
     /// </summary>
     private static void EliminateDeadTempMoves(List<AvrAsmLine> lines,
-        IReadOnlySet<string> outlinedSubroutines)
+        IReadOnlySet<string> outlinedSubroutines, IReadOnlySet<string> clobberingCallTargets)
     {
         int n = lines.Count;
         if (n == 0) return;
@@ -1499,13 +1514,13 @@ public static class AvrPeephole
                        && line.Content.Contains("R" + r, StringComparison.OrdinalIgnoreCase);
             if (line.Type != AvrAsmLine.LineType.Instruction) return false;
             string m = line.Mnemonic;
-            // CALL/RCALL/ICALL do NOT read the temp registers: PyMCU passes arguments in
-            // R24/R22/R20/R18 (never R16/R17), and callees that use a temp internally
-            // (e.g. __div8) push/pop it rather than taking it as input. The operand of a
-            // call is a label, so it reads no register here either way. An OUTLINED body is
-            // the exception: it is a lifted piece of the caller, so it may consume a temp
-            // the caller left in place.
-            if (m is "CALL" or "RCALL" && outlinedSubroutines.Contains(line.Op1)) return true;
+            // Outlined regions and clobberingCallTargets members may read R16/R17 (see
+            // this method's doc comment above); an indirect call's target is unknown,
+            // so it is conservatively assumed to read them too.
+            if (m is "ICALL" or "EICALL") return true;
+            if (m is "CALL" or "RCALL"
+                && (outlinedSubroutines.Contains(line.Op1) || clobberingCallTargets.Contains(line.Op1)))
+                return true;
             if (PureWriteOp1.Contains(m)) return ParseReg(line.Op2) == r; // Op1 is the destination
             return ParseReg(line.Op1) == r || ParseReg(line.Op2) == r;
         }

@@ -330,6 +330,69 @@ public class AvrPeepholeTests
         Assert.Contains(result, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R24");
     }
 
+    // ─── Dead temp-register (R16/R17) move elimination vs. call arguments ───
+
+    [Fact]
+    public void DeadTempMove_NeverReadBeforeReturn_Removed()
+    {
+        // Baseline: a MOV into R16 that is never read again before the function returns
+        // is dead regardless of calls, and the pass still removes it.
+        var result = AvrPeephole.Optimize(new List<AvrAsmLine>
+        {
+            AvrAsmLine.MakeInstruction("MOV", "R16", "R24"),
+            AvrAsmLine.MakeInstruction("RET"),
+        });
+
+        Assert.DoesNotContain(result, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R24");
+    }
+
+    [Fact]
+    public void DeadTempMove_FeedsAClobberingCallTargetsArgument_Kept()
+    {
+        // _f32_emit_digits(out, pos, xd, nd, start, count): six parameters, the fifth
+        // (start) assigned to R16 by AssignArgLocations/ArgBaseRegs once a function has
+        // five or more <=2-byte register arguments. The first call below passes a
+        // compile-time literal for `start` (LDI, which this pass never touches); the
+        // second passes a variable living in its allocator home R12 (a MOV into R16). A
+        // CALL to a clobberingCallTargets member -- every IR Call target, see AvrCodeGen
+        // CompileCall -- may read R16/R17 as that argument, so the second MOV must survive
+        // past the call. Before the fix, this pass only recognised outlined regions as
+        // able to read the temps and treated every other CALL/RCALL as not reading them,
+        // so it saw no read of R16 between the MOV and the function's end and deleted it --
+        // dropping the second call's `start` argument.
+        var lines = new List<AvrAsmLine>
+        {
+            AvrAsmLine.MakeInstruction("LDI", "R16", "0"),            // call 1: start = 0 (literal)
+            AvrAsmLine.MakeInstruction("RCALL", "_f32_emit_digits"),
+            AvrAsmLine.MakeInstruction("MOV", "R16", "R12"),           // call 2: start = decpt (home R12)
+            AvrAsmLine.MakeInstruction("RCALL", "_f32_emit_digits"),
+            AvrAsmLine.MakeInstruction("RET"),
+        };
+
+        var result = AvrPeephole.Optimize(lines,
+            clobberingCallTargets: new HashSet<string> { "_f32_emit_digits" });
+
+        Assert.Contains(result, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R12");
+    }
+
+    [Fact]
+    public void DeadTempMove_OnlyFeedsAFixedAbiRuntimeCall_StillRemoved()
+    {
+        // The fixed-ABI math runtime (__mul32, __div8/16/32, ...) never takes an R16/R17
+        // argument and preserves them across the call, so it is NOT a clobberingCallTargets
+        // member. A MOV into R16 that only precedes such a call, and is never read again,
+        // is still genuinely dead and must still be removed -- the fix must not make every
+        // CALL/RCALL conservative, only the ones that can actually reach R16/R17.
+        var result = AvrPeephole.Optimize(new List<AvrAsmLine>
+        {
+            AvrAsmLine.MakeInstruction("MOV", "R16", "R24"),
+            AvrAsmLine.MakeInstruction("CALL", "__mul32"),
+            AvrAsmLine.MakeInstruction("RET"),
+        });
+
+        Assert.DoesNotContain(result, l => l.Mnemonic == "MOV" && l.Op1 == "R16" && l.Op2 == "R24");
+    }
+
     // ─── 3-window: MOV Ra, Rb ; OP Ra ; MOV Rb, Ra → OP Rb ; MOV Ra, Rb ─────
 
     [Fact]
