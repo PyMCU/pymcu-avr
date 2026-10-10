@@ -5341,7 +5341,8 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // Called from Compile() when program.NeedsGc is true, after all static
     // variable .equ directives have been emitted.
     //
-    // Layout immediately after static variables (at _stack_base + _maxStaticUsage):
+    // Layout immediately after static variables AND the arg-spill region, if the
+    // program has one (at _stack_base + _maxStaticUsage + _argSpillBytes):
     //   _gc_ss_base       : ssBytes    (shadow-stack slots x 2 bytes each, up to 128)
     //   _gc_ss_top_addr   : 1 byte     (current shadow-stack depth)
     //   _gc_heap_top_lo   : 1 byte     (lo byte of GC heap write pointer)
@@ -5354,7 +5355,14 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
     // -------------------------------------------------------------------------
     private void EmitGcSramLayout(int ssBytes)
     {
-        int ssBase = _maxStaticUsage;   // offset from _stack_base
+        // _arg_spill (if this program has one) sits at _stack_base + _maxStaticUsage,
+        // _argSpillBytes long -- the GC region must start AFTER it, not at the same
+        // offset. Both used to be placed at _maxStaticUsage independently, which put
+        // _gc_ss_base on top of _arg_spill in any program with both (a non-inline call
+        // needing more than 5 scalar argument-register pairs, and the GC heap): the
+        // first byte an argument spilled past its 6th slot landed on was the shadow
+        // stack's own base, corrupting it silently whenever both were live at once.
+        int ssBase = _maxStaticUsage + _argSpillBytes;   // offset from _stack_base
         int ssTopAddr = ssBase + ssBytes;   // 1 byte after the shadow stack
         int heapTopLo = ssTopAddr + 1;
         int heapTopHi = heapTopLo + 1;

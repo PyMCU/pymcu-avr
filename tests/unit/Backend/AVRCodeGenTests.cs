@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using PyMCU.Backend.Targets.AVR;
 using PyMCU.Common;
 using PyMCU.Common.Models;
@@ -977,5 +978,45 @@ public class AVRCodeGenTests
         Assert.Contains("__dly_c1600000_3:", asm);
         Assert.Equal(3, asm.Split('\n').Count(l => l.TrimStart().StartsWith("CALL\t__dly_c1600000_3")));
         Assert.DoesNotContain("R21", asm);
+    }
+
+    // ─── ArgSpillDoesNotOverlapGcShadowStack ────────────────────────────────
+    // _arg_spill and _gc_ss_base used to both start at _stack_base + _maxStaticUsage,
+    // independently of each other: a program with BOTH a non-inline call needing
+    // more than 5 scalar argument-register pairs (so _argSpillBytes > 0) AND the GC
+    // heap (program.NeedsGc) put the shadow stack's own base on top of the arg
+    // spill region. The first argument a call spilled past its 6th slot landed on
+    // _gc_ss_base, corrupting it silently whenever both were live at once --
+    // found bisecting a real firmware regression (fix/f32-repr-size's _f32_emit_digits,
+    // a new 6-parameter non-inline function, exposed it in a GC-using program; the
+    // fix belongs here, in the shared layout, not in that one caller).
+
+    [Fact]
+    public void ArgSpillDoesNotOverlapGcShadowStack()
+    {
+        var cfg = new DeviceConfig { Chip = "atmega328p", Arch = "avr", Frequency = 16_000_000 };
+        var prog = new ProgramIR { NeedsGc = true };
+        prog.Functions.Add(new Function
+        {
+            Name = "main",
+            Body =
+            [
+                // 6 single-byte args: 5 scalar register pairs cover the first 5,
+                // the 6th has nowhere to go but _arg_spill.
+                new Call("sixArgs",
+                    [new Constant(1), new Constant(2), new Constant(3),
+                     new Constant(4), new Constant(5), new Constant(6)],
+                    new NoneVal()),
+                new Return(new NoneVal()),
+            ],
+        });
+
+        var asm = Compile(prog, cfg);
+
+        var argSpill = int.Parse(Regex.Match(asm, @"\.equ _arg_spill, _stack_base \+ (\d+)").Groups[1].Value);
+        var gcSsBase = int.Parse(Regex.Match(asm, @"\.equ _gc_ss_base,\s*_stack_base \+ (\d+)").Groups[1].Value);
+
+        Assert.True(gcSsBase >= argSpill + 1,
+            $"_gc_ss_base ({gcSsBase}) must start at or after _arg_spill's own region ({argSpill}+), not overlap it");
     }
 }
