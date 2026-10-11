@@ -9,7 +9,7 @@ on:
 jobs:
   # ---------------------------------------------------------------------------
   # Toolchain supply-chain smoke test: runs on all target platforms.
-  # Verifies that pymcu-avr-toolchain installs correctly and that the full
+  # Verifies that pymcu-avr-toolchain-wasi installs correctly and that the full
   # compile → link → objcopy pipeline works without system AVR tools.
   # ---------------------------------------------------------------------------
   build:
@@ -53,7 +53,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Toolchain supply-chain smoke test: runs on all target platforms.
-  # Verifies that pymcu-avr-toolchain installs correctly and that the full
+  # Verifies that pymcu-avr-toolchain-wasi installs correctly and that the full
   # compile → link → objcopy pipeline works without system AVR tools.
   # ---------------------------------------------------------------------------
   toolchain-smoke:
@@ -81,7 +81,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
-          # Disable package cache so the latest published pymcu-avr-toolchain
+          # Disable package cache so the latest published pymcu-avr-toolchain-wasi
           # is always installed, not a stale cached copy.
           enable-cache: false
 
@@ -93,7 +93,7 @@ jobs:
       - name: Install toolchain + test deps
         run: |
           uv venv .venv
-          uv pip install --python .venv pymcu-avr-toolchain pytest
+          uv pip install --python .venv pymcu-avr-toolchain-wasi pytest
 
       # One line on purpose. A `\` continuation is not a line continuation in
       # PowerShell, which is the default shell on the windows runner, so the split
@@ -107,17 +107,17 @@ jobs:
       # which is correct for this job and is also how the job could quietly stop
       # measuring anything at all.
       #
-      # 6 is what this job can actually reach, measured in a venv built to match it
-      # exactly: python + pytest + pymcu-avr-toolchain and nothing else gives
-      # "6 passed, 133 skipped". The first version of this floor said 12, taken from a
-      # "collected 12 items" line in a failing run -- a COLLECTION count from a run that
-      # then errored, not a count of tests that ran. Two different numbers, and only one
-      # of them is what this checks.
+      # 11 is what this job can actually reach, measured in a venv built to match it
+      # exactly: python + pytest + pymcu-avr-toolchain-wasi (which brings wasmtime) and nothing else
+      # gives "11 passed, 142 skipped". Measured on macOS; the Windows figure is the
+      # first thing this job will show, since no Windows host was available to measure it.
+      # The floor used to be 6 with a Windows exception, from the native avr-gcc tests
+      # that checked execute bits and symlinks. Those tests now check the WASI package,
+      # which has no such files, so the same floor holds on every platform.
       #
-      # That 133 of 139 tests here need pymcu-avr is itself worth someone's attention:
-      # most of tests/toolchain is not testing the toolchain wheel. Not tonight's job.
-      # If a change drops the 6, that is a thing to look at rather than a threshold to
-      # lower.
+      # 142 of 153 tests here need pymcu-avr, so most of tests/toolchain is not testing
+      # the toolchain package. Not tonight's job. If a change drops the 11, that is a
+      # thing to look at rather than a threshold to lower.
       - name: The smoke run has to have actually run
         if: always()
         shell: bash
@@ -133,12 +133,8 @@ jobs:
           fail = int(s.get("failures", 0)) + int(s.get("errors", 0))
           ran = tot - sk
           print(f"ran {ran}, skipped {sk}, failed {fail}, of {tot} collected")
-          # Per platform, because the floor is not the same everywhere and a single
-          # number is either blind on Windows or useless on POSIX.
-          # test_avr_supply_chain.py skips four cases on Windows for real reasons:
-          # execute bits and symlinks, neither of which exists there. So 6 run on
-          # linux and macos, 2 on windows. Measured, not assumed.
-          floor = 2 if sys.platform.startswith("win") else 6
+          # One floor for every platform: the WASI package has the same files everywhere.
+          floor = 11
           if ran < floor:
               sys.exit(f"only {ran} tests actually ran, expected at least {floor} "
                        f"on {sys.platform}; this job is not measuring the wheel")
