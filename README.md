@@ -19,17 +19,10 @@ avr-as / avra           →  firmware.hex    (Intel HEX)
 pip install pymcu-avr
 ```
 
-The AVR toolchain (`avr-gcc`, `avr-as`, `avr-objcopy`) is sourced (in order) from the
-`pymcu-avr-toolchain` wheel cache, common system install paths, or `PATH`. A system
-`avr-gcc` also works with no extra package:
-
-```bash
-# macOS
-brew tap osx-cross/avr && brew install avr-gcc
-
-# Debian/Ubuntu
-apt install gcc-avr binutils-avr avr-libc
-```
+The AVR toolchain (`avr-as`, `avr-ld`, `avr-objcopy`, `cc1`, `cc1plus`) ships with
+`pymcu-avr` as `pymcu-avr-toolchain-wasi`: WebAssembly modules run through `wasmtime`, so
+the same wheel works on Linux, macOS and Windows. No system `avr-gcc` is needed. The driver
+falls back to a system `avr-gcc` on `PATH` only when the WASI package cannot be used.
 
 ## Supported targets
 
