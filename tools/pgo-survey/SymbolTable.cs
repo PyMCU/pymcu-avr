@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // pymcuc-avr-pgo-survey, symbol table + static region classification.
 //
-// Input: firmware.symbols.json produced from `avr-nm --format=bsd` on
-// dist/debug/firmware.elf, same shape profile.py writes: a list of
+// Input: firmware.symbols.json produced from the ELF symbol table of
+// dist/debug/firmware.elf (driver.core.elf, nm's letters), same shape profile.py writes: a list of
 // {"Name": ..., "WordAddr": ...} for every .text symbol (t/T), plus an optional
 // "dataSymbols" list for SRAM (a/b/d) names used by the variable analysis.
 

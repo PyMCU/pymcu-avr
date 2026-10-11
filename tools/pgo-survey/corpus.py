@@ -4,7 +4,7 @@
 #
 # Enumerates examples/* and tests/integration/fixtures/*, builds each project
 # with the worktree's own pymcuc-avr (PYMCU_BACKEND_BINARY), extracts ELF
-# symbols with avr-nm (the same override profile.py performs, backend
+# symbols with the driver's ELF reader (the same override profile.py performs, backend
 # --emit-symbols counts IR instructions, not assembled words), runs the
 # pgo-survey collector for a fixed simulated window, and aggregates CSV.
 #
@@ -22,6 +22,8 @@ import os
 import subprocess
 import sys
 import tomllib
+
+from driver.core.elf import symbols as elf_symbols
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -31,7 +33,6 @@ SURVEY_DLL = (REPO / "tools" / "pgo-survey" / "bin" / "Release" / "net10.0"
               / "pymcuc-avr-pgo-survey.dll")
 PYMCU = REPO / ".venv" / "bin" / "pymcu"
 BACKEND = REPO / "build" / "bin" / "pymcuc-avr"
-AVR_NM = "/opt/homebrew/bin/avr-nm"
 
 RUN_SECONDS = 0.200            # 200 simulated ms per program
 WORKERS = min(8, os.cpu_count() or 4)
@@ -80,18 +81,12 @@ def build_one(d: Path, cfg: dict) -> dict:
     hex_f = dist / "firmware.hex"
     if not elf.is_file() or not hex_f.is_file():
         return {"name": name, "dir": str(d), "failed": "no elf/hex emitted"}
-    nm = subprocess.run([AVR_NM, "--format=bsd", str(elf)],
-                        capture_output=True, text=True)
     text, data = [], []
-    for line in nm.stdout.splitlines():
-        parts = line.split()
-        if len(parts) < 3:
-            continue
-        addr, typ, sym = int(parts[0], 16), parts[1], parts[2]
-        if typ in "tT":
-            text.append({"Name": sym, "WordAddr": addr // 2})
-        elif typ in "abd":
-            data.append({"Name": sym, "WordAddr": addr})
+    for sym in elf_symbols(elf) or []:
+        if sym.kind in "tT":
+            text.append({"Name": sym.name, "WordAddr": sym.value // 2})
+        elif sym.kind in "abd":
+            data.append({"Name": sym.name, "WordAddr": sym.value})
     (dist / "firmware.symbols.json").write_text(
         json.dumps({"Symbols": text, "DataSymbols": data}))
     return {"name": name, "dir": str(d), "dist": str(dist),
