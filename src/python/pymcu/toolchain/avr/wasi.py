@@ -351,7 +351,8 @@ class WasiFfiCompiler:
                         pass
             self._modules[name] = module
 
-    def _run(self, tool: str, argv: list[str], work: Path) -> None:
+    def _run(self, tool: str, argv: list[str], work: Path) -> str:
+        """Run one front end and return what it wrote to stdout."""
         from wasmtime import ExitTrap, Store, WasiConfig  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory(prefix="pymcu-avr-cc1-") as tmp:
@@ -377,6 +378,24 @@ class WasiFfiCompiler:
             stdout, stderr = read(out), read(err)
         if code != 0:
             raise RuntimeError(f"{tool} failed:\n{stderr or stdout}")
+        return stdout
+
+    def preprocess(self, source: str, extra_args: list[str] | None = None) -> str:
+        """Run cc1 in preprocessor mode over a C source and return the result.
+
+        The chip's flags and the vendor headers are the same ones compile() uses,
+        so a macro read here is the macro the compiler would see. Pass
+        ["-dM"] to list macro definitions, or ["-P"] to drop line markers.
+        """
+        with tempfile.TemporaryDirectory(prefix="pymcu-avr-pp-") as tmp:
+            work = Path(tmp)
+            (work / "input.c").write_text(source)
+            return self._run("cc1", [
+                "-E", "-quiet", "-nostdinc",
+                "-isystem", "/inc/gcc", "-isystem", "/inc/gcc-fixed", "-isystem", "/inc/avr",
+                *self.flags, *(extra_args or []),
+                "/work/input.c",
+            ], work)
 
     def compile(
         self,
@@ -431,6 +450,24 @@ class WasiFfiCompiler:
             ], work)
             results.append(work / asm_name)
         return results
+
+
+def preprocess_for_chip(chip: str, source: str,
+                        extra_args: Optional[list[str]] = None) -> Optional[str]:
+    """Preprocess C source for one chip with the vendor's cc1, or None.
+
+    None means the WASI toolchain cannot answer here: the package is not
+    installed, the chip is not in the flags table, or the headers are missing.
+    Callers decide what to do with that; this function never guesses.
+    """
+    root = find_ffi_root()
+    if root is None or not is_known_chip(chip):
+        return None
+    try:
+        compiler = WasiFfiCompiler(root, chip)
+    except WasiUnavailable:
+        return None
+    return compiler.preprocess(source, extra_args)
 
 
 class WasiAvrPipeline:
