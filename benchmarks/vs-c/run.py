@@ -11,8 +11,9 @@ WHY THIS EXISTS
 WHAT MAKES THE COMPARISON HONEST, AND WHY EACH PART IS HERE
 
   ONE SIZE INSTRUMENT FOR BOTH SIDES.  `hex_bytes()` below counts program data out of the
-  Intel HEX, and it is the only thing that measures either side. Using the driver's own
-  reported figure for PyMCU and avr-size for C would compare two definitions of "size" and
+  Intel HEX, and it is the only thing that measures either side. The RAM figure is read from
+  each side's ELF by the same reader (`driver.core.elf`). Using the driver's own reported
+  figure for PyMCU and a different tool for C would compare two definitions of "size" and
   the difference would look like a result.
 
   THE .c LIVES BESIDE THE .py.  One directory per program, `src/main.py` and `main.c`. The
@@ -35,6 +36,8 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from driver.core.elf import section_sizes
 
 HERE = Path(__file__).resolve().parent
 PROGRAMS = ["blink", "arith", "loop", "dht-sensor"]
@@ -62,14 +65,11 @@ def hex_bytes(path: Path) -> int:
 
 def elf_ram(path: Path) -> int:
     """.data + .bss, i.e. the RAM the program occupies before it runs."""
-    out = subprocess.run(["avr-size", "--format=sysv", str(path)],
-                         capture_output=True, text=True).stdout
-    total = 0
-    for line in out.splitlines():
-        parts = line.split()
-        if len(parts) >= 2 and parts[0] in (".data", ".bss"):
-            total += int(parts[1])
-    return total
+    sizes = section_sizes(path)
+    if sizes is None:
+        # Not a silent zero: a value that cannot be read is not a measurement of 0 bytes.
+        raise SystemExit(f"{path}: not a readable ELF, cannot measure RAM")
+    return sizes.get(".data", 0) + sizes.get(".bss", 0)
 
 
 def build_pymcu(d: Path) -> tuple[int, int]:

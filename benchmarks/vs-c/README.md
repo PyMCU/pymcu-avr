@@ -31,9 +31,10 @@ Neither figure here is speed. Every number is bytes.
 ## Why it is built the way it is
 
 **One size instrument for both sides.** `hex_bytes()` counts program data out of the Intel HEX
-and is the only thing that measures either side. Using the driver's reported figure for PyMCU
-and `avr-size` for C would compare two definitions of "size", and the difference between the
-definitions would look like a result.
+and is the only thing that measures either side. The RAM figure is read from each side's ELF by
+the same reader, `driver.core.elf`. Using the driver's reported figure for PyMCU and a different
+tool for C would compare two definitions of "size", and the difference between the definitions
+would look like a result.
 
 **The `.c` sits beside the `.py`.** The C side is the half nobody audits, and a C program that
 quietly does less than the Python one is the easiest way to produce a flattering number. A
