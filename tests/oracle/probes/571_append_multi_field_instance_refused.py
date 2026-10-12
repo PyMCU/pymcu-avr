@@ -1,5 +1,7 @@
-# expect: refuse '.append()' cannot take an instance of 'Pair'
+# expect: refuse 'n' is called on an instance read out of a growable list
 # doc: https://docs.pymcu.org/limitations/#iterators-and-comprehensions
+# A class of several scalar fields appended to a list is a heap record (RFC 0016); its fields read
+# back, but a property or method runs on it only if it is @outline, so this getter is refused.
 from pymcu.types import uint8
 
 
