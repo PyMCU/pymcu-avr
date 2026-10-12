@@ -1,8 +1,9 @@
-# expect: divergence https://docs.pymcu.org/limitations/#heap-objects (a heap object's payload is capped at 255 bytes; CPython's list has no such ceiling)
+# expect: divergence https://docs.pymcu.org/limitations/#heap-objects (an AVR heap object's payload is capped at 255 bytes; CPython's list has no such ceiling)
 # doc: https://docs.pymcu.org/limitations/
 """CPython's list has no capacity ceiling. PyMCU's GC object header stores the
 payload length in a single byte (gc_runtime.S), so no heap object -- including
-a list[T] -- can ever exceed 255 bytes on any target. A 254-element literal
+a list[T] -- can ever exceed 255 bytes on AVR. The ceiling is per target: ARM keeps
+16 bits of length (65535 bytes) and does not measure this probe. A 254-element literal
 asks for a 256-byte object (2-byte list header + 254 payload bytes), which
 gc_alloc's own size check refuses outright, deterministically, with no need to
 exhaust the heap's actual free space first.
