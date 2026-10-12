@@ -1733,6 +1733,17 @@ public class AvrCodeGen(DeviceConfig cfg) : CodeGen
         }
         // ------------------------------------
 
+        // Only a function that is emitted can raise: a code seen solely in a function DCE drops
+        // (a library helper nothing calls) would still cost its name string and its dispatch
+        // entry in the unhandled-exception printer.
+        _usedExnCodes.Clear();
+        foreach (var func in program.Functions
+                     .Where(f => referencedFuncs.Contains(f.Name) || f.IsInterrupt)
+                     .Where(f => f.IsInterrupt || !f.IsInline || f.Name == "main"))
+            foreach (var se in func.Body.OfType<SignalError>())
+                if (se.Code is Constant ce && ce.Value != 0)
+                    _usedExnCodes.Add(ce.Value);
+
         // Census of the constant-delay busy loops that will actually be emitted, keyed by
         // (count, width). A pair reached from enough sites becomes a shared subroutine
         // instead of an inline loop per site (see EmitConstDelay).

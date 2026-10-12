@@ -1019,4 +1019,25 @@ public class AVRCodeGenTests
         Assert.True(gcSsBase >= argSpill + 1,
             $"_gc_ss_base ({gcSsBase}) must start at or after _arg_spill's own region ({argSpill}+), not overlap it");
     }
+
+    // ─── Exception codes of functions DCE drops ───────────────────────────
+
+    [Fact]
+    public void AnExceptionCodeRaisedOnlyInAnUncalledFunctionCostsNothing()
+    {
+        var prog = MakeProgram("main",
+            new SignalError(new Constant(1)),
+            new BranchOnError("__pymcu_unhandled_exn"),
+            new Return(new Constant(0)));
+        prog.Functions.Add(new Function
+        {
+            Name = "never_called",
+            Body = [new SignalError(new Constant(3)), new Return(new Constant(0))]
+        });
+
+        var asm = Compile(prog);
+
+        Assert.Contains("__exn_str_1:", asm);
+        Assert.DoesNotContain("__exn_str_3", asm);
+    }
 }
