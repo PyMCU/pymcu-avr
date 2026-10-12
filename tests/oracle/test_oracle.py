@@ -176,13 +176,13 @@ def _oserror_errno_lines(text: str) -> str:
 # is not one of these keys is a broken header, not a silent pass.
 DIVERGENCE_TRANSFORMS: dict[str, "callable[[str], str]"] = {
     "https://docs.pymcu.org/limitations/#exception-handling": _oserror_errno_lines,
-    # gc_runtime.S's object header stores the payload length in a single byte, so no heap
-    # object -- including a list[T] -- can exceed 255 bytes on any target; CPython's list has
-    # no such ceiling. Probe 840: a 254-element literal asks for a 256-byte object (2-byte
+    # AVR's gc_runtime.S object header stores the payload length in a single byte, so no AVR
+    # heap object -- including a list[T] -- can exceed 255 bytes; CPython's list has no such
+    # ceiling. ARM's header holds 16 bits, so this ceiling is AVR's alone. Probe 840: a 254-element literal asks for a 256-byte object (2-byte
     # header + 254 payload), which gc_alloc's own size check refuses outright. Regression
     # coverage for PyMCU-gcnull (EmitListAnnAssign's GcAlloc call site used to write the
     # header through the null pointer unchecked).
-    "https://docs.pymcu.org/limitations/#heap-objects (a heap object's payload is capped at 255 bytes; CPython's list has no such ceiling)":
+    "https://docs.pymcu.org/limitations/#heap-objects (an AVR heap object's payload is capped at 255 bytes; CPython's list has no such ceiling)":
         lambda text: "MemoryError\nEND\n",
     # Probe 841: a module-level array sized to leave only a few bytes of heap for THIS exact
     # program forces a genuine, measured heap exhaustion (not a size that gc_alloc's own
