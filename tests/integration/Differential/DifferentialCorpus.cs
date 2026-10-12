@@ -277,6 +277,11 @@ public static class DifferentialCorpus
                 "tuple at run time, which PyMCU refuses by design -- neither build " +
                 "exists; the fixture pins the refusal as XBUILD-FAIL in the surfacecov " +
                 "sweep",
+            ["fixtures/adafruit-ds18x20-unmodified"] =
+                "the optimized build already takes 31168 of the 32768 B of flash of the " +
+                "ATmega328P (the 1-Wire bit primitives expand inline), and neither the " +
+                "unoptimized build nor the one without the peephole fits; the optimized " +
+                "build is pinned by AdafruitDs18x20UnmodifiedTests",
             ["fixtures/surfacecov-irremote"] =
                 "byte-identical upstream adafruit_irremote.py is refused on `pulses`: the " +
                 "name already holds a tagged union and an instance has no member slot the " +
