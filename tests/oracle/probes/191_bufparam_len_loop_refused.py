@@ -1,5 +1,7 @@
-# expect: refuse len() argument must be a fixed-size
+# expect: match
 # doc: https://docs.pymcu.org/roadmap/
+# Used to refuse: len(buf) on a plain bytearray parameter had no compile-time answer. It now gets a
+# hidden run-time length, since the body measures it (RFC 0015).
 from pymcu.types import uint8, uint16
 
 def fill(buf: bytearray):
