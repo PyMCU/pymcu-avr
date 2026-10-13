@@ -1,7 +1,5 @@
-# expect: match
+# expect: refuse :9:17: error: SyntaxError: a star pattern (`*rest`) in a sequence pattern is not supported
 # doc: https://github.com/PyMCU/PyMCU/issues/401
-# frontend: py-parser
-# tracked: #401
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8
 

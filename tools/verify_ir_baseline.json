@@ -1282,11 +1282,7 @@
    "rc": 1,
    "violations": []
   },
-  "309_match_star_pattern_refused_default_frontend": {
-   "rc": 1,
-   "violations": []
-  },
-  "310_match_star_pattern_wrongcode_py_parser": {
+  "310_match_star_pattern_refused": {
    "rc": 1,
    "violations": []
   },
@@ -1298,11 +1294,7 @@
    "rc": 1,
    "violations": []
   },
-  "313_generic_type_parameter_refused_default_frontend": {
-   "rc": 1,
-   "violations": []
-  },
-  "314_generic_type_parameter_refused_py_parser": {
+  "313_generic_type_parameter_refused": {
    "rc": 1,
    "violations": []
   },
@@ -1314,19 +1306,11 @@
    "rc": 1,
    "violations": []
   },
-  "317_paramspec_type_parameter_refused_default_frontend": {
+  "317_paramspec_type_parameter_refused": {
    "rc": 1,
    "violations": []
   },
-  "318_paramspec_type_parameter_ignored_py_parser": {
-   "rc": 1,
-   "violations": []
-  },
-  "319_typevartuple_type_parameter_refused_default_frontend": {
-   "rc": 1,
-   "violations": []
-  },
-  "320_typevartuple_type_parameter_ignored_py_parser": {
+  "319_typevartuple_type_parameter_refused": {
    "rc": 1,
    "violations": []
   },
@@ -1337,7 +1321,7 @@
     "unify-widths|read-never-written|main|'short__2' is read but no path writes it and it is not declared as a global -- the 'bchk on an unwritten slot' shape"
    ]
   },
-  "322_type_parameter_scope_is_not_bound_py_parser": {
+  "322_type_parameter_scope_refused": {
    "rc": 1,
    "violations": []
   },
@@ -5073,6 +5057,22 @@
   },
   "915_enumerate_field_list_of_run_time_values_refused": {
    "rc": 1,
+   "violations": []
+  },
+  "950_type_parameter_duplicate_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "951_class_type_parameter_refused": {
+   "rc": 1,
+   "violations": []
+  },
+  "952_match_star_pattern_refused_with_runtime_elements": {
+   "rc": 1,
+   "violations": []
+  },
+  "953_match_sequence_over_run_time_array": {
+   "rc": 0,
    "violations": []
   }
  },

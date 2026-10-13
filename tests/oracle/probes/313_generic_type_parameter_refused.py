@@ -1,6 +1,5 @@
-# expect: refuse :7:1: error: CompileError: unknown type 'T' in the annotation
+# expect: refuse :6:11: error: SyntaxError: PEP 695 type parameters are not supported
 # doc: https://github.com/PyMCU/PyMCU/issues/521
-# frontend: py-parser
 from pymcu.chips.atmega328p import GPIOR0
 from pymcu.types import uint8
 
