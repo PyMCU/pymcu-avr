@@ -35,7 +35,10 @@ public class OptimizerDifferentialTests
     // avr-ld's answer when a section does not fit the chip's flash. Only the unoptimized
     // build is allowed to produce it: it is bigger than the optimized one by construction,
     // so a program can be a valid differential case and still have no image to compare with.
-    private static readonly Regex FlashOverflow = new(@"avr-ld: .*will not fit in region");
+    // Singleline: the console wraps a long path, so the message can span lines between
+    // "avr-ld:" and "will not fit" (and the native fallback prints avr-gcc's link line).
+    private static readonly Regex FlashOverflow =
+        new(@"avr-ld: .*will not fit\s+in\s+region", RegexOptions.Singleline);
 
     internal static bool IsFlashOverflow(Exception e) => FlashOverflow.IsMatch(e.Message);
 
@@ -63,6 +66,19 @@ public class OptimizerDifferentialTests
             "    Linking... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━           0:00:04\n" +
             "Assembly Error: avr-ld failed:\n" +
             "avr-ld: /work/firmware.elf section `.text' will not fit in region `flash'\n";
+
+        Assert.That(IsFlashOverflow(new InvalidOperationException(message)), Is.True);
+    }
+
+    [Test]
+    public void UnoptimizedFlashOverflow_IsRecognisedWhenTheConsoleWrapsIt()
+    {
+        const string message =
+            "pymcu build failed for 'adafruit-bmp280-unmodified-loop (noopt)' (exit 1):\n" +
+            "Assembly Error: avr-gcc link failed (exit 1):\n" +
+            "stderr=\"/opt/homebrew/opt/avr-binutils/bin/avr-ld: \n" +
+            "/private/var/folders/t_/T/pymcu-run-1/pymcu-noopt/fx/dist/firmware.elf \n" +
+            "section `.text' will not fit in region `flash'\\ncollect2: error: ld returned 1 \n";
 
         Assert.That(IsFlashOverflow(new InvalidOperationException(message)), Is.True);
     }
