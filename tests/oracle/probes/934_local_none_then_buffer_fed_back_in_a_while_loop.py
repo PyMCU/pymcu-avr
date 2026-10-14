@@ -19,7 +19,7 @@ class Bus:
 def main():
     bus = Bus()
     rom = None
-    diff = 3
+    diff: int = 3
     n = 0
     while n < 30:
         n += 1

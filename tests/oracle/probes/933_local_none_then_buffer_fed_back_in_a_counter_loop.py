@@ -19,7 +19,7 @@ class Bus:
 def main():
     bus = Bus()
     rom = None
-    diff = 3
+    diff: int = 3
     for _ in range(30):
         rom, diff = bus.search(rom, diff)
         if rom:
